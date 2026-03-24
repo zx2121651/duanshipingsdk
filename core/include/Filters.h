@@ -67,5 +67,18 @@ private:
     GLuint m_lookupTextureId;
 };
 
+class BilateralFilter : public Filter {
+public:
+    BilateralFilter();
+    void initialize() override;
+protected:
+    void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
+    const char* getFragmentShaderSource() const override;
+private:
+    GLuint m_texelWidthOffsetHandle;
+    GLuint m_texelHeightOffsetHandle;
+    GLuint m_distanceNormalizationFactorHandle;
+};
+
 } // namespace video
 } // namespace sdk

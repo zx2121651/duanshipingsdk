@@ -534,6 +534,7 @@ CMakeFiles/video_sdk_core.dir/core/src/Filters.cpp.o: core/src/Filters.cpp \
   /usr/include/c++/13/bits/shared_ptr_base.h \
   /usr/include/c++/13/bits/std_abs.h \
   /usr/include/c++/13/bits/stl_algobase.h \
+  /usr/include/c++/13/bits/stl_bvector.h \
   /usr/include/c++/13/bits/stl_construct.h \
   /usr/include/c++/13/bits/stl_function.h \
   /usr/include/c++/13/bits/stl_iterator.h \
@@ -546,6 +547,7 @@ CMakeFiles/video_sdk_core.dir/core/src/Filters.cpp.o: core/src/Filters.cpp \
   /usr/include/c++/13/bits/stl_tempbuf.h \
   /usr/include/c++/13/bits/stl_tree.h \
   /usr/include/c++/13/bits/stl_uninitialized.h \
+  /usr/include/c++/13/bits/stl_vector.h \
   /usr/include/c++/13/bits/streambuf.tcc \
   /usr/include/c++/13/bits/streambuf_iterator.h \
   /usr/include/c++/13/bits/string_view.tcc \
@@ -554,6 +556,7 @@ CMakeFiles/video_sdk_core.dir/core/src/Filters.cpp.o: core/src/Filters.cpp \
   /usr/include/c++/13/bits/uses_allocator.h \
   /usr/include/c++/13/bits/uses_allocator_args.h \
   /usr/include/c++/13/bits/utility.h \
+  /usr/include/c++/13/bits/vector.tcc \
   /usr/include/c++/13/cctype \
   /usr/include/c++/13/cerrno \
   /usr/include/c++/13/clocale \
@@ -593,6 +596,7 @@ CMakeFiles/video_sdk_core.dir/core/src/Filters.cpp.o: core/src/Filters.cpp \
   /usr/include/c++/13/tuple \
   /usr/include/c++/13/type_traits \
   /usr/include/c++/13/typeinfo \
+  /usr/include/c++/13/vector \
   /usr/include/ctype.h \
   /usr/include/endian.h \
   /usr/include/errno.h \
