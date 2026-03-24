@@ -9,29 +9,25 @@ using namespace sdk::video;
 extern "C" {
 
 JNIEXPORT jlong JNICALL
-Java_com_sdk_video_VideoProcessor_nativeCreate(JNIEnv *env, jobject thiz) {
+Java_com_sdk_video_RenderEngine_nativeInit(JNIEnv *env, jobject thiz) {
     FilterEngine* engine = new FilterEngine();
     // Default Android setup: assume input is OES texture from SurfaceTexture
-    engine->addFilter(std::make_shared<OESInputFilter>());
+    engine->addFilter(std::make_shared<OES2RGBFilter>());
+    engine->initialize(); // Ensure it binds to current GL thread during init
     return reinterpret_cast<jlong>(engine);
 }
 
 JNIEXPORT void JNICALL
-Java_com_sdk_video_VideoProcessor_nativeDestroy(JNIEnv *env, jobject thiz, jlong handle) {
-    FilterEngine* engine = reinterpret_cast<FilterEngine*>(handle);
-    delete engine;
-}
-
-JNIEXPORT void JNICALL
-Java_com_sdk_video_VideoProcessor_nativeInitialize(JNIEnv *env, jobject thiz, jlong handle) {
+Java_com_sdk_video_RenderEngine_nativeRelease(JNIEnv *env, jobject thiz, jlong handle) {
     FilterEngine* engine = reinterpret_cast<FilterEngine*>(handle);
     if (engine) {
-        engine->initialize();
+        engine->release();
+        delete engine;
     }
 }
 
 JNIEXPORT jint JNICALL
-Java_com_sdk_video_VideoProcessor_nativeProcessFrame(JNIEnv *env, jobject thiz, jlong handle, jint textureId, jint width, jint height, jfloatArray matrix) {
+Java_com_sdk_video_RenderEngine_nativeProcessFrame(JNIEnv *env, jobject thiz, jlong handle, jint textureId, jint width, jint height, jfloatArray matrix) {
     FilterEngine* engine = reinterpret_cast<FilterEngine*>(handle);
     if (!engine) return textureId;
 
@@ -43,7 +39,7 @@ Java_com_sdk_video_VideoProcessor_nativeProcessFrame(JNIEnv *env, jobject thiz, 
         env->ReleaseFloatArrayElements(matrix, elements, 0);
 
         // Update the texture matrix on the pipeline
-        // (This applies globally to any filter respecting this parameter, specifically OESInputFilter)
+        // (This applies globally to any filter respecting this parameter, specifically OES2RGBFilter)
         engine->updateParameter("textureMatrix", std::any(textureMatrix));
     }
 
@@ -53,7 +49,7 @@ Java_com_sdk_video_VideoProcessor_nativeProcessFrame(JNIEnv *env, jobject thiz, 
 }
 
 JNIEXPORT void JNICALL
-Java_com_sdk_video_VideoProcessor_nativeUpdateParameterFloat(JNIEnv *env, jobject thiz, jlong handle, jstring key, jfloat value) {
+Java_com_sdk_video_RenderEngine_nativeUpdateParameterFloat(JNIEnv *env, jobject thiz, jlong handle, jstring key, jfloat value) {
     FilterEngine* engine = reinterpret_cast<FilterEngine*>(handle);
     if (engine) {
         const char *keyStr = env->GetStringUTFChars(key, nullptr);
@@ -64,7 +60,7 @@ Java_com_sdk_video_VideoProcessor_nativeUpdateParameterFloat(JNIEnv *env, jobjec
 }
 
 JNIEXPORT void JNICALL
-Java_com_sdk_video_VideoProcessor_nativeUpdateParameterInt(JNIEnv *env, jobject thiz, jlong handle, jstring key, jint value) {
+Java_com_sdk_video_RenderEngine_nativeUpdateParameterInt(JNIEnv *env, jobject thiz, jlong handle, jstring key, jint value) {
     FilterEngine* engine = reinterpret_cast<FilterEngine*>(handle);
     if (engine) {
         const char *keyStr = env->GetStringUTFChars(key, nullptr);
@@ -75,7 +71,19 @@ Java_com_sdk_video_VideoProcessor_nativeUpdateParameterInt(JNIEnv *env, jobject 
 }
 
 JNIEXPORT void JNICALL
-Java_com_sdk_video_VideoProcessor_nativeAddFilter(JNIEnv *env, jobject thiz, jlong handle, jint filterType) {
+Java_com_sdk_video_RenderEngine_nativeUpdateParameterBool(JNIEnv *env, jobject thiz, jlong handle, jstring key, jboolean value) {
+    FilterEngine* engine = reinterpret_cast<FilterEngine*>(handle);
+    if (engine) {
+        const char *keyStr = env->GetStringUTFChars(key, nullptr);
+        std::string k(keyStr);
+        bool val = (value == JNI_TRUE);
+        engine->updateParameter(k, std::any(val));
+        env->ReleaseStringUTFChars(key, keyStr);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeAddFilter(JNIEnv *env, jobject thiz, jlong handle, jint filterType) {
     FilterEngine* engine = reinterpret_cast<FilterEngine*>(handle);
     if (engine) {
         FilterPtr filter;
@@ -92,12 +100,12 @@ Java_com_sdk_video_VideoProcessor_nativeAddFilter(JNIEnv *env, jobject thiz, jlo
 }
 
 JNIEXPORT void JNICALL
-Java_com_sdk_video_VideoProcessor_nativeRemoveAllFilters(JNIEnv *env, jobject thiz, jlong handle) {
+Java_com_sdk_video_RenderEngine_nativeRemoveAllFilters(JNIEnv *env, jobject thiz, jlong handle) {
     FilterEngine* engine = reinterpret_cast<FilterEngine*>(handle);
     if (engine) {
         engine->removeAllFilters();
         // Re-add mandatory OES input filter for Android
-        engine->addFilter(std::make_shared<OESInputFilter>());
+        engine->addFilter(std::make_shared<OES2RGBFilter>());
     }
 }
 

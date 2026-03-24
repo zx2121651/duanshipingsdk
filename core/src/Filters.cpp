@@ -1,5 +1,6 @@
 #include "../include/Filters.h"
 #include <iostream>
+#include <vector>
 
 #ifndef GL_TEXTURE_EXTERNAL_OES
 #define GL_TEXTURE_EXTERNAL_OES 0x8D65
@@ -15,11 +16,19 @@ const char* kOESVertexShader = R"(
 layout(location = 0) in vec4 position;
 layout(location = 1) in vec4 inputTextureCoordinate;
 uniform mat4 textureMatrix;
+uniform bool flipHorizontal;
+uniform bool flipVertical;
 out vec2 textureCoordinate;
 void main() {
     gl_Position = position;
     // Apply SurfaceTexture transform matrix to fix orientation/cropping
-    textureCoordinate = (textureMatrix * inputTextureCoordinate).xy;
+    vec2 coord = (textureMatrix * inputTextureCoordinate).xy;
+
+    // Apply manual flips if necessary
+    if (flipHorizontal) coord.x = 1.0 - coord.x;
+    if (flipVertical) coord.y = 1.0 - coord.y;
+
+    textureCoordinate = coord;
 }
 )";
 
@@ -134,9 +143,9 @@ static const float s_textureCoords[] = {
     1.0f, 1.0f,
 };
 
-// --- OESInputFilter ---
+// --- OES2RGBFilter ---
 
-OESInputFilter::OESInputFilter() {
+OES2RGBFilter::OES2RGBFilter() {
     // Default to identity matrix
     m_parameters["textureMatrix"] = std::vector<float>{
         1.0f, 0.0f, 0.0f, 0.0f,
@@ -144,22 +153,26 @@ OESInputFilter::OESInputFilter() {
         0.0f, 0.0f, 1.0f, 0.0f,
         0.0f, 0.0f, 0.0f, 1.0f
     };
+    m_parameters["flipHorizontal"] = false;
+    m_parameters["flipVertical"] = false;
 }
 
-void OESInputFilter::initialize() {
+void OES2RGBFilter::initialize() {
     Filter::initialize();
     m_textureMatrixHandle = glGetUniformLocation(m_programId, "textureMatrix");
+    m_flipHorizontalHandle = glGetUniformLocation(m_programId, "flipHorizontal");
+    m_flipVerticalHandle = glGetUniformLocation(m_programId, "flipVertical");
 }
 
-const char* OESInputFilter::getVertexShaderSource() const {
+const char* OES2RGBFilter::getVertexShaderSource() const {
     return kOESVertexShader;
 }
 
-const char* OESInputFilter::getFragmentShaderSource() const {
+const char* OES2RGBFilter::getFragmentShaderSource() const {
     return kOESFragmentShader;
 }
 
-void OESInputFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {
+void OES2RGBFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {
     outputFb->bind();
     glUseProgram(m_programId);
 
@@ -176,6 +189,18 @@ void OESInputFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb
             glUniformMatrix4fv(m_textureMatrixHandle, 1, GL_FALSE, matrix.data());
         }
     }
+
+    bool flipH = false;
+    if (m_parameters.count("flipHorizontal") && m_parameters.at("flipHorizontal").type() == typeid(bool)) {
+        flipH = std::any_cast<bool>(m_parameters.at("flipHorizontal"));
+    }
+    glUniform1i(m_flipHorizontalHandle, flipH ? 1 : 0);
+
+    bool flipV = false;
+    if (m_parameters.count("flipVertical") && m_parameters.at("flipVertical").type() == typeid(bool)) {
+        flipV = std::any_cast<bool>(m_parameters.at("flipVertical"));
+    }
+    glUniform1i(m_flipVerticalHandle, flipV ? 1 : 0);
 
     glEnableVertexAttribArray(m_positionHandle);
     glVertexAttribPointer(m_positionHandle, 2, GL_FLOAT, GL_FALSE, 0, s_vertexCoords);
