@@ -10,6 +10,19 @@ namespace video {
 
 // --- Shader sources ---
 
+const char* kOESVertexShader = R"(
+#version 300 es
+layout(location = 0) in vec4 position;
+layout(location = 1) in vec4 inputTextureCoordinate;
+uniform mat4 textureMatrix;
+out vec2 textureCoordinate;
+void main() {
+    gl_Position = position;
+    // Apply SurfaceTexture transform matrix to fix orientation/cropping
+    textureCoordinate = (textureMatrix * inputTextureCoordinate).xy;
+}
+)";
+
 const char* kOESFragmentShader = R"(
 #version 300 es
 #extension GL_OES_EGL_image_external_essl3 : require
@@ -124,10 +137,22 @@ static const float s_textureCoords[] = {
 // --- OESInputFilter ---
 
 OESInputFilter::OESInputFilter() {
+    // Default to identity matrix
+    m_parameters["textureMatrix"] = std::vector<float>{
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f
+    };
 }
 
 void OESInputFilter::initialize() {
     Filter::initialize();
+    m_textureMatrixHandle = glGetUniformLocation(m_programId, "textureMatrix");
+}
+
+const char* OESInputFilter::getVertexShaderSource() const {
+    return kOESVertexShader;
 }
 
 const char* OESInputFilter::getFragmentShaderSource() const {
@@ -144,6 +169,13 @@ void OESInputFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_EXTERNAL_OES, inputTexture.id); // Important: Use OES target
     glUniform1i(m_inputImageTextureHandle, 0);
+
+    if (m_parameters.count("textureMatrix") && m_parameters.at("textureMatrix").type() == typeid(std::vector<float>)) {
+        auto matrix = std::any_cast<std::vector<float>>(m_parameters.at("textureMatrix"));
+        if (matrix.size() == 16) {
+            glUniformMatrix4fv(m_textureMatrixHandle, 1, GL_FALSE, matrix.data());
+        }
+    }
 
     glEnableVertexAttribArray(m_positionHandle);
     glVertexAttribPointer(m_positionHandle, 2, GL_FLOAT, GL_FALSE, 0, s_vertexCoords);
@@ -187,8 +219,8 @@ void BrightnessFilter::onDraw(const Texture& inputTexture, FrameBufferPtr output
     glUniform1i(m_inputImageTextureHandle, 0);
 
     float brightness = 0.0f;
-    if (m_parameters.count("brightness") && m_parameters["brightness"].type() == typeid(float)) {
-        brightness = std::any_cast<float>(m_parameters["brightness"]);
+    if (m_parameters.count("brightness") && m_parameters.at("brightness").type() == typeid(float)) {
+        brightness = std::any_cast<float>(m_parameters.at("brightness"));
     }
     glUniform1f(m_brightnessHandle, brightness);
 
@@ -240,8 +272,8 @@ void GaussianBlurFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outp
     glUniform1f(m_texelHeightOffsetHandle, 1.0f / inputTexture.height);
 
     float blurSize = 1.0f;
-    if (m_parameters.count("blurSize") && m_parameters["blurSize"].type() == typeid(float)) {
-        blurSize = std::any_cast<float>(m_parameters["blurSize"]);
+    if (m_parameters.count("blurSize") && m_parameters.at("blurSize").type() == typeid(float)) {
+        blurSize = std::any_cast<float>(m_parameters.at("blurSize"));
     }
     glUniform1f(m_blurSizeHandle, blurSize);
 
@@ -295,8 +327,8 @@ void LookupFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) 
     glBindTexture(GL_TEXTURE_2D, inputTexture.id);
     glUniform1i(m_inputImageTextureHandle, 0);
 
-    if (m_parameters.count("lookupTextureId") && m_parameters["lookupTextureId"].type() == typeid(int)) {
-        m_lookupTextureId = std::any_cast<int>(m_parameters["lookupTextureId"]);
+    if (m_parameters.count("lookupTextureId") && m_parameters.at("lookupTextureId").type() == typeid(int)) {
+        m_lookupTextureId = std::any_cast<int>(m_parameters.at("lookupTextureId"));
     }
 
     if (m_lookupTextureId) {
@@ -306,8 +338,8 @@ void LookupFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) 
     }
 
     float intensity = 1.0f;
-    if (m_parameters.count("intensity") && m_parameters["intensity"].type() == typeid(float)) {
-        intensity = std::any_cast<float>(m_parameters["intensity"]);
+    if (m_parameters.count("intensity") && m_parameters.at("intensity").type() == typeid(float)) {
+        intensity = std::any_cast<float>(m_parameters.at("intensity"));
     }
     glUniform1f(m_intensityHandle, intensity);
 

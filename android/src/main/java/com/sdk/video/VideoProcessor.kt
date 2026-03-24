@@ -3,7 +3,7 @@ package com.sdk.video
 import android.content.Context
 import android.graphics.SurfaceTexture
 
-class FilterEngine {
+class VideoProcessor {
 
     companion object {
         init {
@@ -27,8 +27,13 @@ class FilterEngine {
     }
 
     // Usually called from SurfaceTexture.OnFrameAvailableListener on GL thread
-    fun processFrame(textureIn: Int, width: Int, height: Int): Int {
-        return nativeProcessFrame(nativeHandle, textureIn, width, height)
+    // textureIn: OES texture id
+    // transformMatrix: float array of size 16 from surfaceTexture.getTransformMatrix()
+    fun processFrame(textureIn: Int, width: Int, height: Int, transformMatrix: FloatArray): Int {
+        if (transformMatrix.size != 16) {
+            throw IllegalArgumentException("Transform matrix must be a 4x4 matrix (16 floats)")
+        }
+        return nativeProcessFrame(nativeHandle, textureIn, width, height, transformMatrix)
     }
 
     // Update float filter parameter
@@ -63,7 +68,7 @@ class FilterEngine {
     private external fun nativeCreate(): Long
     private external fun nativeDestroy(handle: Long)
     private external fun nativeInitialize(handle: Long)
-    private external fun nativeProcessFrame(handle: Long, textureId: Int, width: Int, height: Int): Int
+    private external fun nativeProcessFrame(handle: Long, textureId: Int, width: Int, height: Int, matrix: FloatArray): Int
     private external fun nativeUpdateParameterFloat(handle: Long, key: String, value: Float)
     private external fun nativeUpdateParameterInt(handle: Long, key: String, value: Int)
     private external fun nativeAddFilter(handle: Long, filterType: Int)
