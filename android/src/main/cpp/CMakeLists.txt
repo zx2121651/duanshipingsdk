@@ -18,7 +18,7 @@ set(CORE_SOURCES
 )
 
 set(JNI_SOURCES
-    ${CMAKE_SOURCE_DIR}/native-lib.cpp
+    ${CMAKE_SOURCE_DIR}/NativeBridge.cpp
 )
 
 add_library(

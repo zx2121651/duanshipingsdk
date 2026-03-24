@@ -11,13 +11,18 @@
 namespace sdk {
 namespace video {
 
-class OESInputFilter : public Filter {
+class OES2RGBFilter : public Filter {
 public:
-    OESInputFilter();
+    OES2RGBFilter();
     void initialize() override;
 protected:
     void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
+    const char* getVertexShaderSource() const override;
     const char* getFragmentShaderSource() const override;
+private:
+    GLuint m_textureMatrixHandle;
+    GLuint m_flipHorizontalHandle;
+    GLuint m_flipVerticalHandle;
 };
 
 class BrightnessFilter : public Filter {
@@ -60,6 +65,19 @@ private:
     GLuint m_lookupTextureHandle;
     GLuint m_intensityHandle;
     GLuint m_lookupTextureId;
+};
+
+class BilateralFilter : public Filter {
+public:
+    BilateralFilter();
+    void initialize() override;
+protected:
+    void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
+    const char* getFragmentShaderSource() const override;
+private:
+    GLuint m_texelWidthOffsetHandle;
+    GLuint m_texelHeightOffsetHandle;
+    GLuint m_distanceNormalizationFactorHandle;
 };
 
 } // namespace video
