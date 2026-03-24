@@ -1,0 +1,2 @@
+/usr/bin/ar qc libvideo_sdk_core.a CMakeFiles/video_sdk_core.dir/core/src/Filter.cpp.o CMakeFiles/video_sdk_core.dir/core/src/Filters.cpp.o CMakeFiles/video_sdk_core.dir/core/src/FilterEngine.cpp.o CMakeFiles/video_sdk_core.dir/core/src/FrameBuffer.cpp.o CMakeFiles/video_sdk_core.dir/core/src/FrameBufferPool.cpp.o
+/usr/bin/ranlib libvideo_sdk_core.a
