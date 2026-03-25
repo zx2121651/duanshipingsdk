@@ -80,5 +80,23 @@ private:
     GLuint m_distanceNormalizationFactorHandle;
 };
 
+class CinematicLookupFilter : public Filter {
+public:
+    CinematicLookupFilter();
+    ~CinematicLookupFilter() override;
+    void initialize() override;
+
+    // Set the 512x512 2D LUT texture
+    void setLookupTexture(GLuint textureId);
+
+protected:
+    void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
+    const char* getFragmentShaderSource() const override;
+private:
+    GLuint m_lookupTextureHandle;
+    GLuint m_intensityHandle;
+    GLuint m_lookupTextureId;
+};
+
 } // namespace video
 } // namespace sdk

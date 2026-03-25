@@ -76,7 +76,6 @@ class VideoFilterManager(
             VideoFilterType.GAUSSIAN_BLUR -> RenderEngine.FILTER_TYPE_GAUSSIAN_BLUR
             VideoFilterType.LOOKUP -> RenderEngine.FILTER_TYPE_LOOKUP
             VideoFilterType.BILATERAL -> RenderEngine.FILTER_TYPE_BILATERAL
-            VideoFilterType.CINEMATIC_LOOKUP -> 4
         }
         renderEngine.addFilter(typeInt)
     }

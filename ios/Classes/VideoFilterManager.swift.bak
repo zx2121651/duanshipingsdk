@@ -7,8 +7,6 @@ public enum VideoFilterType: Int {
     case gaussianBlur = 1
     case lookup = 2
     case bilateral = 3
-    case cinematicLookup = 4
-    case bilateral = 3
 }
 
 public enum FilterEngineState {

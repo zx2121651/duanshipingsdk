@@ -6,8 +6,6 @@ import OpenGLES
     case brightness = 0
     case gaussianBlur = 1
     case lookup = 2
-    case bilateral = 3
-    case cinematicLookup = 4
 }
 
 @objc public class FilterEngine: NSObject {
