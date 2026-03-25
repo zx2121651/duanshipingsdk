@@ -3,48 +3,66 @@ package com.sdk.video
 import android.graphics.SurfaceTexture
 import android.view.Surface
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.*
 
 enum class VideoFilterType {
     BRIGHTNESS, GAUSSIAN_BLUR, LOOKUP, BILATERAL
 }
 
+enum class FilterEngineState {
+    STOPPED, INITIALIZING, RUNNING, DEGRADED, ERROR
+}
+
 class VideoFilterManager(
     private val width: Int,
     private val height: Int,
-    private val coroutineScope: CoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    val scope: CoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 ) {
     private val renderEngine = RenderEngine(width, height)
     private var inputSurface: Surface? = null
 
-    // Channel to queue frame processing requests
-    private val frameChannel = Channel<Unit>(Channel.CONFLATED)
-
-    // Flow to emit processed texture IDs back to the consumer
-    private val _processedFrames = MutableSharedFlow<Int>(extraBufferCapacity = 1)
-    val processedFrames: SharedFlow<Int> = _processedFrames.asSharedFlow()
-
-    // A single threaded dispatcher for all GL operations
     @OptIn(DelicateCoroutinesApi::class)
     private val glDispatcher = newSingleThreadContext("GLRenderThread")
 
+    // State flow exposing current engine health to UI
+    private val _engineState = MutableStateFlow(FilterEngineState.STOPPED)
+    val engineState: StateFlow<FilterEngineState> = _engineState.asStateFlow()
+
+    // Processed frames stream. Drops oldest to degrade gracefully if UI is slow.
+    private val _processedFrames = MutableSharedFlow<Result<Int>>(
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val processedFrames: SharedFlow<Result<Int>> = _processedFrames.asSharedFlow()
+
     suspend fun initialize() = withContext(glDispatcher) {
-        renderEngine.init()
+        try {
+            _engineState.value = FilterEngineState.INITIALIZING
+            renderEngine.init()
 
-        // Setup listener on RenderEngine to trigger coroutine processing
-        renderEngine.onFrameProcessedListener = { outputTexId ->
-            coroutineScope.launch {
-                _processedFrames.emit(outputTexId)
+            // Setup listener on RenderEngine to trigger coroutine processing
+            renderEngine.onFrameProcessedListener = { outputTexId ->
+                if (outputTexId >= 0) {
+                    _processedFrames.tryEmit(Result.success(outputTexId))
+                } else {
+                    // Degradation: Failed to render
+                    _processedFrames.tryEmit(Result.failure(RuntimeException("GL Engine Render Failed")))
+                    _engineState.value = FilterEngineState.DEGRADED
+                }
             }
-        }
 
-        // Wrap SurfaceTexture in a Surface for Producer (e.g., CameraX)
-        val st = renderEngine.getSurfaceTexture()
-        if (st != null) {
-            inputSurface = Surface(st)
+            // Wrap SurfaceTexture in a Surface for Producer (e.g., CameraX)
+            val st = renderEngine.getSurfaceTexture()
+            if (st != null) {
+                inputSurface = Surface(st)
+                _engineState.value = FilterEngineState.RUNNING
+            } else {
+                throw IllegalStateException("Failed to create input surface")
+            }
+        } catch (e: Exception) {
+            _engineState.value = FilterEngineState.ERROR
+            _processedFrames.tryEmit(Result.failure(e))
         }
     }
 
@@ -77,7 +95,6 @@ class VideoFilterManager(
     // Call this if not using SurfaceTexture automatic updates, to manually trigger process
     suspend fun processFrame() = withContext(glDispatcher) {
         renderEngine.getSurfaceTexture()?.let { st ->
-            // Manually trigger the listener logic if needed, usually st.setOnFrameAvailableListener does this
             renderEngine.onFrameAvailable(st)
         }
     }
@@ -86,8 +103,9 @@ class VideoFilterManager(
         withContext(glDispatcher) {
             inputSurface?.release()
             inputSurface = null
-            renderEngine.release()
+            try { renderEngine.release() } catch (e: Exception) { /* ignore release errors */ }
         }
+        _engineState.value = FilterEngineState.STOPPED
         coroutineScope.cancel()
         glDispatcher.close()
     }
