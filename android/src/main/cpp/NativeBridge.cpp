@@ -254,7 +254,7 @@ Java_com_sdk_video_RenderEngine_nativeAddFilter(JNIEnv *env, jobject thiz, jlong
         FilterPtr filter;
         switch(filterType) {
             case 0: filter = std::make_shared<BrightnessFilter>(); break;
-            case 1: filter = std::make_shared<GaussianBlurFilter>(); break;
+            case 1: filter = std::make_shared<GaussianBlurFilter>(&(wrapper->filterEngine->m_frameBufferPool)); break;
             case 2: filter = std::make_shared<LookupFilter>(); break;
             case 3: filter = std::make_shared<BilateralFilter>(); break;
             case 4: filter = std::make_shared<CinematicLookupFilter>(); break;

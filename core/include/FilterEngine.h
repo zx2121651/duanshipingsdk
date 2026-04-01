@@ -35,7 +35,9 @@ public:
 private:
     std::vector<FilterPtr> m_filters;
     ThreadCheck m_threadCheck;
+    public:
     FrameBufferPool m_frameBufferPool;
+private:
     bool m_initialized;
 };
 

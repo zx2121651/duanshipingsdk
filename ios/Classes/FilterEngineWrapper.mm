@@ -197,7 +197,7 @@ using namespace sdk::video;
         FilterPtr filter;
         switch(type) {
             case FilterTypeBrightness: filter = std::make_shared<BrightnessFilter>(); break;
-            case FilterTypeGaussianBlur: filter = std::make_shared<GaussianBlurFilter>(); break;
+            case FilterTypeGaussianBlur: filter = std::make_shared<GaussianBlurFilter>(&(self->engine->m_frameBufferPool)); break;
             case FilterTypeLookup: filter = std::make_shared<LookupFilter>(); break;
         }
         if (filter) {
