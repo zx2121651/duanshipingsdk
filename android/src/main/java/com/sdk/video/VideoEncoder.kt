@@ -2,320 +2,261 @@ package com.sdk.video
 
 import android.annotation.SuppressLint
 import android.media.*
-import android.os.Handler
-import android.os.HandlerThread
+import android.util.Log
 import android.view.Surface
 import kotlinx.coroutines.*
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.concurrent.atomic.AtomicBoolean
 
 class VideoEncoder(
     private val width: Int = 1080,
     private val height: Int = 1920,
     private val videoBitRate: Int = 4000000,
-    private val videoFrameRate: Int = 30,
+    private val frameRate: Int = 30,
     private val audioSampleRate: Int = 44100,
-    private val audioBitRate: Int = 128000
+    private val audioBitRate: Int = 128000,
+    private val audioChannels: Int = AudioFormat.CHANNEL_IN_MONO
 ) {
+    companion object {
+        private const val TAG = "VideoEncoder"
+    }
+
     private var videoCodec: MediaCodec? = null
     private var audioCodec: MediaCodec? = null
     private var muxer: MediaMuxer? = null
 
-    private var videoTrackIndex = -1
-    private var audioTrackIndex = -1
-
     private var inputSurface: Surface? = null
     private var audioRecord: AudioRecord? = null
 
-    // Concurrency state
-    private val isRecording = AtomicBoolean(false)
-    private val muxerStarted = AtomicBoolean(false)
-
-    // Muxer start barrier
+    // Muxer 状态与轨道索引
+    @Volatile private var isRecording = false
+    @Volatile private var muxerStarted = false
+    private var videoTrackIndex = -1
+    private var audioTrackIndex = -1
     private var isVideoFormatAdded = false
     private var isAudioFormatAdded = false
 
-    // Handlers for asynchronous callbacks
-    private var videoHandlerThread: HandlerThread? = null
-    private var audioHandlerThread: HandlerThread? = null
-
-    // Coroutine scope for blocking audio reading
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private var audioRecordJob: Job? = null
-
-    // Buffer queues to hold packets before muxer starts
-    private val pendingVideoData = ConcurrentLinkedQueue<MuxerData>()
-    private val pendingAudioData = ConcurrentLinkedQueue<MuxerData>()
-
-    // Time tracking to align PTS
+    // 早鸟帧缓存队列 (解决 Muxer 未启动前的数据丢弃问题)
+    private val pendingFrames = ConcurrentLinkedQueue<FrameData>()
     private var startTimeNs: Long = 0
 
-    private class MuxerData(
-        val bufferInfo: MediaCodec.BufferInfo,
-        val byteBuffer: ByteBuffer
+    // 独立协程作用域，专门用于 Audio 读取
+    private val encoderScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    private data class FrameData(
+        val buffer: ByteBuffer,
+        val info: MediaCodec.BufferInfo,
+        val isVideo: Boolean
     )
 
-    @SuppressLint("MissingPermission")
     fun startRecording(outputPath: String): Surface? {
-        if (isRecording.get()) return inputSurface
+        if (isRecording) return inputSurface
 
         try {
-            muxerStarted.set(false)
-            isVideoFormatAdded = false
-            isAudioFormatAdded = false
-            videoTrackIndex = -1
-            audioTrackIndex = -1
-            startTimeNs = System.nanoTime()
-
             muxer = MediaMuxer(outputPath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
 
-            // 1. Setup Video Codec
-            videoHandlerThread = HandlerThread("VideoCodecCallback").apply { start() }
-            val videoFormat = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height).apply {
-                setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
-                setInteger(MediaFormat.KEY_BIT_RATE, videoBitRate)
-                setInteger(MediaFormat.KEY_FRAME_RATE, videoFrameRate)
-                setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
-            }
-            videoCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
-            videoCodec?.setCallback(VideoCodecCallback(), Handler(videoHandlerThread!!.looper))
-            videoCodec?.configure(videoFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-            inputSurface = videoCodec?.createInputSurface()
+            // 1. 初始化并启动 Video Codec
+            setupVideoCodec()
 
-            // 2. Setup Audio Codec
-            audioHandlerThread = HandlerThread("AudioCodecCallback").apply { start() }
-            val audioFormat = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, audioSampleRate, 1).apply {
-                setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
-                setInteger(MediaFormat.KEY_BIT_RATE, audioBitRate)
-                setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 16384)
-            }
-            audioCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC)
-            audioCodec?.setCallback(AudioCodecCallback(), Handler(audioHandlerThread!!.looper))
-            audioCodec?.configure(audioFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            // 2. 初始化并启动 Audio Codec
+            setupAudioCodec()
 
-            // 3. Setup AudioRecord
-            val bufferSize = AudioRecord.getMinBufferSize(
-                audioSampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT
-            ) * 2
+            startTimeNs = System.nanoTime()
+            isRecording = true
 
-            audioRecord = AudioRecord(
-                MediaRecorder.AudioSource.MIC,
-                audioSampleRate,
-                AudioFormat.CHANNEL_IN_MONO,
-                AudioFormat.ENCODING_PCM_16BIT,
-                bufferSize
-            )
-
-            // Start everything
-            isRecording.set(true)
             videoCodec?.start()
             audioCodec?.start()
-            audioRecord?.startRecording()
 
-            // Start blocking read loop for Audio PCM data
-            startAudioRecordLoop(bufferSize)
+            // 3. 启动音频采集协程
+            startAudioRecordLoop()
 
             return inputSurface
-
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Failed to start recording", e)
             stopRecording()
             return null
         }
     }
 
-    private fun startAudioRecordLoop(bufferSize: Int) {
-        audioRecordJob = scope.launch {
-            val pcmBuffer = ByteArray(bufferSize)
-            while (isActive && isRecording.get()) {
-                val readResult = audioRecord?.read(pcmBuffer, 0, bufferSize) ?: -1
-                if (readResult > 0) {
-                    val codec = audioCodec ?: break
-                    // We must dequeue input buffer synchronously because we are pumping data from AudioRecord
-                    val inputBufferIndex = try {
-                        codec.dequeueInputBuffer(10000)
-                    } catch (e: Exception) { -1 }
+    private fun setupVideoCodec() {
+        val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height)
+        format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
+        format.setInteger(MediaFormat.KEY_BIT_RATE, videoBitRate)
+        format.setInteger(MediaFormat.KEY_FRAME_RATE, frameRate)
+        format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
 
+        videoCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
+        videoCodec?.setCallback(object : MediaCodec.Callback() {
+            override fun onInputBufferAvailable(codec: MediaCodec, index: Int) {
+                // 视频输入由 Surface 提供，无需处理
+            }
+
+            override fun onOutputBufferAvailable(codec: MediaCodec, index: Int, info: MediaCodec.BufferInfo) {
+                processOutputData(codec, index, info, isVideo = true)
+            }
+
+            override fun onOutputFormatChanged(codec: MediaCodec, format: MediaFormat) {
+                synchronized(this@VideoEncoder) {
+                    if (videoTrackIndex == -1) {
+                        videoTrackIndex = muxer!!.addTrack(format)
+                        isVideoFormatAdded = true
+                        tryStartMuxer()
+                    }
+                }
+            }
+
+            override fun onError(codec: MediaCodec, e: MediaCodec.CodecException) {
+                Log.e(TAG, "Video Codec Error", e)
+            }
+        })
+        videoCodec?.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+        inputSurface = videoCodec?.createInputSurface()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun setupAudioCodec() {
+        val format = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, audioSampleRate, 1)
+        format.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
+        format.setInteger(MediaFormat.KEY_BIT_RATE, audioBitRate)
+        format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 16384)
+
+        audioCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC)
+        audioCodec?.setCallback(object : MediaCodec.Callback() {
+            override fun onInputBufferAvailable(codec: MediaCodec, index: Int) {
+                // 音频数据由 startAudioRecordLoop 协程主动塞入，这里留空或作状态标记均可
+            }
+
+            override fun onOutputBufferAvailable(codec: MediaCodec, index: Int, info: MediaCodec.BufferInfo) {
+                processOutputData(codec, index, info, isVideo = false)
+            }
+
+            override fun onOutputFormatChanged(codec: MediaCodec, format: MediaFormat) {
+                synchronized(this@VideoEncoder) {
+                    if (audioTrackIndex == -1) {
+                        audioTrackIndex = muxer!!.addTrack(format)
+                        isAudioFormatAdded = true
+                        tryStartMuxer()
+                    }
+                }
+            }
+
+            override fun onError(codec: MediaCodec, e: MediaCodec.CodecException) {
+                Log.e(TAG, "Audio Codec Error", e)
+            }
+        })
+        audioCodec?.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+
+        val bufferSize = AudioRecord.getMinBufferSize(audioSampleRate, audioChannels, AudioFormat.ENCODING_PCM_16BIT)
+        audioRecord = AudioRecord(MediaRecorder.AudioSource.MIC, audioSampleRate, audioChannels, AudioFormat.ENCODING_PCM_16BIT, bufferSize * 2)
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun startAudioRecordLoop() {
+        encoderScope.launch {
+            audioRecord?.startRecording()
+            val buffer = ByteArray(4096)
+
+            while (isRecording && isActive) {
+                val readBytes = audioRecord?.read(buffer, 0, buffer.size) ?: 0
+                if (readBytes > 0) {
+                    val codec = audioCodec ?: break
+                    val inputBufferIndex = codec.dequeueInputBuffer(10000)
                     if (inputBufferIndex >= 0) {
                         val inputBuffer = codec.getInputBuffer(inputBufferIndex)
-                        if (inputBuffer != null) {
-                            inputBuffer.clear()
-                            inputBuffer.put(pcmBuffer, 0, readResult)
-                            val ptsUsec = (System.nanoTime() - startTimeNs) / 1000
-                            codec.queueInputBuffer(inputBufferIndex, 0, readResult, ptsUsec, 0)
-                        }
+                        inputBuffer?.clear()
+                        inputBuffer?.put(buffer, 0, readBytes)
+
+                        // 计算音频 PTS
+                        val pts = (System.nanoTime() - startTimeNs) / 1000
+                        codec.queueInputBuffer(inputBufferIndex, 0, readBytes, pts, 0)
                     }
                 }
             }
         }
     }
 
-    // --- Codec Callbacks ---
-
-    private inner class VideoCodecCallback : MediaCodec.Callback() {
-        override fun onInputBufferAvailable(codec: MediaCodec, index: Int) {
-            // Ignored, using Surface
+    private fun processOutputData(codec: MediaCodec, index: Int, info: MediaCodec.BufferInfo, isVideo: Boolean) {
+        if ((info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
+            info.size = 0
         }
 
-        override fun onOutputBufferAvailable(codec: MediaCodec, index: Int, info: MediaCodec.BufferInfo) {
-            handleOutputBuffer(codec, index, info, isVideo = true)
-        }
+        if (info.size != 0) {
+            val encodedData = codec.getOutputBuffer(index)
+            if (encodedData != null) {
+                encodedData.position(info.offset)
+                encodedData.limit(info.offset + info.size)
 
-        override fun onOutputFormatChanged(codec: MediaCodec, format: MediaFormat) {
-            handleOutputFormatChanged(format, isVideo = true)
-        }
-
-        override fun onError(codec: MediaCodec, e: MediaCodec.CodecException) {
-            e.printStackTrace()
-        }
-    }
-
-    private inner class AudioCodecCallback : MediaCodec.Callback() {
-        override fun onInputBufferAvailable(codec: MediaCodec, index: Int) {
-            // We pump data manually in the startAudioRecordLoop
-        }
-
-        override fun onOutputBufferAvailable(codec: MediaCodec, index: Int, info: MediaCodec.BufferInfo) {
-            handleOutputBuffer(codec, index, info, isVideo = false)
-        }
-
-        override fun onOutputFormatChanged(codec: MediaCodec, format: MediaFormat) {
-            handleOutputFormatChanged(format, isVideo = false)
-        }
-
-        override fun onError(codec: MediaCodec, e: MediaCodec.CodecException) {
-            e.printStackTrace()
-        }
-    }
-
-    // --- Muxer Synchronization ---
-
-    @Synchronized
-    private fun handleOutputFormatChanged(format: MediaFormat, isVideo: Boolean) {
-        if (!isRecording.get() || muxer == null) return
-
-        if (isVideo) {
-            videoTrackIndex = muxer!!.addTrack(format)
-            isVideoFormatAdded = true
-        } else {
-            audioTrackIndex = muxer!!.addTrack(format)
-            isAudioFormatAdded = true
-        }
-
-        // Muxer Barrier
-        if (isVideoFormatAdded && isAudioFormatAdded && !muxerStarted.get()) {
-            muxer!!.start()
-            muxerStarted.set(true)
-
-            // Drain pending queues
-            drainPendingQueue(pendingVideoData, videoTrackIndex)
-            drainPendingQueue(pendingAudioData, audioTrackIndex)
-        }
-    }
-
-    @Synchronized
-    private fun handleOutputBuffer(codec: MediaCodec, index: Int, info: MediaCodec.BufferInfo, isVideo: Boolean) {
-        if (!isRecording.get()) {
-            try { codec.releaseOutputBuffer(index, false) } catch (e: Exception) {}
-            return
-        }
-
-        val outputBuffer = codec.getOutputBuffer(index)
-        if (outputBuffer != null && info.size != 0 && (info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0) {
-
-            // Ensure PTS is aligned to our startTimeNs (if not coming from GL perfectly)
-            if (isVideo) {
-                // Video PTS comes from GL Surface Presentation Time (already in nanoseconds originally,
-                // but MediaCodec outputs microseconds usually, we just accept what codec gives if we align at source,
-                // or we enforce System.nanoTime difference here for fallback).
-                // In our NativeBridge.cpp we used `eglPresentationTimeANDROID`.
-            }
-
-            outputBuffer.position(info.offset)
-            outputBuffer.limit(info.offset + info.size)
-
-            if (muxerStarted.get()) {
-                val trackIndex = if (isVideo) videoTrackIndex else audioTrackIndex
-                try {
-                    muxer?.writeSampleData(trackIndex, outputBuffer, info)
-                } catch (e: Exception) { e.printStackTrace() }
-            } else {
-                // Cache data until muxer starts
-                val byteBuffer = ByteBuffer.allocate(info.size)
-                byteBuffer.put(outputBuffer)
-                byteBuffer.flip()
+                // 拷贝一份 Buffer，防止 Codec release 后数据丢失
+                val copyBuffer = ByteBuffer.allocate(info.size)
+                copyBuffer.put(encodedData)
+                copyBuffer.flip()
 
                 val newInfo = MediaCodec.BufferInfo().apply {
                     set(0, info.size, info.presentationTimeUs, info.flags)
                 }
 
-                val data = MuxerData(newInfo, byteBuffer)
-                if (isVideo) {
-                    pendingVideoData.add(data)
-                } else {
-                    pendingAudioData.add(data)
+                synchronized(this) {
+                    if (muxerStarted) {
+                        val track = if (isVideo) videoTrackIndex else audioTrackIndex
+                        muxer?.writeSampleData(track, copyBuffer, newInfo)
+                    } else {
+                        // Muxer 未就绪，压入早鸟帧队列
+                        pendingFrames.add(FrameData(copyBuffer, newInfo, isVideo))
+                    }
                 }
             }
         }
-
-        try { codec.releaseOutputBuffer(index, false) } catch (e: Exception) {}
+        codec.releaseOutputBuffer(index, false)
     }
 
-    private fun drainPendingQueue(queue: ConcurrentLinkedQueue<MuxerData>, trackIndex: Int) {
-        while (queue.isNotEmpty()) {
-            val data = queue.poll()
-            if (data != null && muxer != null) {
-                try {
-                    muxer!!.writeSampleData(trackIndex, data.byteBuffer, data.bufferInfo)
-                } catch (e: Exception) { e.printStackTrace() }
+    @Synchronized
+    private fun tryStartMuxer() {
+        if (!muxerStarted && isVideoFormatAdded && isAudioFormatAdded) {
+            Log.d(TAG, "Both tracks added, starting muxer.")
+            muxer?.start()
+            muxerStarted = true
+
+            // 清空早鸟帧队列
+            while (pendingFrames.isNotEmpty()) {
+                val frame = pendingFrames.poll() ?: break
+                val track = if (frame.isVideo) videoTrackIndex else audioTrackIndex
+                muxer?.writeSampleData(track, frame.buffer, frame.info)
             }
         }
     }
 
     fun stopRecording() {
-        if (!isRecording.getAndSet(false)) return
-
-        audioRecordJob?.cancel()
-
-        try {
-            audioRecord?.stop()
-            audioRecord?.release()
-        } catch (e: Exception) { e.printStackTrace() }
-        audioRecord = null
+        isRecording = false
+        encoderScope.coroutineContext.cancelChildren() // 停止音频采集协程
 
         try {
-            videoCodec?.signalEndOfInputStream() // Important for proper MP4 closing
-            videoCodec?.stop()
-            videoCodec?.release()
-        } catch (e: Exception) { e.printStackTrace() }
-        videoCodec = null
+            videoCodec?.signalEndOfInputStream()
+        } catch (e: Exception) { Log.e(TAG, "Error signaling EOS", e) }
 
-        try {
-            audioCodec?.stop()
-            audioCodec?.release()
-        } catch (e: Exception) { e.printStackTrace() }
-        audioCodec = null
+        // 等待编码器排空
+        Thread.sleep(100)
 
-        try {
-            if (muxerStarted.get()) {
-                muxer?.stop()
+        try { audioRecord?.stop(); audioRecord?.release() } catch (e: Exception) {}
+        try { videoCodec?.stop(); videoCodec?.release() } catch (e: Exception) {}
+        try { audioCodec?.stop(); audioCodec?.release() } catch (e: Exception) {}
+
+        synchronized(this) {
+            if (muxerStarted) {
+                try { muxer?.stop(); muxer?.release() } catch (e: Exception) {}
             }
-            muxer?.release()
-        } catch (e: Exception) { e.printStackTrace() }
-        muxer = null
-        muxerStarted.set(false)
+            muxerStarted = false
+        }
 
         inputSurface?.release()
         inputSurface = null
 
-        videoHandlerThread?.quitSafely()
-        audioHandlerThread?.quitSafely()
-        videoHandlerThread = null
-        audioHandlerThread = null
+        videoTrackIndex = -1
+        audioTrackIndex = -1
+        isVideoFormatAdded = false
+        isAudioFormatAdded = false
+        pendingFrames.clear()
 
-        pendingVideoData.clear()
-        pendingAudioData.clear()
+        Log.d(TAG, "Recording stopped and resources released.")
     }
 }
