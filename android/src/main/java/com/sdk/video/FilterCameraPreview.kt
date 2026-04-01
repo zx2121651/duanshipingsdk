@@ -26,6 +26,7 @@ fun FilterCameraPreview(
     // Intensity State for the new CinematicLookupFilter
     var intensity by remember { mutableFloatStateOf(1.0f) }
 
+    // 使用 DisposableEffect 把 VideoFilterManager 的初始化和释放与 Compose 的生命周期安全绑定
     DisposableEffect(filterManager) {
         scope.launch {
             filterManager.initialize()
@@ -46,6 +47,7 @@ fun FilterCameraPreview(
         if (engineState == FilterEngineState.ERROR) {
             Text("Camera failed. Degrading to safe mode...", color = Color.Red)
         } else {
+            // 利用 AndroidView 桥接底层的 GLSurfaceView 来渲染 OpenGL 纹理
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
                 factory = { context ->

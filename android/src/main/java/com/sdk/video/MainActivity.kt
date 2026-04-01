@@ -96,6 +96,8 @@ class MainActivity : AppCompatActivity() {
             val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
 
             // 1. 废弃硬编码，使用 ResolutionSelector 构建安全的回退策略
+            // 1. 使用 CameraX 推荐的 ResolutionSelector 来做兼容性降级
+            // 如果手机不支持请求的 1080p，则自动向下寻找最接近的安全分辨率 (Fallback)
             val resolutionSelector = ResolutionSelector.Builder()
                 .setResolutionStrategy(
                     ResolutionStrategy(
@@ -113,6 +115,7 @@ class MainActivity : AppCompatActivity() {
 
             // 2. 在得到真实分辨率后动态初始化渲染引擎
             preview.setSurfaceProvider { request ->
+                // 获取 CameraX 与底层硬件协商后的实际安全分辨率
                 val resolution = request.resolution
                 Log.d(TAG, "CameraX negotiated resolution: ${resolution.width}x${resolution.height}")
 

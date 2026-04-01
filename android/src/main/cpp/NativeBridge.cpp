@@ -144,6 +144,7 @@ struct EngineWrapper {
 
 extern "C" {
 
+// 这里的 JNIEXPORT 宏保证了方法能被 Java 层反射找到，JNICALL 指定了调用约定
 JNIEXPORT jlong JNICALL
 Java_com_sdk_video_RenderEngine_nativeInit(JNIEnv *env, jobject thiz) {
     EngineWrapper* wrapper = new EngineWrapper();
@@ -171,6 +172,7 @@ Java_com_sdk_video_RenderEngine_nativeProcessFrame(JNIEnv *env, jobject thiz, jl
     auto start = std::chrono::high_resolution_clock::now();
 
     // Extract 4x4 transform matrix
+    // 将 Java 的 FloatArray 转换为 C++ 的 std::vector<float>，方便后续传递给 FilterEngine 统一做坐标纠正
     jsize len = env->GetArrayLength(matrix);
     if (len == 16) {
         jfloat *elements = env->GetFloatArrayElements(matrix, 0);

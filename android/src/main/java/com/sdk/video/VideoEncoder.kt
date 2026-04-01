@@ -9,6 +9,10 @@ import java.io.IOException
 import java.nio.ByteBuffer
 import java.util.concurrent.ConcurrentLinkedQueue
 
+ /**
+  * 纯异步、零阻塞的商业级音视频编码器。
+  * 亮点：完全基于 MediaCodec.Callback 事件驱动，使用 Muxer 同步屏障解决多轨混合问题。
+  */
 class VideoEncoder(
     private val width: Int = 1080,
     private val height: Int = 1920,
@@ -38,6 +42,7 @@ class VideoEncoder(
     private var isAudioFormatAdded = false
 
     // 早鸟帧缓存队列 (解决 Muxer 未启动前的数据丢弃问题)
+        // 早鸟帧缓存队列：在 Muxer 启动前，缓存那些提前到来的 SPS/PPS 配置头或视频帧，防止丢帧
     private val pendingFrames = ConcurrentLinkedQueue<FrameData>()
     private var startTimeNs: Long = 0
 
@@ -210,6 +215,11 @@ class VideoEncoder(
         codec.releaseOutputBuffer(index, false)
     }
 
+    @Synchronized
+        /**
+     * Muxer 启动屏障：必须等到 Video 和 Audio 的 Track 都 Add 完毕后才能 start()。
+     * 一旦 start，就一口气把 pendingFrames 里的早鸟帧全部写入。
+     */
     @Synchronized
     private fun tryStartMuxer() {
         if (!muxerStarted && isVideoFormatAdded && isAudioFormatAdded) {
