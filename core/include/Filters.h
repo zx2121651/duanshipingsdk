@@ -1,5 +1,6 @@
 #pragma once
 #include "Filter.h"
+#include "FrameBufferPool.h"
 #include <string>
 
 #ifdef __APPLE__
@@ -36,14 +37,29 @@ private:
     GLuint m_brightnessHandle;
 };
 
+// ----------------------------------------------------------------------------
+// 高性能 Two-Pass 高斯模糊滤镜 (Gaussian Blur)
+// ----------------------------------------------------------------------------
 class GaussianBlurFilter : public Filter {
 public:
-    GaussianBlurFilter();
+    GaussianBlurFilter(FrameBufferPool* pool);
+public:
+    // 注入 FrameBufferPool 用于在 Two-Pass 之间借用临时 FBO
+    GaussianBlurFilter(FrameBufferPool* pool);
+    ~GaussianBlurFilter() override;
     void initialize() override;
+
+    // 重写 processFrame 因为双趟渲染不只是一次 onDraw
+    Texture processFrame(const Texture& inputTexture, FrameBufferPtr outputFb) override;
+
 protected:
     void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
+    const char* getVertexShaderSource() const override;
     const char* getFragmentShaderSource() const override;
+
 private:
+    FrameBufferPool* m_pool;
+
     GLuint m_texelWidthOffsetHandle;
     GLuint m_texelHeightOffsetHandle;
     GLuint m_blurSizeHandle;
@@ -78,6 +94,24 @@ private:
     GLuint m_texelWidthOffsetHandle;
     GLuint m_texelHeightOffsetHandle;
     GLuint m_distanceNormalizationFactorHandle;
+};
+
+class CinematicLookupFilter : public Filter {
+public:
+    CinematicLookupFilter();
+    ~CinematicLookupFilter() override;
+    void initialize() override;
+
+    // Set the 512x512 2D LUT texture
+    void setLookupTexture(GLuint textureId);
+
+protected:
+    void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
+    const char* getFragmentShaderSource() const override;
+private:
+    GLuint m_lookupTextureHandle;
+    GLuint m_intensityHandle;
+    GLuint m_lookupTextureId;
 };
 
 } // namespace video

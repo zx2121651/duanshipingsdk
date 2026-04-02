@@ -32,11 +32,16 @@ public:
     void addFilter(FilterPtr filter);
     void removeAllFilters();
 
+    // 暴露 FBO 内存池供子滤镜（如 Two-pass 高斯模糊）借用
+    FrameBufferPool m_frameBufferPool;
+
 private:
     std::vector<FilterPtr> m_filters;
     ThreadCheck m_threadCheck;
-    FrameBufferPool m_frameBufferPool;
     bool m_initialized;
+
+    // 故障模拟器开关，用于验证 UI 层的防黑屏兜底策略
+    bool m_simulateCrash;
 };
 
 using FilterEnginePtr = std::shared_ptr<FilterEngine>;

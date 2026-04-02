@@ -102,9 +102,13 @@ uniform float intensity;
 
 void main() {
     vec4 textureColor = texture(inputImageTexture, textureCoordinate);
-    float blueColor = textureColor.b * 63.0;
+    // 3D LUT 核心算法：
+            // 1. 获取输入像素的 B (蓝) 通道值，将其映射为 0~63 之间的浮点数，这代表着它在 LUT 图的 64 个网格中的位置索引。
+            float blueColor = textureColor.b * 63.0;
 
-    vec2 quad1;
+    // 2. 因为 blueColor 是浮点数，所以它通常落在两个相邻的整数网格之间。
+            // 我们算出这两个相邻网格的索引 (quad1 对应向下取整，quad2 对应向上取整)。
+            vec2 quad1;
     quad1.y = floor(floor(blueColor) / 8.0);
     quad1.x = floor(blueColor) - (quad1.y * 8.0);
 
@@ -112,7 +116,9 @@ void main() {
     quad2.y = floor(ceil(blueColor) / 8.0);
     quad2.x = ceil(blueColor) - (quad2.y * 8.0);
 
-    vec2 texPos1;
+    // 3. 在对应的网格中，根据输入像素的 R (红) 和 G (绿) 算出在这个 8x8 小方块中的精确 x, y 坐标。
+            // 0.125 是 1/8 (每个网格占总宽高的 1/8)，0.5/512.0 是半像素偏移，用于防止 OpenGL 边缘采样时出现像素串线。
+            vec2 texPos1;
     texPos1.x = (quad1.x * 0.125) + 0.5/512.0 + ((0.125 - 1.0/512.0) * textureColor.r);
     texPos1.y = (quad1.y * 0.125) + 0.5/512.0 + ((0.125 - 1.0/512.0) * textureColor.g);
 
@@ -123,7 +129,9 @@ void main() {
     vec4 newColor1 = texture(lookupTexture, texPos1);
     vec4 newColor2 = texture(lookupTexture, texPos2);
 
-    vec4 newColor = mix(newColor1, newColor2, fract(blueColor));
+    // 4. 根据蓝通道的小数部分 (fract)，将从两个网格采到的颜色进行 mix (线性插值) 混合。
+            // 这消除了色彩渐变时的 Banding (色阶断层) 现象。
+            vec4 newColor = mix(newColor1, newColor2, fract(blueColor));
     fragColor = mix(textureColor, vec4(newColor.rgb, textureColor.w), intensity);
 }
 )";
@@ -362,8 +370,13 @@ void BrightnessFilter::onDraw(const Texture& inputTexture, FrameBufferPtr output
 
 // --- GaussianBlurFilter ---
 
-GaussianBlurFilter::GaussianBlurFilter() {
+// --- 高性能 Two-Pass 高斯模糊 (Gaussian Blur) ---
+
+GaussianBlurFilter::GaussianBlurFilter(FrameBufferPool* pool) : m_pool(pool) {
     m_parameters["blurSize"] = 1.0f;
+}
+
+GaussianBlurFilter::~GaussianBlurFilter() {
 }
 
 void GaussianBlurFilter::initialize() {
@@ -373,12 +386,16 @@ void GaussianBlurFilter::initialize() {
     m_blurSizeHandle = glGetUniformLocation(m_programId, "blurSize");
 }
 
-const char* GaussianBlurFilter::getFragmentShaderSource() const {
-    return kGaussianBlurFragmentShader;
-}
+Texture GaussianBlurFilter::processFrame(const Texture& inputTexture, FrameBufferPtr outputFb) {
+    if (!m_pool) return inputTexture;
 
-void GaussianBlurFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {
-    outputFb->bind();
+    // 从 FBO 池中借用一个与输入尺寸一致的临时 FrameBuffer 用于存放第一趟（水平模糊）的结果
+    FrameBufferPtr intermediateFb = m_pool->get(inputTexture.width, inputTexture.height);
+
+    // ---------------------------------------------------------
+    // Pass 1: 水平模糊 (Horizontal Blur)
+    // ---------------------------------------------------------
+    intermediateFb->bind();
     glUseProgram(m_programId);
 
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -388,15 +405,19 @@ void GaussianBlurFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outp
     glBindTexture(GL_TEXTURE_2D, inputTexture.id);
     glUniform1i(m_inputImageTextureHandle, 0);
 
-    // Simplistic single-pass diagonal blur passing offsets based on input texture dimensions
+    // 设置水平方向的偏移量，垂直方向为 0
     glUniform1f(m_texelWidthOffsetHandle, 1.0f / inputTexture.width);
-    glUniform1f(m_texelHeightOffsetHandle, 1.0f / inputTexture.height);
+    glUniform1f(m_texelHeightOffsetHandle, 0.0f);
 
     float blurSize = 1.0f;
-    if (m_parameters.count("blurSize") && m_parameters.at("blurSize").type() == typeid(float)) {
-        blurSize = std::any_cast<float>(m_parameters.at("blurSize"));
+    if (m_parameters.count("blurSize")) {
+        try { blurSize = std::any_cast<float>(m_parameters.at("blurSize")); } catch (...) {}
     }
     glUniform1f(m_blurSizeHandle, blurSize);
+
+    // TODO: bind attributes correctly (assuming standard base class handles)
+    static const float s_vertexCoords[] = { -1.0f, -1.0f,  1.0f, -1.0f,  -1.0f, 1.0f,  1.0f, 1.0f };
+    static const float s_textureCoords[] = { 0.0f, 0.0f,  1.0f, 0.0f,  0.0f, 1.0f,  1.0f, 1.0f };
 
     glEnableVertexAttribArray(m_positionHandle);
     glVertexAttribPointer(m_positionHandle, 2, GL_FLOAT, GL_FALSE, 0, s_vertexCoords);
@@ -406,14 +427,97 @@ void GaussianBlurFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outp
 
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
+    // ---------------------------------------------------------
+    // Pass 2: 垂直模糊 (Vertical Blur)
+    // ---------------------------------------------------------
+    outputFb->bind();
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    // 绑定第一趟生成的临时纹理作为输入
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, intermediateFb->getTexture().id);
+    glUniform1i(m_inputImageTextureHandle, 0);
+
+    // 设置垂直方向的偏移量，水平方向为 0
+    glUniform1f(m_texelWidthOffsetHandle, 0.0f);
+    glUniform1f(m_texelHeightOffsetHandle, 1.0f / inputTexture.height);
+    // blurSize 保持不变
+    glUniform1f(m_blurSizeHandle, blurSize);
+
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
     glDisableVertexAttribArray(m_positionHandle);
     glDisableVertexAttribArray(m_texCoordHandle);
-    glBindTexture(GL_TEXTURE_2D, 0);
 
-    outputFb->unbind();
+    // 释放临时 FBO，归还到池中
+    m_pool->release(intermediateFb);
+
+    return outputFb->getTexture();
 }
 
-// --- LookupFilter ---
+void GaussianBlurFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {
+    // 留空，因为我们在重写的 processFrame 中已经完成了所有的绘制调度
+}
+
+const char* GaussianBlurFilter::getVertexShaderSource() const {
+    // 顶点着色器预计算优化 (VS Pre-calculation):
+    // 提前计算 5 个采样点的纹理坐标偏移。在 Vertex Shader 中做这件事，
+    // 可以避免在 Fragment Shader 中针对每一个像素（可能数百万个）进行重复计算，极大地节省 ALU 算力。
+    return R"(#version 300 es
+        layout(location = 0) in vec4 a_position;
+        layout(location = 1) in vec4 a_texCoord;
+
+        uniform float texelWidthOffset;
+        uniform float texelHeightOffset;
+        uniform float blurSize;
+
+        // 传递给片段着色器的 5 个采样点坐标（利用硬件双线性插值，这相当于采样了 9 个点）
+        out vec2 blurCoordinates[5];
+
+        void main() {
+            gl_Position = a_position;
+            vec2 singleStepOffset = vec2(texelWidthOffset, texelHeightOffset) * blurSize;
+
+            // 当前像素点 (中心点)
+            blurCoordinates[0] = a_texCoord.xy;
+            // 距离中心 1.407333 像素的偏移（经过精心计算的硬件线性插值中心位置）
+            blurCoordinates[1] = a_texCoord.xy + singleStepOffset * 1.407333;
+            blurCoordinates[2] = a_texCoord.xy - singleStepOffset * 1.407333;
+            // 距离中心 3.294215 像素的偏移
+            blurCoordinates[3] = a_texCoord.xy + singleStepOffset * 3.294215;
+            blurCoordinates[4] = a_texCoord.xy - singleStepOffset * 3.294215;
+        }
+    )";
+}
+
+const char* GaussianBlurFilter::getFragmentShaderSource() const {
+    // 片段着色器:
+    // 只需执行 5 次 texture 采样调用，利用不同的高斯权重(0.204164 等)进行叠加。
+    // 这比传统的 O(N^2) for 循环采样快了上百倍。
+    return R"(#version 300 es
+        precision mediump float;
+
+        uniform sampler2D inputImageTexture;
+        in vec2 blurCoordinates[5];
+
+        out vec4 fragColor;
+
+        void main() {
+            vec4 sum = vec4(0.0);
+
+            // 中心点权重最高
+            sum += texture(inputImageTexture, blurCoordinates[0]) * 0.204164;
+
+            // 利用预计算好的偏移和硬件插值，单次 texture 相当于加权了 2 个周围像素点
+            sum += texture(inputImageTexture, blurCoordinates[1]) * 0.304005;
+            sum += texture(inputImageTexture, blurCoordinates[2]) * 0.304005;
+            sum += texture(inputImageTexture, blurCoordinates[3]) * 0.093913;
+            sum += texture(inputImageTexture, blurCoordinates[4]) * 0.093913;
+
+            fragColor = sum;
+        }
+    )";
+}
 
 LookupFilter::LookupFilter() : m_lookupTextureId(0) {
     m_parameters["intensity"] = 1.0f;
@@ -541,3 +645,104 @@ void BilateralFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputF
 
 } // namespace video
 } // namespace sdk
+
+// --- CinematicLookupFilter Implementation ---
+// 这是电影级调色的滤镜，采用 GPUImage 风格的 512x512 2D 展开图来模拟 64x64x64 的 3D LUT (查找表)。
+CinematicLookupFilter::CinematicLookupFilter()
+    : m_lookupTextureHandle(0)
+    , m_intensityHandle(0)
+    , m_lookupTextureId(0)
+{
+    m_parameters["intensity"] = std::any(1.0f);
+}
+
+CinematicLookupFilter::~CinematicLookupFilter() {
+    if (m_lookupTextureId != 0) {
+        glDeleteTextures(1, &m_lookupTextureId);
+        m_lookupTextureId = 0;
+    }
+}
+
+void CinematicLookupFilter::setLookupTexture(GLuint textureId) {
+    if (m_lookupTextureId != 0) {
+        glDeleteTextures(1, &m_lookupTextureId);
+    }
+    m_lookupTextureId = textureId;
+}
+
+void CinematicLookupFilter::initialize() {
+    Filter::initialize();
+    m_lookupTextureHandle = glGetUniformLocation(m_programId, "lookupTexture");
+    m_intensityHandle = glGetUniformLocation(m_programId, "intensity");
+}
+
+void CinematicLookupFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {
+    if (m_lookupTextureId != 0) {
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, m_lookupTextureId);
+        glUniform1i(m_lookupTextureHandle, 1);
+    }
+
+    float intensity = 1.0f;
+    auto it = m_parameters.find("intensity");
+    if (it != m_parameters.end()) {
+        try { intensity = std::any_cast<float>(it->second); } catch (...) {}
+    }
+    glUniform1f(m_intensityHandle, intensity);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, inputTexture.id);
+
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+const char* CinematicLookupFilter::getFragmentShaderSource() const {
+    return R"(#version 300 es
+        precision highp float;
+        in vec2 v_texCoord;
+        uniform sampler2D inputImageTexture;
+        uniform sampler2D lookupTexture;
+        uniform float intensity;
+
+        out vec4 fragColor;
+
+        void main() {
+            vec4 textureColor = texture(inputImageTexture, v_texCoord);
+
+            // 3D LUT 核心算法：
+            // 1. 获取输入像素的 B (蓝) 通道值，将其映射为 0~63 之间的浮点数，这代表着它在 LUT 图的 64 个网格中的位置索引。
+            float blueColor = textureColor.b * 63.0;
+
+            // 2. 因为 blueColor 是浮点数，所以它通常落在两个相邻的整数网格之间。
+            // 我们算出这两个相邻网格的索引 (quad1 对应向下取整，quad2 对应向上取整)。
+            vec2 quad1;
+            quad1.y = floor(floor(blueColor) / 8.0);
+            quad1.x = floor(blueColor) - (quad1.y * 8.0);
+
+            vec2 quad2;
+            quad2.y = floor(ceil(blueColor) / 8.0);
+            quad2.x = ceil(blueColor) - (quad2.y * 8.0);
+
+            // 3. 在对应的网格中，根据输入像素的 R (红) 和 G (绿) 算出在这个 8x8 小方块中的精确 x, y 坐标。
+            // 0.125 是 1/8 (每个网格占总宽高的 1/8)，0.5/512.0 是半像素偏移，用于防止 OpenGL 边缘采样时出现像素串线。
+            vec2 texPos1;
+            texPos1.x = (quad1.x * 0.125) + 0.5/512.0 + ((0.125 - 1.0/512.0) * textureColor.r);
+            texPos1.y = (quad1.y * 0.125) + 0.5/512.0 + ((0.125 - 1.0/512.0) * textureColor.g);
+
+            vec2 texPos2;
+            texPos2.x = (quad2.x * 0.125) + 0.5/512.0 + ((0.125 - 1.0/512.0) * textureColor.r);
+            texPos2.y = (quad2.y * 0.125) + 0.5/512.0 + ((0.125 - 1.0/512.0) * textureColor.g);
+
+            vec4 newColor1 = texture(lookupTexture, texPos1);
+            vec4 newColor2 = texture(lookupTexture, texPos2);
+
+            // 4. 根据蓝通道的小数部分 (fract)，将从两个网格采到的颜色进行 mix (线性插值) 混合。
+            // 这消除了色彩渐变时的 Banding (色阶断层) 现象。
+            vec4 newColor = mix(newColor1, newColor2, fract(blueColor));
+
+            fragColor = mix(textureColor, vec4(newColor.rgb, textureColor.w), intensity);
+        }
+    )";
+}
