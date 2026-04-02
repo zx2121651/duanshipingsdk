@@ -114,6 +114,19 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
         }
     }
 
+
+    fun startAudioRecord(sampleRate: Int) {
+        if (nativeHandle != 0L) nativeStartAudioRecord(nativeHandle, sampleRate)
+    }
+
+    fun stopAudioRecord() {
+        if (nativeHandle != 0L) nativeStopAudioRecord(nativeHandle)
+    }
+
+    fun readAudioPCM(buffer: ByteArray, length: Int): Int {
+        return if (nativeHandle != 0L) nativeReadAudioPCM(nativeHandle, buffer, length) else 0
+    }
+
     // Native methods
     private external fun nativeInit(): Long
     private external fun nativeRelease(handle: Long)
@@ -124,4 +137,7 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     private external fun nativeUpdateParameterBool(handle: Long, key: String, value: Boolean)
     private external fun nativeAddFilter(handle: Long, filterType: Int)
     private external fun nativeRemoveAllFilters(handle: Long)
+    private external fun nativeStartAudioRecord(handle: Long, sampleRate: Int)
+    private external fun nativeStopAudioRecord(handle: Long)
+    private external fun nativeReadAudioPCM(handle: Long, buffer: ByteArray, length: Int): Int
 }
