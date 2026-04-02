@@ -13,11 +13,14 @@
 
 #include "../../../../core/include/FilterEngine.h"
 #include "../../../../core/include/Filters.h"
+#include "OboeAudioEngine.h"
+
 
 using namespace sdk::video;
 
 struct EngineWrapper {
     std::shared_ptr<FilterEngine> filterEngine;
+    std::unique_ptr<OboeAudioEngine> audioEngine;
 
 #ifndef WIN32
     // Recording state
@@ -32,13 +35,72 @@ struct EngineWrapper {
 
     EngineWrapper() {
         filterEngine = std::make_shared<FilterEngine>();
+        audioEngine = std::make_unique<OboeAudioEngine>();
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
     }
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"
 
     ~EngineWrapper() {
 #ifndef WIN32
         releaseRecordingSurface();
 #endif
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
     }
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"
 
 #ifndef WIN32
     void setupRecordingSurface(JNIEnv* env, jobject surface) {
@@ -79,19 +141,164 @@ struct EngineWrapper {
             recordProgram = glCreateProgram();
             glAttachShader(recordProgram, vs); glAttachShader(recordProgram, fs);
             glLinkProgram(recordProgram);
-        }
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
     }
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"
 
     void releaseRecordingSurface() {
         if (eglDisplay != EGL_NO_DISPLAY && recordingSurface != EGL_NO_SURFACE) {
             eglDestroySurface(eglDisplay, recordingSurface);
             recordingSurface = EGL_NO_SURFACE;
-        }
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"
         if (recordingWindow) {
             ANativeWindow_release(recordingWindow);
             recordingWindow = nullptr;
-        }
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
     }
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"
 
     void renderToRecordingSurface(Texture tex, int width, int height, int64_t timestampNs) {
         if (recordingSurface == EGL_NO_SURFACE || eglDisplay == EGL_NO_DISPLAY) return;
@@ -103,7 +310,36 @@ struct EngineWrapper {
         // Make recording surface current
         if (!eglMakeCurrent(eglDisplay, recordingSurface, recordingSurface, sharedContext)) {
             return;
-        }
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"
 
         glViewport(0, 0, width, height);
         glClear(GL_COLOR_BUFFER_BIT);
@@ -131,13 +367,71 @@ struct EngineWrapper {
 
         if (eglPresentationTimeANDROID) {
             eglPresentationTimeANDROID(eglDisplay, recordingSurface, timestampNs);
-        }
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"
 
         eglSwapBuffers(eglDisplay, recordingSurface);
 
         // Restore original display surface
         eglMakeCurrent(eglDisplay, drawSurface, readSurface, sharedContext);
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
     }
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"
 #endif
 };
 
@@ -152,7 +446,36 @@ Java_com_sdk_video_RenderEngine_nativeInit(JNIEnv *env, jobject thiz) {
     wrapper->filterEngine->addFilter(std::make_shared<OES2RGBFilter>());
     wrapper->filterEngine->initialize(); // Ensure it binds to current GL thread during init
     return reinterpret_cast<jlong>(wrapper);
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
+    }
 }
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"
 
 JNIEXPORT void JNICALL
 Java_com_sdk_video_RenderEngine_nativeRelease(JNIEnv *env, jobject thiz, jlong handle) {
@@ -160,8 +483,66 @@ Java_com_sdk_video_RenderEngine_nativeRelease(JNIEnv *env, jobject thiz, jlong h
     if (wrapper) {
         wrapper->filterEngine->release();
         delete wrapper;
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
     }
 }
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"
 
 JNIEXPORT jint JNICALL
 Java_com_sdk_video_RenderEngine_nativeProcessFrame(JNIEnv *env, jobject thiz, jlong handle, jint textureId, jint width, jint height, jfloatArray matrix, jlong timestampNs) {
@@ -179,7 +560,36 @@ Java_com_sdk_video_RenderEngine_nativeProcessFrame(JNIEnv *env, jobject thiz, jl
         std::vector<float> textureMatrix(elements, elements + 16);
         env->ReleaseFloatArrayElements(matrix, elements, 0);
         wrapper->filterEngine->updateParameter("textureMatrix", std::any(textureMatrix));
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
     }
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"
 
     Texture inTex = {static_cast<uint32_t>(textureId), width, height};
     Texture outTex = wrapper->filterEngine->processFrame(inTex, width, height);
@@ -198,10 +608,68 @@ Java_com_sdk_video_RenderEngine_nativeProcessFrame(JNIEnv *env, jobject thiz, jl
     jfieldID lastFrameTimeMsId = env->GetFieldID(cls, "lastFrameTimeMs", "J");
     if (lastFrameTimeMsId) {
         env->SetLongField(thiz, lastFrameTimeMsId, static_cast<jlong>(durationMs));
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
     }
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"
 
     return outTex.id;
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
+    }
 }
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"
 
 JNIEXPORT void JNICALL
 Java_com_sdk_video_RenderEngine_nativeSetRecordingSurface(JNIEnv *env, jobject thiz, jlong handle, jobject surface) {
@@ -212,10 +680,97 @@ Java_com_sdk_video_RenderEngine_nativeSetRecordingSurface(JNIEnv *env, jobject t
             wrapper->setupRecordingSurface(env, surface);
         } else {
             wrapper->releaseRecordingSurface();
-        }
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
     }
-#endif
 }
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"
+#endif
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"
 
 
 JNIEXPORT void JNICALL
@@ -225,8 +780,66 @@ Java_com_sdk_video_RenderEngine_nativeUpdateParameterFloat(JNIEnv *env, jobject 
         const char *keyStr = env->GetStringUTFChars(key, nullptr);
         wrapper->filterEngine->updateParameter(std::string(keyStr), std::any(value));
         env->ReleaseStringUTFChars(key, keyStr);
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
     }
 }
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"
 
 JNIEXPORT void JNICALL
 Java_com_sdk_video_RenderEngine_nativeUpdateParameterInt(JNIEnv *env, jobject thiz, jlong handle, jstring key, jint value) {
@@ -235,8 +848,66 @@ Java_com_sdk_video_RenderEngine_nativeUpdateParameterInt(JNIEnv *env, jobject th
         const char *keyStr = env->GetStringUTFChars(key, nullptr);
         wrapper->filterEngine->updateParameter(std::string(keyStr), std::any(value));
         env->ReleaseStringUTFChars(key, keyStr);
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
     }
 }
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"
 
 JNIEXPORT void JNICALL
 Java_com_sdk_video_RenderEngine_nativeUpdateParameterBool(JNIEnv *env, jobject thiz, jlong handle, jstring key, jboolean value) {
@@ -246,8 +917,66 @@ Java_com_sdk_video_RenderEngine_nativeUpdateParameterBool(JNIEnv *env, jobject t
         bool val = (value == JNI_TRUE);
         wrapper->filterEngine->updateParameter(std::string(keyStr), std::any(val));
         env->ReleaseStringUTFChars(key, keyStr);
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
     }
 }
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"
 
 JNIEXPORT void JNICALL
 Java_com_sdk_video_RenderEngine_nativeAddFilter(JNIEnv *env, jobject thiz, jlong handle, jint filterType) {
@@ -261,12 +990,128 @@ Java_com_sdk_video_RenderEngine_nativeAddFilter(JNIEnv *env, jobject thiz, jlong
             case 3: filter = std::make_shared<BilateralFilter>(); break;
             case 4: filter = std::make_shared<CinematicLookupFilter>(); break;
             default: break;
-        }
-        if (filter) {
-            wrapper->filterEngine->addFilter(filter);
-        }
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
     }
 }
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"
+        if (filter) {
+            wrapper->filterEngine->addFilter(filter);
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"
 
 JNIEXPORT void JNICALL
 Java_com_sdk_video_RenderEngine_nativeRemoveAllFilters(JNIEnv *env, jobject thiz, jlong handle) {
@@ -275,7 +1120,94 @@ Java_com_sdk_video_RenderEngine_nativeRemoveAllFilters(JNIEnv *env, jobject thiz
         wrapper->filterEngine->removeAllFilters();
         // Re-add mandatory OES input filter for Android
         wrapper->filterEngine->addFilter(std::make_shared<OES2RGBFilter>());
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
     }
 }
 
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
 }
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"
+
+
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->start(sampleRate);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->audioEngine) {
+        wrapper->audioEngine->stop();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jlong handle, jbyteArray buffer, jint length) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    jbyte* nativeBuffer = env->GetByteArrayElements(buffer, nullptr);
+    int32_t bytesRead = wrapper->audioEngine->readPCM(reinterpret_cast<uint8_t*>(nativeBuffer), length);
+    env->ReleaseByteArrayElements(buffer, nativeBuffer, 0); // 0 means copy back to java
+
+    return bytesRead;
+}
+} // extern "C"

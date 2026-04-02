@@ -174,7 +174,7 @@ class MainActivity : AppCompatActivity() {
         val outputFile = File(moviesDir, "VideoSDK_$timeStamp.mp4")
 
         // 3. 动态配置编码器分辨率，杜绝 MediaCodec 异常
-        videoEncoder = VideoEncoder(width = safeSize.width, height = safeSize.height)
+        videoEncoder = renderEngine?.let { VideoEncoder(renderEngine = it, width = safeSize.width, height = safeSize.height) }
         val recordingSurface = videoEncoder?.startRecording(outputFile.absolutePath)
 
         if (recordingSurface != null) {

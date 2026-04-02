@@ -1,45 +1,42 @@
 cmake_minimum_required(VERSION 3.10.2)
 project("video-sdk")
 
-set(CMAKE_CXX_STANDARD 17)
+# 引入 FetchContent 用于下载 Oboe
+include(FetchContent)
+FetchContent_Declare(
+        oboe
+        GIT_REPOSITORY https://github.com/google/oboe.git
+        GIT_TAG 1.8.0
+)
+FetchContent_MakeAvailable(oboe)
 
-# Include directories
-include_directories(
-    ${CMAKE_SOURCE_DIR}/../../../core/include
+# 定义核心源码文件
+set(CORE_SRC
+        ../../../../core/src/Filter.cpp
+        ../../../../core/src/FilterEngine.cpp
+        ../../../../core/src/Filters.cpp
+        ../../../../core/src/FrameBuffer.cpp
+        ../../../../core/src/FrameBufferPool.cpp
 )
 
-# Source files
-set(CORE_SOURCES
-    ${CMAKE_SOURCE_DIR}/../../../core/src/Filter.cpp
-    ${CMAKE_SOURCE_DIR}/../../../core/src/Filters.cpp
-    ${CMAKE_SOURCE_DIR}/../../../core/src/FilterEngine.cpp
-    ${CMAKE_SOURCE_DIR}/../../../core/src/FrameBuffer.cpp
-    ${CMAKE_SOURCE_DIR}/../../../core/src/FrameBufferPool.cpp
+add_library(video-sdk SHARED
+    NativeBridge.cpp
+    OboeAudioEngine.cpp
+    ${CORE_SRC}
 )
 
-set(JNI_SOURCES
-    ${CMAKE_SOURCE_DIR}/NativeBridge.cpp
+# 包含路径
+target_include_directories(video-sdk PRIVATE
+    ../../../../core/include
+    ${oboe_SOURCE_DIR}/include
 )
 
-add_library(
-    video-sdk
-    SHARED
-    ${CORE_SOURCES}
-    ${JNI_SOURCES}
-)
-
-find_library(
-    log-lib
-    log
-)
-
-find_library(
-    gles3-lib
-    GLESv3
-)
-
-target_link_libraries(
-    video-sdk
-    ${log-lib}
-    ${gles3-lib}
+# 链接依赖库
+target_link_libraries(video-sdk
+        android
+        log
+        EGL
+        GLESv3
+        oboe::oboe
+        OpenSLES
 )
