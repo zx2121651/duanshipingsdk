@@ -15,6 +15,7 @@ import java.util.concurrent.ConcurrentLinkedQueue
  * 新增：智能探测硬件支持的 High Profile 并开启 VBR 动态码率，以获得最佳画质与体积比。
  * 升级：彻底剥离 Java AudioRecord，引入底层的 Oboe C++ 引擎进行超低延迟音频采集与自动重采样。
  */
+@InternalApi
 class VideoEncoder(
     private val renderEngine: RenderEngine, // 需要传入 RenderEngine 以调用 Oboe JNI
     private val width: Int = 1080,
