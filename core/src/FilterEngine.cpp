@@ -14,6 +14,9 @@ FilterEngine::~FilterEngine() {
 Result FilterEngine::initialize() {
     m_threadCheck.bind(); // Bind to current (GL) thread.
 
+    // 初始化前首先唤醒嗅探器，对底层硬件进行深度体检
+    m_contextManager.sniffCapabilities();
+
     for (auto& filter : m_filters) {
         filter->initialize();
     }
@@ -27,9 +30,6 @@ Texture FilterEngine::processFrame(const Texture& textureIn, int width, int heig
         return textureIn;
     }
 
-    // --- 故障模拟器拦截 (Crash Simulation) ---
-    // 一旦触发，主动返回非法纹理 ID (0)，模拟底层渲染引擎崩溃或显存耗尽。
-    // 这将触发上层 VideoFilterManager 的 DEGRADED 状态并 Bypass 原图。
     if (m_simulateCrash) {
         return Texture{0, static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
     }
@@ -46,29 +46,32 @@ Texture FilterEngine::processFrame(const Texture& textureIn, int width, int heig
     Texture currentTexture = textureIn;
     FrameBufferPtr previousFb = nullptr;
 
-    // --- 精准回收的 Ping-Pong FBO 架构 ---
     for (size_t i = 0; i < m_filters.size(); ++i) {
-        // 对于最后一步之前的所有中间过程，我们使用 RGB565 格式的半带宽 FBO 即可，这省了一半显存带宽！
-        // 如果是最后一步，出于兼容上屏或后续视频硬编码的要求，可能需要标准的 RGBA FBO。
-        bool isIntermediate = (i < m_filters.size() - 1);
+        // [三级平滑降级策略] - 根据硬件嗅探结果，智能决定 FBO 精度
+        FBOPrecision targetPrecision = FBOPrecision::RGBA8888;
 
-        FrameBufferPtr targetFb = m_frameBufferPool.getFrameBuffer(width, height, isIntermediate);
+        bool isIntermediate = (i < m_filters.size() - 1);
+        if (isIntermediate) {
+            if (m_contextManager.isFP16RenderTargetSupported()) {
+                // Tier 3 旗舰：开启 16 位浮点 HDR 渲染，防止高光色阶断层
+                targetPrecision = FBOPrecision::FP16;
+            } else {
+                // Tier 2/1 降级：开启 RGB565，带宽砍半，省电防卡顿
+                targetPrecision = FBOPrecision::RGB565;
+            }
+        }
+
+        FrameBufferPtr targetFb = m_frameBufferPool.getFrameBuffer(width, height, targetPrecision);
 
         Texture outTexture = m_filters[i]->processFrame(currentTexture, targetFb);
         currentTexture = outTexture;
 
-        // 【极致优化】：当前 Filter 执行完毕后，上一趟的输入 (previousFb) 已经没用了！
-        // 此时我们立刻强制将其归还回 Pool 中，这就保证了整个长达 10 几个 Filter 的链条中，
-        // 真正在显存里被霸占的 FBO 永远只有 2 个！极大地降低了显存爆表风险。
         if (previousFb != nullptr) {
             m_frameBufferPool.returnFrameBuffer(previousFb.get());
         }
-
         previousFb = targetFb;
     }
 
-    // 返回最后一趟生成的纹理。由于 shared_ptr custom deleter 的设计（或我们外部的手动管理），
-    // 最终业务层拿去渲染后，如果不保留引用，这个最后的 FBO 也会安全回到池子里。
     return currentTexture;
 }
 

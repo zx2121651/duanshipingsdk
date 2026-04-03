@@ -119,3 +119,29 @@ private:
 
 } // namespace video
 } // namespace sdk
+
+// ----------------------------------------------------------------------------
+// Compute Shader 滤镜 (仅 Android GLES 3.1)
+// ----------------------------------------------------------------------------
+#ifdef __ANDROID__
+class ComputeBlurFilter : public Filter {
+public:
+    ComputeBlurFilter();
+    ~ComputeBlurFilter() override;
+    void initialize() override;
+
+    // Compute Shader 不需要 Vertex 和 Fragment Shader
+    Texture processFrame(const Texture& inputTexture, FrameBufferPtr outputFb) override;
+
+protected:
+    void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
+    const char* getVertexShaderSource() const override { return ""; }
+    const char* getFragmentShaderSource() const override { return ""; }
+
+    const char* getComputeShaderSource() const;
+
+private:
+    GLuint m_computeProgramId;
+    GLuint m_blurSizeHandle;
+};
+#endif

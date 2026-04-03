@@ -3,6 +3,7 @@
 #include "Filter.h"
 #include "FrameBufferPool.h"
 #include "ThreadCheck.h"
+#include "GLContextManager.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -35,13 +36,17 @@ public:
     // 暴露 FBO 内存池供子滤镜（如 Two-pass 高斯模糊）借用
     FrameBufferPool m_frameBufferPool;
 
+    // 暴露 ContextManager 给 NativeBridge 探测
+    GLContextManager& getContextManager() { return m_contextManager; }
+
 private:
     std::vector<FilterPtr> m_filters;
     ThreadCheck m_threadCheck;
     bool m_initialized;
-
-    // 故障模拟器开关，用于验证 UI 层的防黑屏兜底策略
     bool m_simulateCrash;
+
+    // 【三级防线】特征级嗅探器
+    GLContextManager m_contextManager;
 };
 
 using FilterEnginePtr = std::shared_ptr<FilterEngine>;

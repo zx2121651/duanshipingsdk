@@ -31,7 +31,7 @@ fun FilterCameraPreview(
         scope.launch {
             filterManager.initialize()
             // Add cinematic lookup by default for preview
-            filterManager.addFilter(VideoFilterType.CINEMATIC_LOOKUP)
+            filterManager.addFilter(VideoFilterType.COMPUTE_BLUR)
         }
         onDispose {
             scope.launch { filterManager.release() }
@@ -40,7 +40,7 @@ fun FilterCameraPreview(
 
     // React to Slider changes
     LaunchedEffect(intensity) {
-        filterManager.updateParameter("intensity", intensity)
+        filterManager.updateParameter("blurSize", intensity * 10f) // 扩展滑块参数测试 Compute Shader (0.0~10.0 半径)
     }
 
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -90,7 +90,7 @@ fun FilterCameraPreview(
                 .padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("Cinematic Intensity: ${String.format("%.2f", intensity)}", color = Color.White)
+            Text("GLES 3.1 Compute Blur Radius: ${String.format("%.1f", intensity * 10f)}", color = Color.White)
             Slider(
                 value = intensity,
                 onValueChange = { intensity = it },
