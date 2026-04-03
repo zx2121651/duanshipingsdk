@@ -17,11 +17,16 @@ set(CORE_SRC
         ../../../../core/src/Filters.cpp
         ../../../../core/src/FrameBuffer.cpp
         ../../../../core/src/FrameBufferPool.cpp
+        ../../../../core/src/GLContextManager.cpp
+        ../../../../core/src/timeline/Clip.cpp
+        ../../../../core/src/timeline/Track.cpp
+        ../../../../core/src/timeline/Timeline.cpp
 )
 
 add_library(video-sdk SHARED
     NativeBridge.cpp
     OboeAudioEngine.cpp
+    TimelineBridge.cpp
     ${CORE_SRC}
 )
 
