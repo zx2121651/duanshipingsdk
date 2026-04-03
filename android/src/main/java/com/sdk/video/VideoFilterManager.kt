@@ -37,8 +37,7 @@ class VideoFilterManager(
     // 重点：为所有的 GL 操作分配一个专属的单线程。
     // 在 OpenGL 中，所有的 Context 和 Texture ID 都绑定在特定的线程上。
     // 必须确保所有对 renderEngine 的调用都在这个单线程中进行。
-    @OptIn(DelicateCoroutinesApi::class)
-    private val glDispatcher = newSingleThreadContext("GLRenderThread")
+
 
     // StateFlow 暴露引擎状态，外部 UI (如 Compose) 可以直接 collectAsState() 监听变化
     private val _engineState = MutableStateFlow(FilterEngineState.STOPPED)
@@ -57,7 +56,7 @@ class VideoFilterManager(
     val processedFrames: SharedFlow<Result<Int>> = _processedFrames.asSharedFlow()
 
     // 初始化引擎，必须切换到专属的 GL 线程
-    suspend fun initialize() = withContext(glDispatcher) {
+    fun initialize() {
         try {
             _engineState.value = FilterEngineState.INITIALIZING
             renderEngine.init() // 调用底层的 Native 初始化
@@ -89,12 +88,12 @@ class VideoFilterManager(
     }
 
     // 提供给相机的输入层
-    suspend fun getInputSurface(): Surface? = withContext(glDispatcher) {
+    fun getInputSurface(): Surface? {
         inputSurface
     }
 
     // 动态添加滤镜
-    suspend fun addFilter(type: VideoFilterType) = withContext(glDispatcher) {
+    fun addFilter(type: VideoFilterType) {
         val typeInt = when (type) {
             VideoFilterType.BRIGHTNESS -> RenderEngine.FILTER_TYPE_BRIGHTNESS
             VideoFilterType.GAUSSIAN_BLUR -> RenderEngine.FILTER_TYPE_GAUSSIAN_BLUR
@@ -107,28 +106,28 @@ class VideoFilterManager(
     }
 
     // 清空滤镜管线
-    suspend fun removeAllFilters() = withContext(glDispatcher) {
+    fun removeAllFilters() {
         renderEngine.removeAllFilters()
     }
 
     // 更新滤镜参数 (Float)
-    suspend fun updateParameter(key: String, value: Float) = withContext(glDispatcher) {
+    fun updateParameter(key: String, value: Float) {
         renderEngine.updateParameterFloat(key, value)
     }
 
     // 更新滤镜参数 (Int)
-    suspend fun updateParameter(key: String, value: Int) = withContext(glDispatcher) {
+    fun updateParameter(key: String, value: Int) {
         renderEngine.updateParameterInt(key, value)
     }
 
 
     // --- 音视频录制代理方法 ---
 
-    suspend fun startVideoRecording(surface: Surface) = withContext(glDispatcher) {
+    fun startVideoRecording(surface: Surface) {
         renderEngine.startRecording(surface)
     }
 
-    suspend fun stopVideoRecording() = withContext(glDispatcher) {
+    fun stopVideoRecording() {
         renderEngine.stopRecording()
     }
 
@@ -151,14 +150,14 @@ class VideoFilterManager(
     }
 
     // 手动触发一帧处理
-    suspend fun processFrame() = withContext(glDispatcher) {
+    fun processFrame() {
         renderEngine.getSurfaceTexture()?.let { st ->
             renderEngine.onFrameAvailable(st)
         }
     }
 
     // 释放所有的硬件及线程资源
-    suspend fun release() {
+    fun release() {
         withContext(glDispatcher) {
             inputSurface?.release()
             inputSurface = null
@@ -166,6 +165,6 @@ class VideoFilterManager(
         }
         _engineState.value = FilterEngineState.STOPPED
         scope.cancel() // 取消协程域中的所有任务
-        glDispatcher.close() // 关闭专属 GL 线程
+
     }
 }

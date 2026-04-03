@@ -127,24 +127,21 @@ class MainActivity : ComponentActivity() {
                     runOnUiThread { performanceMs.value = durationMs }
                 }
 
-                // 启动引擎的唯一合法入口
+                // 启动引擎的唯一合法入口 (移交 GLSurfaceView 内部初始化)
                 newManager.scope.launch {
                     try {
-                        newManager.initialize()
-
-                        // 预先装载计算着色器滤镜供 UI 演示
-                        newManager.addFilter(VideoFilterType.COMPUTE_BLUR)
+                        // 等待一段时间让 GLSurfaceView 初始化完成并抛出 Surface
+                        kotlinx.coroutines.delay(500)
 
                         val surface = newManager.getInputSurface()
                         if (surface != null) {
                             request.provideSurface(surface, cameraExecutor) { result ->
-                                // 核心逻辑：当 CameraX 确认销毁旧的 Surface 时，连带销毁其绑定的引擎 FBO 资源
                                 surface.release()
-                                newManager.scope.launch { newManager.release() }
+                                newManager.release()
                             }
                         }
                     } catch (e: Exception) {
-                        Log.e(TAG, "Failed to initialize VideoFilterManager", e)
+                        Log.e(TAG, "Failed to provide surface", e)
                     }
                 }
 
@@ -177,9 +174,7 @@ class MainActivity : ComponentActivity() {
         val recordingSurface = videoEncoder?.startRecording(outputFile.absolutePath)
 
         if (recordingSurface != null) {
-            fm.scope.launch {
-                fm.startVideoRecording(recordingSurface)
-            }
+            fm.startVideoRecording(recordingSurface)
             isRecordingState.value = true
         } else {
             Toast.makeText(this, "Failed to start recording", Toast.LENGTH_SHORT).show()
@@ -209,7 +204,7 @@ class MainActivity : ComponentActivity() {
         // 兜底安全释放：即使 CameraX 没有正常触发 request.provideSurface 的销毁回调，
         // 在 Activity 彻底死亡时也将 GL 资源清理干净。
         filterManager?.let { fm ->
-            fm.scope.launch { fm.release() }
+            fm.release()
         }
         filterManager = null
     }
