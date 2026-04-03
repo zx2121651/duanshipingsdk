@@ -56,10 +56,11 @@ class VideoFilterManager(
     val processedFrames: SharedFlow<Result<Int>> = _processedFrames.asSharedFlow()
 
     // 初始化引擎，必须切换到专属的 GL 线程
-    fun initialize() {
+    fun initialize(): Result<Unit> {
         try {
             _engineState.value = FilterEngineState.INITIALIZING
-            renderEngine.init() // 调用底层的 Native 初始化
+            val res = renderEngine.init()
+            if (res != 0) return Result.failure(Exception("Native init failed"))
 
             // 设置底层每处理完一帧的回调监听
             renderEngine.onFrameProcessedListener = { outputTexId ->
@@ -78,18 +79,20 @@ class VideoFilterManager(
             if (st != null) {
                 inputSurface = Surface(st)
                 _engineState.value = FilterEngineState.RUNNING
+                return Result.success(Unit)
             } else {
-                throw IllegalStateException("Failed to create input surface")
+                return Result.failure(Exception("Failed to create input surface"))
             }
         } catch (e: Exception) {
             _engineState.value = FilterEngineState.ERROR
             _processedFrames.tryEmit(Result.failure(e))
+            return Result.failure(e)
         }
     }
 
     // 提供给相机的输入层
     fun getInputSurface(): Surface? {
-        inputSurface
+        return inputSurface
     }
 
     // 动态添加滤镜
@@ -158,10 +161,12 @@ class VideoFilterManager(
 
     // 释放所有的硬件及线程资源
     fun release() {
-        withContext(glDispatcher) {
-            inputSurface?.release()
-            inputSurface = null
-            try { renderEngine.release() } catch (e: Exception) { /* 忽略释放错误 */ }
+        inputSurface?.release()
+        inputSurface = null
+        try { renderEngine.release() } catch (e: Exception) { /* 忽略释放错误 */ }
+        _engineState.value = FilterEngineState.STOPPED
+        scope.cancel() // 取消协程域中的所有任务
+    } catch (e: Exception) { /* 忽略释放错误 */ }
         }
         _engineState.value = FilterEngineState.STOPPED
         scope.cancel() // 取消协程域中的所有任务

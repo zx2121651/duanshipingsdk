@@ -6,7 +6,7 @@
 using namespace sdk::video;
 
 @interface FilterEngineWrapper () {
-    std::shared_ptr<FilterEngine> _engine;
+    std::shared_ptr<FilterEngine> self->engine;
     EAGLContext *_context;
     CVOpenGLESTextureCacheRef _textureCache;
     CVPixelBufferPoolRef _pixelBufferPool;
@@ -18,7 +18,7 @@ using namespace sdk::video;
 - (instancetype)init {
     self = [super init];
     if (self) {
-        _engine = std::make_shared<FilterEngine>();
+        self->engine = std::make_shared<FilterEngine>();
         _textureCache = NULL;
         _pixelBufferPool = NULL;
     }
@@ -35,11 +35,11 @@ using namespace sdk::video;
         return;
     }
 
-    _engine->initialize();
+    self->engine->initialize();
 }
 
 - (CVPixelBufferRef)processFrame:(CVPixelBufferRef)pixelBuffer {
-    if (!_engine || !_textureCache || !_context) return NULL;
+    if (!self->engine || !_textureCache || !_context) return NULL;
 
     [EAGLContext setCurrentContext:_context];
 
@@ -69,7 +69,7 @@ using namespace sdk::video;
     Texture inputTexture = {inTextureId, width, height};
 
     // 2. Process frame with C++ engine (renders into FBO from FrameBufferPool)
-    Texture outputTextureInfo = _engine->processFrame(inputTexture, width, height);
+    Texture outputTextureInfo = self->engine->processFrame(inputTexture, width, height);
 
     // 3. To output a CVPixelBuffer on the fast path, we create a new CVPixelBuffer
     //    and a new CVOpenGLESTextureRef linked to it, bind it to an FBO, and draw the outputTextureInfo.id into it.
@@ -179,21 +179,21 @@ using namespace sdk::video;
 }
 
 - (void)updateParameterFloat:(NSString *)key value:(float)value {
-    if (_engine) {
+    if (self->engine) {
         std::string cppKey([key UTF8String]);
-        _engine->updateParameter(cppKey, std::any(value));
+        self->engine->updateParameter(cppKey, std::any(value));
     }
 }
 
 - (void)updateParameterInt:(NSString *)key value:(int)value {
-    if (_engine) {
+    if (self->engine) {
         std::string cppKey([key UTF8String]);
-        _engine->updateParameter(cppKey, std::any(value));
+        self->engine->updateParameter(cppKey, std::any(value));
     }
 }
 
 - (void)addFilter:(FilterType)type {
-    if (_engine) {
+    if (self->engine) {
         FilterPtr filter;
         switch(type) {
             case FilterTypeBrightness: filter = std::make_shared<BrightnessFilter>(); break;
@@ -201,21 +201,21 @@ using namespace sdk::video;
             case FilterTypeLookup: filter = std::make_shared<LookupFilter>(); break;
         }
         if (filter) {
-            _engine->addFilter(filter);
+            self->engine->addFilter(filter);
         }
     }
 }
 
 - (void)removeAllFilters {
-    if (_engine) {
-        _engine->removeAllFilters();
+    if (self->engine) {
+        self->engine->removeAllFilters();
     }
 }
 
 - (void)releaseResources {
-    if (_engine) {
+    if (self->engine) {
         [EAGLContext setCurrentContext:_context];
-        _engine->release();
+        self->engine->release();
     }
     if (_textureCache) {
         CFRelease(_textureCache);
