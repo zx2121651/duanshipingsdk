@@ -31,8 +31,10 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     var onPerformanceUpdateListener: ((durationMs: Long) -> Unit)? = null
 
     // Call on GL thread to initialize
-    fun init() {
+    fun init(): Int {
         nativeHandle = nativeInit()
+        if (nativeHandle == 0L) return -1
+        return 0
 
         val textures = IntArray(1)
         GLES20.glGenTextures(1, textures, 0)
