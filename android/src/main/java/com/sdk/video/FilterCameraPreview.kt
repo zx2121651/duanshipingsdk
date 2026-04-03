@@ -13,6 +13,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
+import android.opengl.GLES20
 import kotlinx.coroutines.launch
 
 @Composable
@@ -43,7 +44,27 @@ fun FilterCameraPreview(
                         setRenderer(object : GLSurfaceView.Renderer {
                             var currentTextureId = -1
 
+
+                            private var displayProgram = 0
+                            private val vertexShaderCode = "attribute vec4 vPosition; attribute vec2 vTexCoord; varying vec2 texCoord; void main() { gl_Position = vPosition; texCoord = vTexCoord; }"
+                            private val fragmentShaderCode = "precision mediump float; varying vec2 texCoord; uniform sampler2D sTexture; void main() { gl_FragColor = texture2D(sTexture, texCoord); }"
+
+                            private fun loadShader(type: Int, shaderCode: String): Int {
+                                val shader = GLES20.glCreateShader(type)
+                                GLES20.glShaderSource(shader, shaderCode)
+                                GLES20.glCompileShader(shader)
+                                return shader
+                            }
+
                             override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
+                                val vertexShader = loadShader(GLES20.GL_VERTEX_SHADER, vertexShaderCode)
+                                val fragmentShader = loadShader(GLES20.GL_FRAGMENT_SHADER, fragmentShaderCode)
+                                displayProgram = GLES20.glCreateProgram().also {
+                                    GLES20.glAttachShader(it, vertexShader)
+                                    GLES20.glAttachShader(it, fragmentShader)
+                                    GLES20.glLinkProgram(it)
+                                }
+
                                 scope.launch {
                                     filterManager.processedFrames.collect { result ->
                                         result.onSuccess { texId ->
@@ -54,15 +75,49 @@ fun FilterCameraPreview(
                                 }
                             }
 
+
                             override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
                                 gl?.glViewport(0, 0, width, height)
                             }
 
+
                             override fun onDrawFrame(gl: GL10?) {
-                                gl?.glClearColor(0.0f, 0.0f, 0.0f, 1.0f)
-                                gl?.glClear(GL10.GL_COLOR_BUFFER_BIT)
-                                // Normally draw currentTextureId here using a simple OES/2D pass
+                                GLES20.glClearColor(0.0f, 0.0f, 0.0f, 1.0f)
+                                GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+
+                                if (currentTextureId >= 0 && engineState != FilterEngineState.DEGRADED) {
+                                    GLES20.glUseProgram(displayProgram)
+
+                                    val positionHandle = GLES20.glGetAttribLocation(displayProgram, "vPosition")
+                                    val texCoordHandle = GLES20.glGetAttribLocation(displayProgram, "vTexCoord")
+                                    val samplerHandle = GLES20.glGetUniformLocation(displayProgram, "sTexture")
+
+                                    val squareCoords = floatArrayOf(-1.0f, 1.0f, -1.0f, -1.0f, 1.0f, -1.0f, 1.0f, 1.0f)
+                                    val textureCoords = floatArrayOf(0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f)
+
+                                    val vertexBuffer = java.nio.ByteBuffer.allocateDirect(squareCoords.size * 4).order(java.nio.ByteOrder.nativeOrder()).asFloatBuffer()
+                                    vertexBuffer.put(squareCoords).position(0)
+
+                                    val texBuffer = java.nio.ByteBuffer.allocateDirect(textureCoords.size * 4).order(java.nio.ByteOrder.nativeOrder()).asFloatBuffer()
+                                    texBuffer.put(textureCoords).position(0)
+
+                                    GLES20.glEnableVertexAttribArray(positionHandle)
+                                    GLES20.glVertexAttribPointer(positionHandle, 2, GLES20.GL_FLOAT, false, 0, vertexBuffer)
+
+                                    GLES20.glEnableVertexAttribArray(texCoordHandle)
+                                    GLES20.glVertexAttribPointer(texCoordHandle, 2, GLES20.GL_FLOAT, false, 0, texBuffer)
+
+                                    GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
+                                    GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, currentTextureId)
+                                    GLES20.glUniform1i(samplerHandle, 0)
+
+                                    GLES20.glDrawArrays(GLES20.GL_TRIANGLE_FAN, 0, 4)
+
+                                    GLES20.glDisableVertexAttribArray(positionHandle)
+                                    GLES20.glDisableVertexAttribArray(texCoordHandle)
+                                }
                             }
+
                         })
                         renderMode = GLSurfaceView.RENDERMODE_WHEN_DIRTY
                     }

@@ -123,7 +123,8 @@ class MainActivity : ComponentActivity() {
                 val newManager = VideoFilterManager(resolution.width, resolution.height)
 
                 newManager.setOnPerformanceUpdateListener { durationMs ->
-                    performanceMs.value = durationMs
+                    // 确保 Compose State 的更新发生主线程
+                    runOnUiThread { performanceMs.value = durationMs }
                 }
 
                 // 启动引擎的唯一合法入口

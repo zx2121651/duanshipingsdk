@@ -55,6 +55,8 @@ public:
     void setTrackVolume(float volume) { m_trackVolume = volume; }
     float getTrackVolume() const { return m_trackVolume; }
 
+    int64_t getMaxTimelineOut() const;
+
 private:
     int m_zIndex;
     TrackType m_type;

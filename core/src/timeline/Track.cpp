@@ -55,6 +55,20 @@ ClipPtr Track::getActiveClipAtTime(int64_t timelineUs) const {
     return nullptr;
 }
 
+
+int64_t Track::getMaxTimelineOut() const {
+    int64_t maxOut = 0;
+    // 既然我们已经根据 TimelineIn 进行了排序，但考虑到不同 Clip 变速或裁切时长不同，
+    // 最晚结束的并不一定就是最后一个 Clip，虽然通常是。为求严谨，遍历取最大值。
+    for (const auto& clip : m_clips) {
+        int64_t outTime = clip->getTimelineOut();
+        if (outTime > maxOut) {
+            maxOut = outTime;
+        }
+    }
+    return maxOut;
+}
+
 } // namespace timeline
 } // namespace video
 } // namespace sdk
