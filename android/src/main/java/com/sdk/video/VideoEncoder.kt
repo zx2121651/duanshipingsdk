@@ -17,7 +17,7 @@ import java.util.concurrent.ConcurrentLinkedQueue
  */
 @InternalApi
 class VideoEncoder(
-    private val renderEngine: RenderEngine, // 需要传入 RenderEngine 以调用 Oboe JNI
+    private val filterManager: VideoFilterManager, // 需要传入 RenderEngine 以调用 Oboe JNI
     private val width: Int = 1080,
     private val height: Int = 1920,
     private val videoBitRate: Int = 4000000,
@@ -73,7 +73,7 @@ class VideoEncoder(
             audioCodec?.start()
 
             // 启动底层的 Oboe C++ 音频采集引擎 (自带重采样至 44100Hz)
-            renderEngine.startAudioRecord(audioSampleRate)
+            filterManager.startAudioRecord(audioSampleRate)
 
             // 启动协程去消费底层吐出的 PCM 数据
             startAudioRecordLoop()
@@ -180,7 +180,7 @@ class VideoEncoder(
             val buffer = ByteArray(4096)
             while (isRecording && isActive) {
                 // 通过 JNI 从底层的 Oboe 无锁队列中拉取重采样好的 PCM 数据
-                val readBytes = renderEngine.readAudioPCM(buffer, buffer.size)
+                val readBytes = filterManager.readAudioPCM(buffer, buffer.size)
 
                 if (readBytes > 0) {
                     val codec = audioCodec ?: break
@@ -252,7 +252,7 @@ class VideoEncoder(
         encoderScope.coroutineContext.cancelChildren()
 
         // 关闭底层的 Oboe 音频采集引擎
-        renderEngine.stopAudioRecord()
+        filterManager.stopAudioRecord()
 
         try { videoCodec?.signalEndOfInputStream() } catch (e: Exception) {}
 
