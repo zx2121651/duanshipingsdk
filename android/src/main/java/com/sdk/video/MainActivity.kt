@@ -17,7 +17,6 @@ import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
@@ -66,7 +65,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-                // UI 层只接收 Facade，不需要知道 RenderEngine 的存在
+                // UI 层只接收 Facade，生命周期由下方的 CameraX 严格托管
                 filterManager?.let { fm ->
                     FilterCameraPreview(
                         filterManager = fm,
@@ -74,7 +73,6 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
-                // 性能指标监控
                 Text(
                     text = "${performanceMs.value} ms",
                     color = if (performanceMs.value > 16) Color.Red else Color.Green,
@@ -83,7 +81,6 @@ class MainActivity : ComponentActivity() {
                         .padding(16.dp)
                 )
 
-                // 录制控制按钮
                 Button(
                     onClick = {
                         if (isRecordingState.value) stopRecording() else startRecording()
@@ -120,26 +117,29 @@ class MainActivity : ComponentActivity() {
                 Log.d(TAG, "CameraX negotiated resolution: ${resolution.width}x${resolution.height}")
                 activeCameraResolution = resolution
 
-                // 彻底通过 Facade (VideoFilterManager) 统一生命周期，废弃 RenderEngine 直接暴露
+                // 清除之前的实例（如果有），防止多开
                 filterManager?.scope?.launch { filterManager?.release() }
 
                 val newManager = VideoFilterManager(resolution.width, resolution.height)
 
-                // 监听性能指标
                 newManager.setOnPerformanceUpdateListener { durationMs ->
                     performanceMs.value = durationMs
                 }
 
-                // 启动引擎
+                // 启动引擎的唯一合法入口
                 newManager.scope.launch {
                     try {
                         newManager.initialize()
-                        // 为了前置摄像头，自动水平翻转等基础操作可以通过 UpdateParameter 或内置 Filter 搞定
-                        // 此处简单添加必备的基础滤镜
+
+                        // 预先装载计算着色器滤镜供 UI 演示
+                        newManager.addFilter(VideoFilterType.COMPUTE_BLUR)
+
                         val surface = newManager.getInputSurface()
                         if (surface != null) {
-                            request.provideSurface(surface, cameraExecutor) {
+                            request.provideSurface(surface, cameraExecutor) { result ->
+                                // 核心逻辑：当 CameraX 确认销毁旧的 Surface 时，连带销毁其绑定的引擎 FBO 资源
                                 surface.release()
+                                newManager.scope.launch { newManager.release() }
                             }
                         }
                     } catch (e: Exception) {
@@ -202,12 +202,14 @@ class MainActivity : ComponentActivity() {
         ContextCompat.checkSelfPermission(baseContext, it) == PackageManager.PERMISSION_GRANTED
     }
 
-    // [修复关键问题]：原本代码里可能写成了 super.onCreate() 导致无限递归或者泄漏
     override fun onDestroy() {
         super.onDestroy()
         cameraExecutor.shutdown()
-        filterManager?.scope?.launch {
-            filterManager?.release()
+        // 兜底安全释放：即使 CameraX 没有正常触发 request.provideSurface 的销毁回调，
+        // 在 Activity 彻底死亡时也将 GL 资源清理干净。
+        filterManager?.let { fm ->
+            fm.scope.launch { fm.release() }
         }
+        filterManager = null
     }
 }

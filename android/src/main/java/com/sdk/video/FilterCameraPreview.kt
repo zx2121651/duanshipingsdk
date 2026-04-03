@@ -23,20 +23,8 @@ fun FilterCameraPreview(
     val engineState by filterManager.engineState.collectAsState()
     val scope = rememberCoroutineScope()
 
-    // Intensity State for the new CinematicLookupFilter
+    // Intensity State for the ComputeBlurFilter
     var intensity by remember { mutableFloatStateOf(1.0f) }
-
-    // 使用 DisposableEffect 把 VideoFilterManager 的初始化和释放与 Compose 的生命周期安全绑定
-    DisposableEffect(filterManager) {
-        scope.launch {
-            filterManager.initialize()
-            // Add cinematic lookup by default for preview
-            filterManager.addFilter(VideoFilterType.COMPUTE_BLUR)
-        }
-        onDispose {
-            scope.launch { filterManager.release() }
-        }
-    }
 
     // React to Slider changes
     LaunchedEffect(intensity) {
@@ -47,7 +35,6 @@ fun FilterCameraPreview(
         if (engineState == FilterEngineState.ERROR) {
             Text("Camera failed. Degrading to safe mode...", color = Color.Red)
         } else {
-            // 利用 AndroidView 桥接底层的 GLSurfaceView 来渲染 OpenGL 纹理
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
                 factory = { context ->
@@ -74,7 +61,7 @@ fun FilterCameraPreview(
                             override fun onDrawFrame(gl: GL10?) {
                                 gl?.glClearColor(0.0f, 0.0f, 0.0f, 1.0f)
                                 gl?.glClear(GL10.GL_COLOR_BUFFER_BIT)
-                                // Normally draw currentTextureId here
+                                // Normally draw currentTextureId here using a simple OES/2D pass
                             }
                         })
                         renderMode = GLSurfaceView.RENDERMODE_WHEN_DIRTY
