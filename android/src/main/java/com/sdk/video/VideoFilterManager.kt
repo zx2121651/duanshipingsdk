@@ -121,6 +121,35 @@ class VideoFilterManager(
         renderEngine.updateParameterInt(key, value)
     }
 
+
+    // --- 音视频录制代理方法 ---
+
+    suspend fun startVideoRecording(surface: Surface) = withContext(glDispatcher) {
+        renderEngine.startRecording(surface)
+    }
+
+    suspend fun stopVideoRecording() = withContext(glDispatcher) {
+        renderEngine.stopRecording()
+    }
+
+    // Oboe 音频控制不需要强制在 GL 线程，但为了统一管理也可以放进来
+    fun startAudioRecord(sampleRate: Int) {
+        renderEngine.startAudioRecord(sampleRate)
+    }
+
+    fun stopAudioRecord() {
+        renderEngine.stopAudioRecord()
+    }
+
+    fun readAudioPCM(buffer: ByteArray, length: Int): Int {
+        return renderEngine.readAudioPCM(buffer, length)
+    }
+
+    // 暴露性能监控监听器供外部（或者修改为 StateFlow 抛出）
+    fun setOnPerformanceUpdateListener(listener: (Long) -> Unit) {
+        renderEngine.onPerformanceUpdateListener = listener
+    }
+
     // 手动触发一帧处理
     suspend fun processFrame() = withContext(glDispatcher) {
         renderEngine.getSurfaceTexture()?.let { st ->
