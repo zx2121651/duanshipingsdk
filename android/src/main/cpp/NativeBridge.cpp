@@ -253,7 +253,18 @@ Java_com_sdk_video_RenderEngine_nativeAddFilter(JNIEnv *env, jobject thiz, jlong
             case 3: filter = std::make_shared<BilateralFilter>(); break;
             case 4: filter = std::make_shared<CinematicLookupFilter>(); break;
 #ifdef __ANDROID__
-            case 5: filter = std::make_shared<ComputeBlurFilter>(); break;
+            case 5:
+                // 【智能路由器 / Fallback】:
+                // 如果 UI 请求了最高性能的 Compute Blur，但在初始化阶段通过 GLContextManager
+                // 嗅探出该设备不支持 GLES 3.1 或最大工作组 (Max Invocations) 小于 256（易引发驱动内核崩溃），
+                // 此时执行【无感降级】：拦截请求，将其路由到我们之前写好的普通 Two-pass 高斯模糊。
+                // 业务层的 API 调用不会失败，且视觉效果几乎一致，仅仅是算力降维。
+                if (wrapper->filterEngine->getContextManager().isComputeShaderSupported()) {
+                    filter = std::make_shared<ComputeBlurFilter>();
+                } else {
+                    filter = std::make_shared<GaussianBlurFilter>(&(wrapper->filterEngine->m_frameBufferPool));
+                }
+                break;
 #endif
             default: break;
         }

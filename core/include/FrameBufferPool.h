@@ -13,28 +13,24 @@ public:
     FrameBufferPool() = default;
     ~FrameBufferPool();
 
-    // Returns a FrameBuffer from the pool or creates a new one if necessary.
-    // 增加 isRgb565 参数，控制申请半精度带宽砍半版本
-    FrameBufferPtr getFrameBuffer(int width, int height, bool isRgb565 = false);
+    // 动态嗅探传入的精度策略
+    FrameBufferPtr getFrameBuffer(int width, int height, FBOPrecision precision = FBOPrecision::RGBA8888);
 
-    // 为了兼容 Two-pass 模糊代码中的旧 API 调用
+    // 为了兼容旧代码的 Boolean 传参，做一个简单的转换
     FrameBufferPtr get(int width, int height, bool isRgb565 = false) {
-        return getFrameBuffer(width, height, isRgb565);
+        return getFrameBuffer(width, height, isRgb565 ? FBOPrecision::RGB565 : FBOPrecision::RGBA8888);
     }
 
-    // Returns a FrameBuffer to the pool.  Called automatically by custom deleter.
     void returnFrameBuffer(FrameBuffer* fb);
-    void release(FrameBufferPtr fb); // Helper for manual release
+    void release(FrameBufferPtr fb);
 
-    // Clears all framebuffers in the pool.
     void clear();
 
-    // Disallow copying and assignment.
     FrameBufferPool(const FrameBufferPool&) = delete;
     FrameBufferPool& operator=(const FrameBufferPool&) = delete;
 
 private:
-    std::string getKey(int width, int height, bool isRgb565) const;
+    std::string getKey(int width, int height, FBOPrecision precision) const;
 
     std::mutex m_mutex;
     std::map<std::string, std::vector<std::unique_ptr<FrameBuffer>>> m_pool;

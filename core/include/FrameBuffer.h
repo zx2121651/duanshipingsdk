@@ -11,10 +11,16 @@
 namespace sdk {
 namespace video {
 
+// FBO 的精度级别，根据设备能力动态降级
+enum class FBOPrecision {
+    FP16,     // 16-bit 浮点 (GL_RGBA16F) - 用于 HDR 电影级调色，防止色阶断层
+    RGBA8888, // 32-bit (GL_RGBA8) - 兼容机型的默认格式
+    RGB565    // 16-bit (GL_RGB565) - 极致带宽砍半，省电不发热
+};
+
 class FrameBuffer {
 public:
-    // 增加 isRgb565 参数，控制纹理位数
-    FrameBuffer(int width, int height, bool isRgb565 = false);
+    FrameBuffer(int width, int height, FBOPrecision precision = FBOPrecision::RGBA8888);
     ~FrameBuffer();
 
     // Non-copyable
@@ -27,14 +33,14 @@ public:
     Texture getTexture() const { return {m_textureId, static_cast<uint32_t>(m_width), static_cast<uint32_t>(m_height)}; }
     int width() const { return m_width; }
     int height() const { return m_height; }
-    bool isRgb565() const { return m_isRgb565; }
+    FBOPrecision precision() const { return m_precision; }
 
 private:
     GLuint m_fboId;
     GLuint m_textureId;
     int m_width;
     int m_height;
-    bool m_isRgb565;
+    FBOPrecision m_precision;
 };
 
 using FrameBufferPtr = std::shared_ptr<FrameBuffer>;
