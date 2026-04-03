@@ -701,7 +701,7 @@ void CinematicLookupFilter::onDraw(const Texture& inputTexture, FrameBufferPtr o
 const char* CinematicLookupFilter::getFragmentShaderSource() const {
     return R"(#version 300 es
         precision highp float;
-        in vec2 v_texCoord;
+        in vec2 textureCoordinate;
         uniform sampler2D inputImageTexture;
         uniform sampler2D lookupTexture;
         uniform float intensity;
@@ -709,7 +709,7 @@ const char* CinematicLookupFilter::getFragmentShaderSource() const {
         out vec4 fragColor;
 
         void main() {
-            vec4 textureColor = texture(inputImageTexture, v_texCoord);
+            vec4 textureColor = texture(inputImageTexture, textureCoordinate);
 
             // 3D LUT 核心算法：
             // 1. 获取输入像素的 B (蓝) 通道值，将其映射为 0~63 之间的浮点数，这代表着它在 LUT 图的 64 个网格中的位置索引。

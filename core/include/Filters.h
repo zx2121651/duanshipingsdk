@@ -15,6 +15,7 @@ namespace video {
 class OES2RGBFilter : public Filter {
 public:
     OES2RGBFilter();
+    ~OES2RGBFilter() override = default;
     void initialize() override;
 protected:
     void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
@@ -29,6 +30,7 @@ private:
 class BrightnessFilter : public Filter {
 public:
     BrightnessFilter();
+    ~BrightnessFilter() override = default;
     void initialize() override;
 protected:
     void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
@@ -86,6 +88,7 @@ private:
 class BilateralFilter : public Filter {
 public:
     BilateralFilter();
+    ~BilateralFilter() override = default;
     void initialize() override;
 protected:
     void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
