@@ -130,15 +130,13 @@ class MainActivity : ComponentActivity() {
                 // 启动引擎的唯一合法入口 (移交 GLSurfaceView 内部初始化)
                 newManager.scope.launch {
                     try {
-                        // 等待一段时间让 GLSurfaceView 初始化完成并抛出 Surface
-                        kotlinx.coroutines.delay(500)
+                        // 摒弃不稳定的 delay(500)，改为事件驱动：挂起直到底层 GLSurfaceView 真正创建好 EGL Context 和 OES 纹理
+                        val surface = newManager.awaitInputSurface()
 
-                        val surface = newManager.getInputSurface()
-                        if (surface != null) {
-                            request.provideSurface(surface, cameraExecutor) { result ->
-                                surface.release()
-                                newManager.release()
-                            }
+                        request.provideSurface(surface, cameraExecutor) { result ->
+                            // 核心逻辑：当 CameraX 确认销毁旧的 Surface 时，连带销毁其绑定的引擎 FBO 资源
+                            surface.release()
+                            newManager.release()
                         }
                     } catch (e: Exception) {
                         Log.e(TAG, "Failed to provide surface", e)

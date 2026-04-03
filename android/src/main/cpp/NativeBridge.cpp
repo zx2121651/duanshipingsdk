@@ -241,7 +241,7 @@ Java_com_sdk_video_RenderEngine_nativeUpdateParameterBool(JNIEnv *env, jobject t
     }
 }
 
-JNIEXPORT void JNICALL
+JNIEXPORT jint JNICALL
 Java_com_sdk_video_RenderEngine_nativeAddFilter(JNIEnv *env, jobject thiz, jlong handle, jint filterType) {
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
     if (wrapper) {
@@ -266,37 +266,45 @@ Java_com_sdk_video_RenderEngine_nativeAddFilter(JNIEnv *env, jobject thiz, jlong
                 }
                 break;
 #endif
-            default: break;
+            default: return -2; // Unknown filter type
         }
         if (filter) {
             wrapper->filterEngine->addFilter(filter);
+            return 0;
         }
     }
+    return -1; // Null wrapper
 }
 
-JNIEXPORT void JNICALL
+JNIEXPORT jint JNICALL
 Java_com_sdk_video_RenderEngine_nativeRemoveAllFilters(JNIEnv *env, jobject thiz, jlong handle) {
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
     if (wrapper) {
         wrapper->filterEngine->removeAllFilters();
         wrapper->filterEngine->addFilter(std::make_shared<OES2RGBFilter>());
+        return 0;
     }
+    return -1;
 }
 
-JNIEXPORT void JNICALL
+JNIEXPORT jint JNICALL
 Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
     if (wrapper && wrapper->audioEngine) {
-        wrapper->audioEngine->start(sampleRate);
+        bool ok = wrapper->audioEngine->start(sampleRate);
+        return ok ? 0 : -2;
     }
+    return -1;
 }
 
-JNIEXPORT void JNICALL
+JNIEXPORT jint JNICALL
 Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
     if (wrapper && wrapper->audioEngine) {
         wrapper->audioEngine->stop();
+        return 0;
     }
+    return -1;
 }
 
 JNIEXPORT jint JNICALL

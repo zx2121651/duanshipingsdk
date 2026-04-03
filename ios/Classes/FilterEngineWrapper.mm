@@ -196,9 +196,12 @@ using namespace sdk::video;
     if (self->engine) {
         FilterPtr filter;
         switch(type) {
-            case FilterTypeBrightness: filter = std::make_shared<BrightnessFilter>(); break;
-            case FilterTypeGaussianBlur: filter = std::make_shared<GaussianBlurFilter>(&(self->engine->m_frameBufferPool)); break;
-            case FilterTypeLookup: filter = std::make_shared<LookupFilter>(); break;
+            case 0: filter = std::make_shared<BrightnessFilter>(); break;
+            case 1: filter = std::make_shared<GaussianBlurFilter>(&(self->engine->m_frameBufferPool)); break;
+            case 2: filter = std::make_shared<LookupFilter>(); break;
+            case 3: filter = std::make_shared<BilateralFilter>(); break;
+            case 4: filter = std::make_shared<CinematicLookupFilter>(); break;
+            default: break; // ComputeBlurFilter is not supported on iOS (GLES 3.1)
         }
         if (filter) {
             self->engine->addFilter(filter);

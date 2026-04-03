@@ -9,6 +9,7 @@ public enum VideoFilterType: Int {
     case lookup = 2
     case bilateral = 3
     case cinematicLookup = 4 // 电影级 3D LUT
+    case computeBlur = 5 // Not supported on iOS, mapped for cross-platform API parity
 }
 
 // 引擎运行状态

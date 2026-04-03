@@ -94,12 +94,14 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     }
 
     // Pipeline
-    fun addFilter(type: Int) {
-        nativeAddFilter(nativeHandle, type)
+    fun addFilter(type: Int): Result<Unit> {
+        val code = nativeAddFilter(nativeHandle, type)
+        return if (code == 0) Result.success(Unit) else Result.failure(Exception("Native addFilter failed with code $code"))
     }
 
-    fun removeAllFilters() {
-        nativeRemoveAllFilters(nativeHandle)
+    fun removeAllFilters(): Result<Unit> {
+        val code = nativeRemoveAllFilters(nativeHandle)
+        return if (code == 0) Result.success(Unit) else Result.failure(Exception("Native removeAllFilters failed with code $code"))
     }
 
     // Call on GL thread to release
@@ -118,12 +120,16 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     }
 
 
-    fun startAudioRecord(sampleRate: Int) {
-        if (nativeHandle != 0L) nativeStartAudioRecord(nativeHandle, sampleRate)
+    fun startAudioRecord(sampleRate: Int): Result<Unit> {
+        if (nativeHandle == 0L) return Result.failure(Exception("Engine not initialized"))
+        val code = nativeStartAudioRecord(nativeHandle, sampleRate)
+        return if (code == 0) Result.success(Unit) else Result.failure(Exception("Native startAudioRecord failed with code $code"))
     }
 
-    fun stopAudioRecord() {
-        if (nativeHandle != 0L) nativeStopAudioRecord(nativeHandle)
+    fun stopAudioRecord(): Result<Unit> {
+        if (nativeHandle == 0L) return Result.failure(Exception("Engine not initialized"))
+        val code = nativeStopAudioRecord(nativeHandle)
+        return if (code == 0) Result.success(Unit) else Result.failure(Exception("Native stopAudioRecord failed with code $code"))
     }
 
     fun readAudioPCM(buffer: ByteArray, length: Int): Int {
@@ -138,9 +144,9 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     private external fun nativeUpdateParameterFloat(handle: Long, key: String, value: Float)
     private external fun nativeUpdateParameterInt(handle: Long, key: String, value: Int)
     private external fun nativeUpdateParameterBool(handle: Long, key: String, value: Boolean)
-    private external fun nativeAddFilter(handle: Long, filterType: Int)
-    private external fun nativeRemoveAllFilters(handle: Long)
-    private external fun nativeStartAudioRecord(handle: Long, sampleRate: Int)
-    private external fun nativeStopAudioRecord(handle: Long)
+    private external fun nativeAddFilter(handle: Long, filterType: Int): Int
+    private external fun nativeRemoveAllFilters(handle: Long): Int
+    private external fun nativeStartAudioRecord(handle: Long, sampleRate: Int): Int
+    private external fun nativeStopAudioRecord(handle: Long): Int
     private external fun nativeReadAudioPCM(handle: Long, buffer: ByteArray, length: Int): Int
 }
