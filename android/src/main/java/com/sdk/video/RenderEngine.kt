@@ -34,7 +34,6 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     fun init(): Int {
         nativeHandle = nativeInit()
         if (nativeHandle == 0L) return -1
-        return 0
 
         val textures = IntArray(1)
         GLES20.glGenTextures(1, textures, 0)
@@ -49,6 +48,7 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
 
         surfaceTexture = SurfaceTexture(oesTextureId)
         surfaceTexture?.setOnFrameAvailableListener(this)
+        return 0
     }
 
     fun getSurfaceTexture(): SurfaceTexture? {

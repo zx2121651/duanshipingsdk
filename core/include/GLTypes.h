@@ -20,15 +20,18 @@ struct Texture {
 
 class Result {
 public:
-    static Result ok() { return Result(true, ""); }
-    static Result error(const std::string& msg) { return Result(false, msg); }
+    static Result ok() { return Result(true, 0, ""); }
+    static Result error(int code, const std::string& msg) { return Result(false, code, msg); }
+    static Result error(const std::string& msg) { return Result(false, -1, msg); }
 
     bool isOk() const { return m_isOk; }
+    int getErrorCode() const { return m_errorCode; }
     std::string getMessage() const { return m_message; }
 
 private:
-    Result(bool isOk, const std::string& msg) : m_isOk(isOk), m_message(msg) {}
+    Result(bool isOk, int code, const std::string& msg) : m_isOk(isOk), m_errorCode(code), m_message(msg) {}
     bool m_isOk;
+    int m_errorCode;
     std::string m_message;
 };
 

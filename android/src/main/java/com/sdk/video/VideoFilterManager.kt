@@ -166,10 +166,5 @@ class VideoFilterManager(
         try { renderEngine.release() } catch (e: Exception) { /* 忽略释放错误 */ }
         _engineState.value = FilterEngineState.STOPPED
         scope.cancel() // 取消协程域中的所有任务
-    } catch (e: Exception) { /* 忽略释放错误 */ }
-        }
-        _engineState.value = FilterEngineState.STOPPED
-        scope.cancel() // 取消协程域中的所有任务
-
     }
 }
