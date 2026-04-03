@@ -252,6 +252,9 @@ Java_com_sdk_video_RenderEngine_nativeAddFilter(JNIEnv *env, jobject thiz, jlong
             case 2: filter = std::make_shared<LookupFilter>(); break;
             case 3: filter = std::make_shared<BilateralFilter>(); break;
             case 4: filter = std::make_shared<CinematicLookupFilter>(); break;
+#ifdef __ANDROID__
+            case 5: filter = std::make_shared<ComputeBlurFilter>(); break;
+#endif
             default: break;
         }
         if (filter) {

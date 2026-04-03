@@ -746,3 +746,142 @@ const char* CinematicLookupFilter::getFragmentShaderSource() const {
         }
     )";
 }
+
+#ifdef __ANDROID__
+// --- 高性能 Compute Shader 计算模糊 (ComputeBlurFilter) ---
+
+ComputeBlurFilter::ComputeBlurFilter() : m_computeProgramId(0) {
+    m_parameters["blurSize"] = 2.0f; // 默认模糊半径
+}
+
+ComputeBlurFilter::~ComputeBlurFilter() {
+    if (m_computeProgramId != 0) {
+        glDeleteProgram(m_computeProgramId);
+    }
+}
+
+void ComputeBlurFilter::initialize() {
+    // 1. 编译 Compute Shader
+    const char* csSrc = getComputeShaderSource();
+    GLuint computeShader = glCreateShader(GL_COMPUTE_SHADER);
+    glShaderSource(computeShader, 1, &csSrc, NULL);
+    glCompileShader(computeShader);
+
+    GLint compiled = 0;
+    glGetShaderiv(computeShader, GL_COMPILE_STATUS, &compiled);
+    if (!compiled) {
+        GLint infoLen = 0;
+        glGetShaderiv(computeShader, GL_INFO_LOG_LENGTH, &infoLen);
+        if (infoLen > 1) {
+            char* infoLog = new char[infoLen];
+            glGetShaderInfoLog(computeShader, infoLen, NULL, infoLog);
+            std::cerr << "Error compiling compute shader:\n" << infoLog << std::endl;
+            delete[] infoLog;
+        }
+        glDeleteShader(computeShader);
+        return;
+    }
+
+    // 2. 链接 Program
+    m_computeProgramId = glCreateProgram();
+    glAttachShader(m_computeProgramId, computeShader);
+    glLinkProgram(m_computeProgramId);
+
+    GLint linked = 0;
+    glGetProgramiv(m_computeProgramId, GL_LINK_STATUS, &linked);
+    if (!linked) {
+        std::cerr << "Error linking compute program" << std::endl;
+        glDeleteProgram(m_computeProgramId);
+        m_computeProgramId = 0;
+    }
+
+    glDeleteShader(computeShader);
+
+    m_blurSizeHandle = glGetUniformLocation(m_computeProgramId, "blurSize");
+}
+
+Texture ComputeBlurFilter::processFrame(const Texture& inputTexture, FrameBufferPtr outputFb) {
+    if (m_computeProgramId == 0) return inputTexture; // 兼容性失败时回退
+
+    // 我们不需要调用 FBO 的 bind() 来画三角形。
+    // Compute Shader 直接对着内存中的 Texture 进行读写（Image Store）。
+    glUseProgram(m_computeProgramId);
+
+    // 绑定输入纹理作为只读的 image2D (绑定在单元 0)
+    glBindImageTexture(0, inputTexture.id, 0, GL_FALSE, 0, GL_READ_ONLY, GL_RGBA8);
+
+    // 绑定输出 FBO 的纹理作为只写的 image2D (绑定在单元 1)
+    glBindImageTexture(1, outputFb->getTexture().id, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA8);
+
+    float blurSize = 2.0f;
+    if (m_parameters.count("blurSize")) {
+        try { blurSize = std::any_cast<float>(m_parameters.at("blurSize")); } catch (...) {}
+    }
+    glUniform1f(m_blurSizeHandle, blurSize);
+
+    // 分发计算任务 (Dispatch)
+    // 假设我们在 Shader 中定义了 local_size_x = 16, local_size_y = 16
+    // 我们需要启动 (width/16) * (height/16) 个工作组 (Work Groups)
+    GLuint numGroupsX = (inputTexture.width + 15) / 16;
+    GLuint numGroupsY = (inputTexture.height + 15) / 16;
+
+    glDispatchCompute(numGroupsX, numGroupsY, 1);
+
+    // 设置内存屏障，确保在下次被当作纹理采样前，Compute Shader 的写入已经完全落盘到显存
+    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+
+    return outputFb->getTexture();
+}
+
+void ComputeBlurFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {
+    // 留空，重载 processFrame 直接使用 Compute
+}
+
+const char* ComputeBlurFilter::getComputeShaderSource() const {
+    // 这是一个利用 GLES 3.1 并行计算优势的 Box Blur 演示。
+    // 它完全抛弃了传统的顶点/片段着色器管线，直接在显存层面对纹理像素发起多线程并行读写。
+    // 这对于极其复杂的 AI 计算或物理仿真特效来说，算力碾压传统的 Fragment Shader。
+    return R"(#version 310 es
+        // 声明每个工作组内有 16x16 个计算线程 (Invocation)
+        layout(local_size_x = 16, local_size_y = 16) in;
+
+        // 绑定输入输出的 Image (无需经过 sampler 纹理过滤，直接读取裸数据)
+        layout(binding = 0, rgba8) uniform readonly highp image2D inputImage;
+        layout(binding = 1, rgba8) uniform writeonly highp image2D outputImage;
+
+        uniform float blurSize;
+
+        void main() {
+            // 获取当前计算线程对应的像素坐标
+            ivec2 texelPos = ivec2(gl_GlobalInvocationID.xy);
+            ivec2 size = imageSize(inputImage);
+
+            // 越界保护
+            if (texelPos.x >= size.x || texelPos.y >= size.y) {
+                return;
+            }
+
+            vec4 sum = vec4(0.0);
+            int count = 0;
+            int radius = int(blurSize);
+
+            // 粗暴的盒式模糊 (Box Blur) 演示并行算力
+            for(int y = -radius; y <= radius; y++) {
+                for(int x = -radius; x <= radius; x++) {
+                    ivec2 offsetPos = texelPos + ivec2(x, y);
+                    // 处理边界 clamp
+                    offsetPos.x = clamp(offsetPos.x, 0, size.x - 1);
+                    offsetPos.y = clamp(offsetPos.y, 0, size.y - 1);
+
+                    sum += imageLoad(inputImage, offsetPos);
+                    count++;
+                }
+            }
+
+            vec4 result = sum / float(count);
+            // 将计算结果直接写入显存的输出纹理中
+            imageStore(outputImage, texelPos, result);
+        }
+    )";
+}
+#endif
