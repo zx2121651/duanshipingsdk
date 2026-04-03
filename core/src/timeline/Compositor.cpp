@@ -81,7 +81,7 @@ Texture Compositor::blendTextures(const Texture& bg, const Texture& fg, float op
 
 Result Compositor::renderFrameAtTime(int64_t timelineUs, FrameBufferPtr outputFb) {
     if (!m_timeline || !m_filterEngine || !outputFb) {
-        return Result::error("Compositor not properly initialized with Timeline/Engine/FBO");
+        return Result::error(-3, "Compositor not properly initialized with Timeline/Engine/FBO");
     }
 
     initBlendProgram();

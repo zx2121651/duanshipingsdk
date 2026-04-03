@@ -22,7 +22,12 @@ FrameBufferPtr FrameBufferPool::getFrameBuffer(int width, int height, FBOPrecisi
         std::unique_ptr<FrameBuffer> fb = std::move(m_pool[key].back());
         m_pool[key].pop_back();
 
-        return FrameBufferPtr(fb.release(), [](FrameBuffer* ptr) {});
+        // 核心修复：统一生命周期。不论是新创建的还是从池子里拿出来的，
+        // 只要离开 shared_ptr 作用域，必定触发自动回归池子的 lambda deleter。
+        // 这堵死了 C++ 跨组件传递纹理时由于 manual release 遗忘导致的 FBO 泄露。
+        return FrameBufferPtr(fb.release(), [this](FrameBuffer* ptr) {
+            this->returnFrameBuffer(ptr);
+        });
     }
 
     auto* fbRaw = new FrameBuffer(width, height, precision);
