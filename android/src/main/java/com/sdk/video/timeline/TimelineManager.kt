@@ -25,16 +25,16 @@ class TimelineManager(val outputWidth: Int, val outputHeight: Int, val fps: Int)
     }
 
     // 在时间线上新建一条轨道（如同 PS 新建图层）
-    fun addTrack(zIndex: Int, trackType: TrackType) {
-        nativeAddTrack(nativeHandle, zIndex, trackType.value)
+    fun addTrack(zIndex: Int, trackType: TrackType): Int {
+        return nativeAddTrack(nativeHandle, zIndex, trackType.value)
     }
 
     // 将用户相册里的一段视频/图片/音乐“放置”到指定的轨道时间区间上
     fun addClip(
         zIndex: Int, clipId: String, sourcePath: String, mediaType: MediaType,
         trimInUs: Long, trimOutUs: Long, timelineInUs: Long
-    ) {
-        nativeAddClip(nativeHandle, zIndex, clipId, sourcePath, mediaType.value, trimInUs, trimOutUs, timelineInUs)
+    ): Int {
+        return nativeAddClip(nativeHandle, zIndex, clipId, sourcePath, mediaType.value, trimInUs, trimOutUs, timelineInUs)
     }
 
     // 销毁 C++ 的时间线模型
@@ -51,10 +51,10 @@ class TimelineManager(val outputWidth: Int, val outputHeight: Int, val fps: Int)
     @InternalApi
     private external fun nativeReleaseTimeline(handle: Long)
     @InternalApi
-    private external fun nativeAddTrack(handle: Long, zIndex: Int, trackType: Int)
+    private external fun nativeAddTrack(handle: Long, zIndex: Int, trackType: Int): Int
     @InternalApi
     private external fun nativeAddClip(
         handle: Long, zIndex: Int, clipId: String, sourcePath: String, mediaType: Int,
         trimInUs: Long, trimOutUs: Long, timelineInUs: Long
-    )
+    ): Int
 }

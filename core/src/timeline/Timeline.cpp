@@ -10,17 +10,15 @@ Timeline::Timeline(int outputWidth, int outputHeight, int fps)
 
 int64_t Timeline::getTotalDuration() const {
     int64_t maxDuration = 0;
-    // 遍历所有轨道，找出 TimelineOut 最大的那个，就是整个视频的物理总长
     for (const auto& pair : m_tracks) {
         TrackPtr track = pair.second;
         if (!track) continue;
 
-        // 如果 m_clips 是私有的，你需要在 Track 里暴露一个 getEndTimelineUs 接口。
-        // 这里假设轨道内可以获取最后一个 Clip (因为排过序)。
-        // 简写：由于 Track 逻辑暂没暴露最后一个，我们在外部用一个大 O(N) 找最大值，
-        // 或者我们在 Track 中增加 getMaxOutTime()。
+        int64_t trackOut = track->getMaxTimelineOut();
+        if (trackOut > maxDuration) {
+            maxDuration = trackOut;
+        }
     }
-    // TODO: Implement track.getMaxOutTime() for performance.
     return maxDuration;
 }
 

@@ -30,12 +30,14 @@ Java_com_sdk_video_timeline_TimelineManager_nativeReleaseTimeline(JNIEnv *env, j
     }
 }
 
-JNIEXPORT void JNICALL
+JNIEXPORT jint JNICALL
 Java_com_sdk_video_timeline_TimelineManager_nativeAddTrack(JNIEnv *env, jobject thiz, jlong handle, jint zIndex, jint trackType) {
     auto timelinePtr = reinterpret_cast<std::shared_ptr<Timeline>*>(handle);
     if (timelinePtr && *timelinePtr) {
         (*timelinePtr)->addTrack(zIndex, static_cast<Track::TrackType>(trackType));
+        return 0; // Success
     }
+    return -1; // Null pointer error
 }
 
 // ========================================================================
@@ -43,14 +45,14 @@ Java_com_sdk_video_timeline_TimelineManager_nativeAddTrack(JNIEnv *env, jobject 
 // 例如：用户插入一个视频，或者缩短/拉长了一个视频的时长。
 // ========================================================================
 
-JNIEXPORT void JNICALL
+JNIEXPORT jint JNICALL
 Java_com_sdk_video_timeline_TimelineManager_nativeAddClip(
     JNIEnv *env, jobject thiz, jlong handle, jint zIndex,
     jstring clipId, jstring sourcePath, jint mediaType,
     jlong trimInUs, jlong trimOutUs, jlong timelineInUs)
 {
     auto timelinePtr = reinterpret_cast<std::shared_ptr<Timeline>*>(handle);
-    if (!timelinePtr || !(*timelinePtr)) return;
+    if (!timelinePtr || !(*timelinePtr)) return -1; // Null pointer error
 
     TrackPtr track = (*timelinePtr)->getTrack(zIndex);
     if (track) {
@@ -66,7 +68,9 @@ Java_com_sdk_video_timeline_TimelineManager_nativeAddClip(
 
         env->ReleaseStringUTFChars(clipId, cId);
         env->ReleaseStringUTFChars(sourcePath, cPath);
+        return 0; // Success
     }
+    return -2; // Track not found error
 }
 
 } // extern "C"
