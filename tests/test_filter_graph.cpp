@@ -11,7 +11,7 @@ void test_filter_graph_creation() {
 
     // Add multiple filters
     engine.addFilter(std::make_shared<BrightnessFilter>());
-    engine.addFilter(std::make_shared<GaussianBlurFilter>(&(engine->m_frameBufferPool)));
+    engine.addFilter(std::make_shared<GaussianBlurFilter>(&(engine.m_frameBufferPool)));
     engine.addFilter(std::make_shared<LookupFilter>());
 
     // We can't really test OpenGL context here easily without a proper windowing system (like GLFW/EGL).

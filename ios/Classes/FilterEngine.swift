@@ -8,6 +8,9 @@ import OpenGLES
     case lookup = 2
     case bilateral = 3
     case cinematicLookup = 4
+    case computeBlur = 5 // Not supported natively, graceful fallback
+    case bilateral = 3
+    case cinematicLookup = 4
 }
 
 @objc public class FilterEngine: NSObject {

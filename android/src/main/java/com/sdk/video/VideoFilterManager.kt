@@ -90,13 +90,19 @@ class VideoFilterManager(
         }
     }
 
+    suspend fun awaitInputSurface(): Surface {
+        // 彻底告别脆弱的 delay(500)，使用协程 Flow 挂起等待引擎真正初始化完毕
+        engineState.first { it == FilterEngineState.RUNNING }
+        return inputSurface ?: throw IllegalStateException("Surface is null even though engine is RUNNING")
+    }
+
     // 提供给相机的输入层
     fun getInputSurface(): Surface? {
         return inputSurface
     }
 
     // 动态添加滤镜
-    fun addFilter(type: VideoFilterType) {
+    fun addFilter(type: VideoFilterType): Result<Unit> {
         val typeInt = when (type) {
             VideoFilterType.BRIGHTNESS -> RenderEngine.FILTER_TYPE_BRIGHTNESS
             VideoFilterType.GAUSSIAN_BLUR -> RenderEngine.FILTER_TYPE_GAUSSIAN_BLUR
@@ -105,12 +111,12 @@ class VideoFilterManager(
             VideoFilterType.CINEMATIC_LOOKUP -> 4 // 刚才在 C++ 里新增的电影级 LUT
             VideoFilterType.COMPUTE_BLUR -> 5 // OpenGL ES 3.1 计算着色器测试
         }
-        renderEngine.addFilter(typeInt)
+        return renderEngine.addFilter(typeInt)
     }
 
     // 清空滤镜管线
-    fun removeAllFilters() {
-        renderEngine.removeAllFilters()
+    fun removeAllFilters(): Result<Unit> {
+        return renderEngine.removeAllFilters()
     }
 
     // 更新滤镜参数 (Float)
@@ -135,12 +141,12 @@ class VideoFilterManager(
     }
 
     // Oboe 音频控制不需要强制在 GL 线程，但为了统一管理也可以放进来
-    fun startAudioRecord(sampleRate: Int) {
-        renderEngine.startAudioRecord(sampleRate)
+    fun startAudioRecord(sampleRate: Int): Result<Unit> {
+        return renderEngine.startAudioRecord(sampleRate)
     }
 
-    fun stopAudioRecord() {
-        renderEngine.stopAudioRecord()
+    fun stopAudioRecord(): Result<Unit> {
+        return renderEngine.stopAudioRecord()
     }
 
     fun readAudioPCM(buffer: ByteArray, length: Int): Int {
