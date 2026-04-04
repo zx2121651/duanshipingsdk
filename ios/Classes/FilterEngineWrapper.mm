@@ -25,13 +25,13 @@ using namespace sdk::video;
 }
 
 - (int)initializeWithContext:(EAGLContext *)context {
-    if (!context || !engine) return -1;
+    if (!context || !engine) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
 
     [EAGLContext setCurrentContext:context];
 
     CVReturn err = CVOpenGLESTextureCacheCreate(kCFAllocatorDefault, NULL, context, NULL, &textureCache);
     if (err != kCVReturnSuccess) {
-        return -4; // Texture cache creation failed
+        return sdk::video::ErrorCode::ERR_RENDER_FBO_ALLOC_FAILED; // Texture cache creation failed
     }
 
     Result res = engine->initialize();
@@ -98,7 +98,7 @@ using namespace sdk::video;
 }
 
 - (int)initializeWithContext:(EAGLContext *)context {
-    if (!context || !engine) return -1;
+    if (!context || !engine) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
 
     [EAGLContext setCurrentContext:context];
 
@@ -119,7 +119,7 @@ using namespace sdk::video;
 }
 
 - (int)addFilter:(FilterType)type {
-    if (!engine) return -1;
+    if (!engine) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
 
     FilterPtr filter;
     switch(type) {
@@ -128,30 +128,30 @@ using namespace sdk::video;
         case FilterTypeLookup: filter = std::make_shared<LookupFilter>(); break;
         case FilterTypeBilateral: filter = std::make_shared<BilateralFilter>(); break;
         case FilterTypeCinematicLookup: filter = std::make_shared<CinematicLookupFilter>(); break;
-        default: return -3; // ComputeBlurFilter is not supported on iOS (GLES 3.1)
+        default: return sdk::video::ErrorCode::ERR_RENDER_COMPUTE_NOT_SUPPORTED; // ComputeBlurFilter is not supported on iOS (GLES 3.1)
     }
 
     if (filter) {
         engine->addFilter(filter);
         return 0;
     }
-    return -2;
+    return sdk::video::ErrorCode::ERR_RENDER_INVALID_STATE;
 }
 
 - (int)removeAllFilters {
-    if (!engine) return -1;
+    if (!engine) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
     engine->removeAllFilters();
     return 0;
 }
 
 - (int)updateParameterFloat:(NSString *)key value:(float)value {
-    if (!engine || !key) return -1;
+    if (!engine || !key) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
     engine->updateParameter([key UTF8String], std::any(value));
     return 0;
 }
 
 - (int)updateParameterInt:(NSString *)key value:(int32_t)value {
-    if (!engine || !key) return -1;
+    if (!engine || !key) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
     engine->updateParameter([key UTF8String], std::any(value));
     return 0;
 }

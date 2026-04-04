@@ -120,17 +120,18 @@ class VideoFilterManager(
     // 动态添加滤镜
     fun addFilter(type: VideoFilterType): Result<Unit> {
         runOnGLThread {
-        val typeInt = when (type) {
-            VideoFilterType.BRIGHTNESS -> RenderEngine.FILTER_TYPE_BRIGHTNESS
-            VideoFilterType.GAUSSIAN_BLUR -> RenderEngine.FILTER_TYPE_GAUSSIAN_BLUR
-            VideoFilterType.LOOKUP -> RenderEngine.FILTER_TYPE_LOOKUP
-            VideoFilterType.BILATERAL -> RenderEngine.FILTER_TYPE_BILATERAL
-            VideoFilterType.CINEMATIC_LOOKUP -> 4 // 刚才在 C++ 里新增的电影级 LUT
-            VideoFilterType.COMPUTE_BLUR -> 5 // OpenGL ES 3.1 计算着色器测试
-        }
-        renderEngine.addFilter(typeInt)
+            val typeInt = when (type) {
+                VideoFilterType.BRIGHTNESS -> RenderEngine.FILTER_TYPE_BRIGHTNESS
+                VideoFilterType.GAUSSIAN_BLUR -> RenderEngine.FILTER_TYPE_GAUSSIAN_BLUR
+                VideoFilterType.LOOKUP -> RenderEngine.FILTER_TYPE_LOOKUP
+                VideoFilterType.BILATERAL -> RenderEngine.FILTER_TYPE_BILATERAL
+                VideoFilterType.CINEMATIC_LOOKUP -> 4 // 刚才在 C++ 里新增的电影级 LUT
+                VideoFilterType.COMPUTE_BLUR -> 5 // OpenGL ES 3.1 计算着色器测试
+            }
+            renderEngine.addFilter(typeInt)
         }
         return Result.success(Unit)
+    }
 
     // 清空滤镜管线
     fun removeAllFilters(): Result<Unit> {
