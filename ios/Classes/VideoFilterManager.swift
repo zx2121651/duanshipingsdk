@@ -53,12 +53,17 @@ public actor VideoFilterManager {
 
     /// 初始化底层滤镜引擎，传入已设置好 OpenGL ES 3.0 的 EAGLContext
     public func initialize(context: EAGLContext) {
-        do {
-            self.state = .initializing
-            self.context = context
-            engine.initialize(context: context)
+        self.state = .initializing
+        self.context = context
+
+        let result = engine.initialize(context: context)
+        if result == 0 {
             self.state = .running
-        } catch {
+        } else {
+            let error = NSError(domain: "VideoFilterManager", code: Int(result), userInfo: [NSLocalizedDescriptionKey: "Failed to initialize FilterEngine. Error code: \(result)"])
+            self.state = .error(error)
+        }
+    } catch {
             self.state = .error(error)
         }
     }

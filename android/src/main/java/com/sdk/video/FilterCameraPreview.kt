@@ -27,9 +27,13 @@ fun FilterCameraPreview(
     // Intensity State for the ComputeBlurFilter
     var intensity by remember { mutableFloatStateOf(1.0f) }
 
+    var glView by remember { mutableStateOf<GLSurfaceView?>(null) }
+
     // React to Slider changes
     LaunchedEffect(intensity) {
-        filterManager.updateParameter("blurSize", intensity * 10f) // 扩展滑块参数测试 Compute Shader (0.0~10.0 半径)
+        glView?.queueEvent {
+            filterManager.updateParameter("blurSize", intensity * 10f)
+        }
     }
 
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -40,6 +44,7 @@ fun FilterCameraPreview(
                 modifier = Modifier.fillMaxSize(),
                 factory = { context ->
                     GLSurfaceView(context).apply {
+                        glView = this
                         setEGLContextClientVersion(3)
                         setRenderer(object : GLSurfaceView.Renderer {
                             var currentTextureId = -1
@@ -164,7 +169,7 @@ fun FilterCameraPreview(
 
             // Hidden/Debug Crash Simulator
             Button(onClick = {
-                scope.launch { filterManager.updateParameter("simulateCrash", 1f) }
+                glView?.queueEvent { filterManager.updateParameter("simulateCrash", 1f) }
             }) {
                 Text("Simulate Overload (Test Degradation)")
             }
