@@ -212,19 +212,18 @@ class VideoEncoder(
                 encodedData.position(info.offset)
                 encodedData.limit(info.offset + info.size)
 
-                val copyBuffer = ByteBuffer.allocate(info.size)
-                copyBuffer.put(encodedData)
-                copyBuffer.flip()
-
-                val newInfo = MediaCodec.BufferInfo().apply {
-                    set(0, info.size, info.presentationTimeUs, info.flags)
-                }
-
                 synchronized(this) {
                     if (muxerStarted) {
                         val track = if (isVideo) videoTrackIndex else audioTrackIndex
-                        muxer?.writeSampleData(track, copyBuffer, newInfo)
+                        muxer?.writeSampleData(track, encodedData, info)
                     } else {
+                        val copyBuffer = ByteBuffer.allocateDirect(info.size)
+                        copyBuffer.put(encodedData)
+                        copyBuffer.flip()
+
+                        val newInfo = MediaCodec.BufferInfo().apply {
+                            set(0, info.size, info.presentationTimeUs, info.flags)
+                        }
                         pendingFrames.add(FrameData(copyBuffer, newInfo, isVideo))
                     }
                 }

@@ -266,14 +266,14 @@ Java_com_sdk_video_RenderEngine_nativeAddFilter(JNIEnv *env, jobject thiz, jlong
                 }
                 break;
 #endif
-            default: return -2; // Unknown filter type
+            default: return sdk::video::ErrorCode::ERR_RENDER_INVALID_STATE;
         }
         if (filter) {
             wrapper->filterEngine->addFilter(filter);
             return 0;
         }
     }
-    return -1; // Null wrapper
+    return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
 }
 
 JNIEXPORT jint JNICALL
@@ -284,7 +284,7 @@ Java_com_sdk_video_RenderEngine_nativeRemoveAllFilters(JNIEnv *env, jobject thiz
         wrapper->filterEngine->addFilter(std::make_shared<OES2RGBFilter>());
         return 0;
     }
-    return -1;
+    return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
 }
 
 JNIEXPORT jint JNICALL
@@ -292,9 +292,9 @@ Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
     if (wrapper && wrapper->audioEngine) {
         bool ok = wrapper->audioEngine->start(sampleRate);
-        return ok ? 0 : -2;
+        return ok ? 0 : sdk::video::ErrorCode::ERR_INIT_OBOE_FAILED;
     }
-    return -1;
+    return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
 }
 
 JNIEXPORT jint JNICALL
@@ -304,7 +304,7 @@ Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz,
         wrapper->audioEngine->stop();
         return 0;
     }
-    return -1;
+    return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
 }
 
 JNIEXPORT jint JNICALL
