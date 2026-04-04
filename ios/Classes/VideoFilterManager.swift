@@ -63,9 +63,6 @@ public actor VideoFilterManager {
             let error = NSError(domain: "VideoFilterManager", code: Int(result), userInfo: [NSLocalizedDescriptionKey: "Failed to initialize FilterEngine. Error code: \(result)"])
             self.state = .error(error)
         }
-    } catch {
-            self.state = .error(error)
-        }
     }
 
     /**
