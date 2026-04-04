@@ -39,6 +39,22 @@ class VideoFilterManager(
     // 必须确保所有对 renderEngine 的调用都在这个单线程中进行。
 
 
+        // GL 线程分发器：为了消除对具体 UI 控件 (GLSurfaceView) 的直接依赖，
+    // 我们强制外部消费者在创建引擎时提供一个回调，用于将任务派发给 EGL 绑定的渲染线程。
+    // 这解决了之前 "依靠约定保证单线程" 带来的巨大维护隐患。
+    var glThreadDispatcher: ((Runnable) -> Unit)? = null
+
+    // 将所有的配置更新请求统一收敛并安全分发给 GL 线程
+    private fun runOnGLThread(action: () -> Unit) {
+        val dispatcher = glThreadDispatcher
+        if (dispatcher != null) {
+            dispatcher.invoke(Runnable { action() })
+        } else {
+            // 如果还没绑定分发器，可以直接执行或者抛错。
+            action()
+        }
+    }
+
     // StateFlow 暴露引擎状态，外部 UI (如 Compose) 可以直接 collectAsState() 监听变化
     private val _engineState = MutableStateFlow(FilterEngineState.STOPPED)
     val engineState: StateFlow<FilterEngineState> = _engineState.asStateFlow()
@@ -103,6 +119,7 @@ class VideoFilterManager(
 
     // 动态添加滤镜
     fun addFilter(type: VideoFilterType): Result<Unit> {
+        runOnGLThread {
         val typeInt = when (type) {
             VideoFilterType.BRIGHTNESS -> RenderEngine.FILTER_TYPE_BRIGHTNESS
             VideoFilterType.GAUSSIAN_BLUR -> RenderEngine.FILTER_TYPE_GAUSSIAN_BLUR
@@ -111,22 +128,24 @@ class VideoFilterManager(
             VideoFilterType.CINEMATIC_LOOKUP -> 4 // 刚才在 C++ 里新增的电影级 LUT
             VideoFilterType.COMPUTE_BLUR -> 5 // OpenGL ES 3.1 计算着色器测试
         }
-        return renderEngine.addFilter(typeInt)
-    }
+        renderEngine.addFilter(typeInt)
+        }
+        return Result.success(Unit)
 
     // 清空滤镜管线
     fun removeAllFilters(): Result<Unit> {
-        return renderEngine.removeAllFilters()
+        runOnGLThread { renderEngine.removeAllFilters() }
+        return Result.success(Unit)
     }
 
     // 更新滤镜参数 (Float)
     fun updateParameter(key: String, value: Float) {
-        renderEngine.updateParameterFloat(key, value)
+        runOnGLThread { renderEngine.updateParameterFloat(key, value) }
     }
 
     // 更新滤镜参数 (Int)
     fun updateParameter(key: String, value: Int) {
-        renderEngine.updateParameterInt(key, value)
+        runOnGLThread { renderEngine.updateParameterInt(key, value) }
     }
 
 

@@ -31,9 +31,7 @@ fun FilterCameraPreview(
 
     // React to Slider changes
     LaunchedEffect(intensity) {
-        glView?.queueEvent {
-            filterManager.updateParameter("blurSize", intensity * 10f)
-        }
+        filterManager.updateParameter("blurSize", intensity * 10f)
     }
 
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -45,6 +43,7 @@ fun FilterCameraPreview(
                 factory = { context ->
                     GLSurfaceView(context).apply {
                         glView = this
+                        filterManager.glThreadDispatcher = { runnable -> queueEvent(runnable) }
                         setEGLContextClientVersion(3)
                         setRenderer(object : GLSurfaceView.Renderer {
                             var currentTextureId = -1
@@ -169,7 +168,7 @@ fun FilterCameraPreview(
 
             // Hidden/Debug Crash Simulator
             Button(onClick = {
-                glView?.queueEvent { filterManager.updateParameter("simulateCrash", 1f) }
+                filterManager.updateParameter("simulateCrash", 1f)
             }) {
                 Text("Simulate Overload (Test Degradation)")
             }

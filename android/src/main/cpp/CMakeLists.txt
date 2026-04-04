@@ -22,6 +22,7 @@ set(CORE_SRC
         ../../../../core/src/timeline/Track.cpp
         ../../../../core/src/timeline/Timeline.cpp
         ../../../../core/src/timeline/Compositor.cpp
+        ../../../../core/src/timeline/DecoderPool.cpp
 )
 
 add_library(video-sdk SHARED
