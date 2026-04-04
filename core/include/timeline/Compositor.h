@@ -51,6 +51,9 @@ private:
     std::shared_ptr<IDecoderPool> m_decoderPool;
 
     GLuint m_blendProgram = 0;
+    GLuint m_copyProgram = 0;
+    void initCopyProgram();
+    void copyTexture(const Texture& src, FrameBufferPtr target);
 
     void initBlendProgram();
     Texture blendTextures(const Texture& bg, const Texture& fg, float opacity, FrameBufferPtr target);

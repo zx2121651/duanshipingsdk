@@ -8,6 +8,58 @@ namespace timeline {
 Compositor::Compositor(std::shared_ptr<Timeline> timeline, std::shared_ptr<FilterEngine> engine)
     : m_timeline(timeline), m_filterEngine(engine), m_decoderPool(nullptr) {}
 
+void Compositor::initCopyProgram() {
+    if (m_copyProgram != 0) return;
+    const char* vsrc = R"(#version 300 es
+        layout(location = 0) in vec4 position;
+        layout(location = 1) in vec2 texCoord;
+        out vec2 v_texCoord;
+        void main() {
+            gl_Position = position;
+            v_texCoord = texCoord;
+        }
+    )";
+    const char* fsrc = R"(#version 300 es
+        precision highp float;
+        in vec2 v_texCoord;
+        uniform sampler2D texForeground;
+        uniform float opacity;
+        out vec4 fragColor;
+        void main() {
+            vec4 fg = texture(texForeground, v_texCoord);
+            fragColor = vec4(fg.rgb, fg.a * opacity);
+        }
+    )";
+    auto compile = [](GLenum type, const char* s) {
+        GLuint sh = glCreateShader(type); glShaderSource(sh, 1, &s, NULL); glCompileShader(sh); return sh;
+    };
+    GLuint vs = compile(GL_VERTEX_SHADER, vsrc);
+    GLuint fs = compile(GL_FRAGMENT_SHADER, fsrc);
+    m_copyProgram = glCreateProgram();
+    glAttachShader(m_copyProgram, vs); glAttachShader(m_copyProgram, fs);
+    glLinkProgram(m_copyProgram);
+    glDeleteShader(vs); glDeleteShader(fs);
+}
+
+void Compositor::copyTexture(const Texture& src, FrameBufferPtr target) {
+    if (!target || src.id == 0) return;
+    target->bind();
+    glUseProgram(m_copyProgram);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, src.id);
+    glUniform1i(glGetUniformLocation(m_copyProgram, "texForeground"), 0);
+    glUniform1f(glGetUniformLocation(m_copyProgram, "opacity"), 1.0f);
+
+    static const float squareCoords[] = {-1, -1, 1, -1, -1, 1, 1, 1};
+    static const float textureCoords[] = {0, 0, 1, 0, 0, 1, 1, 1};
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, squareCoords);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, textureCoords);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    target->unbind();
+}
+
 void Compositor::initBlendProgram() {
     if (m_blendProgram != 0) return;
 
@@ -85,6 +137,7 @@ Result Compositor::renderFrameAtTime(int64_t timelineUs, FrameBufferPtr outputFb
     }
 
     initBlendProgram();
+    initCopyProgram();
 
     std::vector<ClipPtr> activeClips = m_timeline->getActiveVideoClipsAtTime(timelineUs);
 
@@ -112,13 +165,15 @@ Result Compositor::renderFrameAtTime(int64_t timelineUs, FrameBufferPtr outputFb
 
         // C. 叠加合成
         if (isFirst) {
-            // 最底下一层，直接贴在背景 FBO 上
+            // [P0 修复] 最底下一层，绝对不能与空纹理 {0,0,0} 混合，否则引发 GL 报错
+            // 直接使用专用的 copyProgram 画到 pingFb 上作为后续的基底
             pingFb->bind();
             glClearColor(0.0, 0.0, 0.0, 1.0);
             glClear(GL_COLOR_BUFFER_BIT);
+            pingFb->unbind(); // bind in copyTexture
 
-            // TODO: Simple Copy Program to draw fgTex to pingFb (or use blend with alpha=1.0 & black bg)
-            accumulatedTexture = blendTextures({0,0,0}, fgTex, clip->getOpacity(), pingFb);
+            copyTexture(fgTex, pingFb);
+            accumulatedTexture = pingFb->getTexture();
             isFirst = false;
         } else {
             // 与已有画面进行 Alpha Blending 画到 pongFb
@@ -140,9 +195,6 @@ Result Compositor::renderFrameAtTime(int64_t timelineUs, FrameBufferPtr outputFb
     glUniform1f(glGetUniformLocation(m_blendProgram, "opacity"), 1.0f);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
     outputFb->unbind();
-
-    m_filterEngine->m_frameBufferPool.returnFrameBuffer(pingFb.get());
-    m_filterEngine->m_frameBufferPool.returnFrameBuffer(pongFb.get());
 
     return Result::ok();
 }

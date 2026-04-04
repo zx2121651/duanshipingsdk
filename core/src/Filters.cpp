@@ -411,7 +411,7 @@ Texture GaussianBlurFilter::processFrame(const Texture& inputTexture, FrameBuffe
 
     float blurSize = 1.0f;
     if (m_parameters.count("blurSize")) {
-        try { blurSize = std::any_cast<float>(m_parameters.at("blurSize")); } catch (...) {}
+        try { blurSize = std::any_cast<float>(m_parameters.at("blurSize")); } catch (const std::bad_any_cast& e) { std::cerr << "Parameter type cast error: " << e.what() << std::endl; }
     }
     glUniform1f(m_blurSizeHandle, blurSize);
 
@@ -686,7 +686,7 @@ void CinematicLookupFilter::onDraw(const Texture& inputTexture, FrameBufferPtr o
     float intensity = 1.0f;
     auto it = m_parameters.find("intensity");
     if (it != m_parameters.end()) {
-        try { intensity = std::any_cast<float>(it->second); } catch (...) {}
+        try { intensity = std::any_cast<float>(it->second); } catch (const std::bad_any_cast& e) { std::cerr << "Parameter type cast error: " << e.what() << std::endl; }
     }
     glUniform1f(m_intensityHandle, intensity);
 
@@ -815,7 +815,7 @@ Texture ComputeBlurFilter::processFrame(const Texture& inputTexture, FrameBuffer
 
     float blurSize = 2.0f;
     if (m_parameters.count("blurSize")) {
-        try { blurSize = std::any_cast<float>(m_parameters.at("blurSize")); } catch (...) {}
+        try { blurSize = std::any_cast<float>(m_parameters.at("blurSize")); } catch (const std::bad_any_cast& e) { std::cerr << "Parameter type cast error: " << e.what() << std::endl; }
     }
     glUniform1f(m_blurSizeHandle, blurSize);
 

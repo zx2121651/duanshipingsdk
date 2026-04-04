@@ -65,10 +65,6 @@ Texture FilterEngine::processFrame(const Texture& textureIn, int width, int heig
 
         Texture outTexture = m_filters[i]->processFrame(currentTexture, targetFb);
         currentTexture = outTexture;
-
-        if (previousFb != nullptr) {
-            m_frameBufferPool.returnFrameBuffer(previousFb.get());
-        }
         previousFb = targetFb;
     }
 
@@ -80,7 +76,7 @@ void FilterEngine::updateParameter(const std::string& key, const std::any& value
         try {
             float val = std::any_cast<float>(value);
             m_simulateCrash = (val > 0.5f);
-        } catch (...) {}
+        } catch (const std::bad_any_cast& e) { std::cerr << "updateParameter type cast error: " << e.what() << std::endl; }
         return;
     }
 
