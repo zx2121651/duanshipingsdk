@@ -46,13 +46,14 @@ class VideoFilterManager(
     var glThreadDispatcher: ((Runnable) -> Unit)? = null
 
     // 将所有的配置更新请求统一收敛并安全分发给 GL 线程
-    private fun runOnGLThread(action: () -> Unit) {
+    private fun runOnGLThread(action: () -> Unit): Result<Unit> {
         val dispatcher = glThreadDispatcher
         if (dispatcher != null) {
             dispatcher.invoke(Runnable { action() })
+            return Result.success(Unit)
         } else {
-            // 如果还没绑定分发器，可以直接执行或者抛错。
-            action()
+            // Fail-fast: 拒绝在未知线程执行可能导致崩溃的 GL 调用
+            return Result.failure(IllegalStateException("GL thread dispatcher not bound. Cannot execute GL action."))
         }
     }
 
@@ -77,7 +78,7 @@ class VideoFilterManager(
         try {
             _engineState.value = FilterEngineState.INITIALIZING
             val res = renderEngine.init()
-            if (res != 0) return Result.failure(Exception("Native init failed"))
+            if (res != 0) return Result.failure(VideoSdkError.fromNativeCode(res))
 
             // 设置底层每处理完一帧的回调监听
             renderEngine.onFrameProcessedListener = { outputTexId ->
@@ -120,7 +121,7 @@ class VideoFilterManager(
 
     // 动态添加滤镜
     fun addFilter(type: VideoFilterType): Result<Unit> {
-        runOnGLThread {
+        return runOnGLThread {
             val typeInt = when (type) {
                 VideoFilterType.BRIGHTNESS -> RenderEngine.FILTER_TYPE_BRIGHTNESS
                 VideoFilterType.GAUSSIAN_BLUR -> RenderEngine.FILTER_TYPE_GAUSSIAN_BLUR
@@ -131,23 +132,21 @@ class VideoFilterManager(
             }
             renderEngine.addFilter(typeInt)
         }
-        return Result.success(Unit)
     }
 
     // 清空滤镜管线
     fun removeAllFilters(): Result<Unit> {
-        runOnGLThread { renderEngine.removeAllFilters() }
-        return Result.success(Unit)
+        return runOnGLThread { renderEngine.removeAllFilters() }
     }
 
     // 更新滤镜参数 (Float)
-    fun updateParameter(key: String, value: Float) {
-        runOnGLThread { renderEngine.updateParameterFloat(key, value) }
+    fun updateParameter(key: String, value: Float): Result<Unit> {
+        return runOnGLThread { renderEngine.updateParameterFloat(key, value) }
     }
 
     // 更新滤镜参数 (Int)
-    fun updateParameter(key: String, value: Int) {
-        runOnGLThread { renderEngine.updateParameterInt(key, value) }
+    fun updateParameter(key: String, value: Int): Result<Unit> {
+        return runOnGLThread { renderEngine.updateParameterInt(key, value) }
     }
 
 

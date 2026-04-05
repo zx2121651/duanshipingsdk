@@ -118,7 +118,9 @@ class MainActivity : ComponentActivity() {
                 activeCameraResolution = resolution
 
                 // 清除之前的实例（如果有），防止多开
-                filterManager?.scope?.launch { filterManager?.release() }
+                // Fix Risk B: Capture old instance locally before releasing to prevent race conditions
+                val oldManager = filterManager
+                oldManager?.scope?.launch { oldManager.release() }
 
                 val newManager = VideoFilterManager(resolution.width, resolution.height)
 
