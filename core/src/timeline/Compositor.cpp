@@ -185,16 +185,9 @@ Result Compositor::renderFrameAtTime(int64_t timelineUs, FrameBufferPtr outputFb
     // D. 最后的合并帧还要经过 FilterEngine 做全局特效 (例如套 LUT)
     Texture finalTex = m_filterEngine->processFrame(accumulatedTexture, outputFb->width(), outputFb->height());
 
-    // E. 拷贝到输出目标 outputFb
-    // 这里因为 processFrame 返回了最终纹理，我们需要把它画到 outputFb
-    outputFb->bind();
-    glUseProgram(m_blendProgram); // Reuse blend program as copy with 1.0 opacity and no background
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, finalTex.id);
-    glUniform1i(glGetUniformLocation(m_blendProgram, "texForeground"), 1);
-    glUniform1f(glGetUniformLocation(m_blendProgram, "opacity"), 1.0f);
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    outputFb->unbind();
+    // E. 显式 FBO 拷贝阶段 (Explicit Copy Pass)
+    // 解决架构审查反馈：使用专用的 copyProgram 进行一次彻底的 copy pass，消除由于复用 blend program 带来的未初始化状态依赖风险。
+    copyTexture(finalTex, outputFb);
 
     return Result::ok();
 }
