@@ -1,5 +1,6 @@
 #pragma once
 #include "Compositor.h"
+#include "VideoDecoder.h"
 #include <string>
 #include <map>
 #include <mutex>
@@ -9,11 +10,11 @@ namespace video {
 namespace timeline {
 
 /**
- * @brief 基础的视频解码池 (Decoder Pool)
+ * @brief 视频解码池 (Decoder Pool)
  *
  * 用于在 NLE 架构中按需根据时间戳提取各个素材轨的帧数据。
- * 在 Android 上将对接 AMediaExtractor/AMediaCodec。
- * 在 iOS 上将对接 AVAssetReader。
+ * 在 Android 上对接 AMediaExtractor/AMediaCodec。
+ * 在 iOS 上对接 AVAssetReader。
  */
 class DecoderPool : public IDecoderPool {
 public:
@@ -32,11 +33,11 @@ public:
 private:
     std::mutex m_mutex;
 
-    // 模拟持有的 Decoder 上下文。真实环境下这里会持有平台相关的硬件解码器实例。
     struct DecoderContext {
         std::string sourcePath;
+        std::shared_ptr<VideoDecoder> decoder;
         bool isInitialized = false;
-        Texture lastDecodedFrame = {0, 0, 0}; // 缓存的上一帧，用于防抖
+        Texture lastDecodedFrame = {0, 0, 0};
         int64_t lastDecodedTimeUs = -1;
     };
 
