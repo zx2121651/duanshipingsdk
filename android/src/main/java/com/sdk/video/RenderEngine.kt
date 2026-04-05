@@ -96,12 +96,12 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     // Pipeline
     fun addFilter(type: Int): Result<Unit> {
         val code = nativeAddFilter(nativeHandle, type)
-        return if (code == 0) Result.success(Unit) else Result.failure(Exception("Native addFilter failed with code $code"))
+        return if (code == 0) Result.success(Unit) else Result.failure(VideoSdkError.fromNativeCode(code))
     }
 
     fun removeAllFilters(): Result<Unit> {
         val code = nativeRemoveAllFilters(nativeHandle)
-        return if (code == 0) Result.success(Unit) else Result.failure(Exception("Native removeAllFilters failed with code $code"))
+        return if (code == 0) Result.success(Unit) else Result.failure(VideoSdkError.fromNativeCode(code))
     }
 
     // Call on GL thread to release
@@ -121,15 +121,15 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
 
 
     fun startAudioRecord(sampleRate: Int): Result<Unit> {
-        if (nativeHandle == 0L) return Result.failure(Exception("Engine not initialized"))
+        if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
         val code = nativeStartAudioRecord(nativeHandle, sampleRate)
-        return if (code == 0) Result.success(Unit) else Result.failure(Exception("Native startAudioRecord failed with code $code"))
+        return if (code == 0) Result.success(Unit) else Result.failure(VideoSdkError.fromNativeCode(code))
     }
 
     fun stopAudioRecord(): Result<Unit> {
-        if (nativeHandle == 0L) return Result.failure(Exception("Engine not initialized"))
+        if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
         val code = nativeStopAudioRecord(nativeHandle)
-        return if (code == 0) Result.success(Unit) else Result.failure(Exception("Native stopAudioRecord failed with code $code"))
+        return if (code == 0) Result.success(Unit) else Result.failure(VideoSdkError.fromNativeCode(code))
     }
 
     fun readAudioPCM(buffer: ByteArray, length: Int): Int {
