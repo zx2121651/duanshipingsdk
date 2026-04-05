@@ -253,16 +253,16 @@ class VideoEncoder(
         // 关闭底层的 Oboe 音频采集引擎
         filterManager.stopAudioRecord()
 
-        try { videoCodec?.signalEndOfInputStream() } catch (e: Exception) {}
+        try { videoCodec?.signalEndOfInputStream() } catch (e: Exception) { Log.e(TAG, "Error signaling end of video stream", e) }
 
         Thread.sleep(100)
 
-        try { videoCodec?.stop(); videoCodec?.release() } catch (e: Exception) {}
-        try { audioCodec?.stop(); audioCodec?.release() } catch (e: Exception) {}
+        try { videoCodec?.stop(); videoCodec?.release() } catch (e: Exception) { Log.e(TAG, "Error releasing video codec", e) }
+        try { audioCodec?.stop(); audioCodec?.release() } catch (e: Exception) { Log.e(TAG, "Error releasing audio codec", e) }
 
         synchronized(this) {
             if (muxerStarted) {
-                try { muxer?.stop(); muxer?.release() } catch (e: Exception) {}
+                try { muxer?.stop(); muxer?.release() } catch (e: Exception) { Log.e(TAG, "Error releasing muxer", e) }
             }
             muxerStarted = false
         }

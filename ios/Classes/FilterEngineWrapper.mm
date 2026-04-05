@@ -4,12 +4,16 @@
 
 using namespace sdk::video;
 
-
 #import <CoreVideo/CVOpenGLESTextureCache.h>
 
 @interface FilterEngineWrapper () {
     std::shared_ptr<FilterEngine> engine;
     CVOpenGLESTextureCacheRef textureCache;
+    CVPixelBufferPoolRef pixelBufferPool;
+    size_t poolWidth;
+    size_t poolHeight;
+    GLuint blitFboRead;
+    GLuint blitFboDraw;
 }
 @end
 
@@ -20,6 +24,11 @@ using namespace sdk::video;
     if (self) {
         engine = std::make_shared<FilterEngine>();
         textureCache = NULL;
+        pixelBufferPool = NULL;
+        poolWidth = 0;
+        poolHeight = 0;
+        blitFboRead = 0;
+        blitFboDraw = 0;
     }
     return self;
 }
@@ -72,50 +81,83 @@ using namespace sdk::video;
     Texture inTex = {inputTextureId, (uint32_t)width, (uint32_t)height};
     Texture outTex = engine->processFrame(inTex, (int)width, (int)height);
 
-    // For true zero-copy processing back to AVFoundation, we should ideally render into a new CVPixelBuffer
-    // backed FBO. For now, since outTex holds the FBO ID, if we want the output buffer as CVPixelBuffer,
-    // we would create an output CVPixelBuffer and attach an FBO to it.
-    // Given the complexity of providing a full output pool here, we'll return the input buffer with effects applied
-    // if we rendered directly to it (not possible with read-only buffers).
-    // For the sake of this architectural fix, we will just release the CV texture and return.
+    // Zero-copy output: Create a CVPixelBuffer backed texture, and blit the result to it
+    if (poolWidth != width || poolHeight != height || !pixelBufferPool) {
+        if (pixelBufferPool) {
+            CVPixelBufferPoolRelease(pixelBufferPool);
+        }
+        NSDictionary *pixelBufferAttributes = @{
+            (id)kCVPixelBufferPixelFormatTypeKey: @(kCVPixelFormatType_32BGRA),
+            (id)kCVPixelBufferWidthKey: @(width),
+            (id)kCVPixelBufferHeightKey: @(height),
+            (id)kCVPixelBufferOpenGLESCompatibilityKey: @(YES),
+            (id)kCVPixelBufferIOSurfacePropertiesKey: @{}
+        };
+        CVPixelBufferPoolCreate(kCFAllocatorDefault, NULL, (__bridge CFDictionaryRef)pixelBufferAttributes, &pixelBufferPool);
+        poolWidth = width;
+        poolHeight = height;
+    }
 
+    CVPixelBufferRef outPixelBuffer = NULL;
+    err = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pixelBufferPool, &outPixelBuffer);
+    if (err != kCVReturnSuccess || !outPixelBuffer) {
+        CFRelease(cvTexture);
+        return pixelBuffer;
+    }
+
+    CVOpenGLESTextureRef outCvTexture = NULL;
+    err = CVOpenGLESTextureCacheCreateTextureFromImage(kCFAllocatorDefault,
+                                                       textureCache,
+                                                       outPixelBuffer,
+                                                       NULL,
+                                                       GL_TEXTURE_2D,
+                                                       GL_RGBA,
+                                                       (GLsizei)width,
+                                                       (GLsizei)height,
+                                                       GL_BGRA,
+                                                       GL_UNSIGNED_BYTE,
+                                                       0,
+                                                       &outCvTexture);
+    if (err != kCVReturnSuccess || !outCvTexture) {
+        CVPixelBufferRelease(outPixelBuffer);
+        CFRelease(cvTexture);
+        return pixelBuffer;
+    }
+
+    GLuint outputTextureId = CVOpenGLESTextureGetName(outCvTexture);
+
+    // Create or bind FBOs for blitting
+    if (blitFboRead == 0) {
+        glGenFramebuffers(1, &blitFboRead);
+    }
+    if (blitFboDraw == 0) {
+        glGenFramebuffers(1, &blitFboDraw);
+    }
+
+    GLint oldReadFBO, oldDrawFBO;
+    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &oldReadFBO);
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &oldDrawFBO);
+
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, blitFboRead);
+    glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, outTex.id, 0);
+
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, blitFboDraw);
+    glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, outputTextureId, 0);
+
+    // Blit from engine output to CVPixelBuffer-backed texture
+    glBlitFramebuffer(0, 0, (GLint)width, (GLint)height, 0, 0, (GLint)width, (GLint)height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+    // Restore state
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, oldReadFBO);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, oldDrawFBO);
+
+    // Cleanup CV resources for this frame
+    CFRelease(outCvTexture);
     CFRelease(cvTexture);
     CVOpenGLESTextureCacheFlush(textureCache, 0);
 
-    // In a production pipeline, outTex would be read via glReadPixels or bound to an output CVPixelBuffer.
-    return pixelBuffer; // TODO: Implement zero-copy output CVMetalTextureCache map
-}
-@end
-
-@implementation FilterEngineWrapper
-
-- (instancetype)init {
-    self = [super init];
-    if (self) {
-        engine = std::make_shared<FilterEngine>();
-    }
-    return self;
-}
-
-- (int)initializeWithContext:(EAGLContext *)context {
-    if (!context || !engine) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
-
-    [EAGLContext setCurrentContext:context];
-
-    // We expect engine->initialize() to return Result, let's map it
-    Result res = engine->initialize();
-    if (!res.isOk()) {
-        return res.getErrorCode() != 0 ? res.getErrorCode() : -2;
-    }
-    return 0; // OK
-}
-
-- (CVPixelBufferRef)processFrame:(CVPixelBufferRef)pixelBuffer {
-    if (!engine) return pixelBuffer;
-    // For iOS, texture handling mapping needs CVMetalTextureCache or similar.
-    // Placeholder passing back input buffer as NLE N/A fallback for now
-    // Texture outTex = engine->processFrame(...);
-    return pixelBuffer;
+    // Return the new zero-copy buffer
+    return outPixelBuffer;
 }
 
 - (int)addFilter:(FilterType)type {
@@ -159,6 +201,22 @@ using namespace sdk::video;
 - (void)releaseResources {
     if (engine) {
         engine->release();
+    }
+    if (textureCache) {
+        CFRelease(textureCache);
+        textureCache = NULL;
+    }
+    if (pixelBufferPool) {
+        CVPixelBufferPoolRelease(pixelBufferPool);
+        pixelBufferPool = NULL;
+    }
+    if (blitFboRead != 0) {
+        glDeleteFramebuffers(1, &blitFboRead);
+        blitFboRead = 0;
+    }
+    if (blitFboDraw != 0) {
+        glDeleteFramebuffers(1, &blitFboDraw);
+        blitFboDraw = 0;
     }
 }
 

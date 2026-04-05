@@ -1,8 +1,9 @@
+
 package com.sdk.video
 
 @RequiresOptIn(
-    message = "This API is internal to the video SDK and should not be used outside.",
-    level = RequiresOptIn.Level.ERROR
+    level = RequiresOptIn.Level.ERROR,
+    message = "This API is internal to the SDK and should not be called directly."
 )
 @Retention(AnnotationRetention.BINARY)
 @Target(AnnotationTarget.CLASS, AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY)
