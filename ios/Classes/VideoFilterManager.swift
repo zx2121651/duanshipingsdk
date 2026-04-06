@@ -31,6 +31,9 @@ public actor VideoFilterManager {
     private let engine: FilterEngine
     private var context: EAGLContext?
 
+    // 录制器
+    private var videoEncoder: VideoEncoder?
+
     public private(set) var state: FilterEngineState = .stopped
 
     // AsyncStream 的发送端
@@ -80,6 +83,13 @@ public actor VideoFilterManager {
         if let processedBuffer = engine.processFrame(pixelBuffer) {
             // 处理成功，将带特效的 Buffer 发送进 AsyncStream 队列
             streamContinuation?.yield(.success(processedBuffer))
+
+            // 如果正在录制，将处理后的帧写入编码器
+            if let encoder = videoEncoder, encoder.isRecording {
+                // 真实场景下 timestamp 应该从参数传入，此处模拟一个自增时间或使用系统时间
+                let timestamp = CMClockGetTime(CMClockGetHostTimeClock())
+                encoder.appendVideoPixelBuffer(processedBuffer, timestamp: timestamp)
+            }
         } else {
             // 处理失败 (例如内部 simulateCrash 被触发，或者 GPU 显存耗尽)。
             // 将状态标为 degraded，并 Bypass 原图。
@@ -111,6 +121,29 @@ public actor VideoFilterManager {
     public func updateParameter(key: String, value: Int) {
         guard case .running = state else { return }
         engine.updateParameterInt(key: key, value: value)
+    }
+
+
+    /// 开始录制
+    public func startVideoRecording(outputURL: URL, width: Int, height: Int) throws {
+        let encoder = VideoEncoder(width: width, height: height)
+        try encoder.startRecording(outputURL: outputURL)
+        self.videoEncoder = encoder
+    }
+
+    /// 停止录制
+    public func stopVideoRecording() async throws {
+        if let encoder = videoEncoder {
+            try await encoder.stopRecording()
+            self.videoEncoder = nil
+        }
+    }
+
+    /// 供外部 (如 AVCaptureAudioDataOutput) 传入麦克风 PCM
+    public func appendAudioSampleBuffer(_ sampleBuffer: CMSampleBuffer) {
+        if let encoder = videoEncoder, encoder.isRecording {
+            encoder.appendAudioSampleBuffer(sampleBuffer)
+        }
     }
 
     /// 释放引擎及 AsyncStream

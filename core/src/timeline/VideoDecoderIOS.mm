@@ -3,6 +3,11 @@
 #ifdef __APPLE__
 #import <AVFoundation/AVFoundation.h>
 #import <CoreVideo/CoreVideo.h>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <queue>
+#include <atomic>
 
 namespace sdk {
 namespace video {
@@ -10,7 +15,7 @@ namespace timeline {
 
 class VideoDecoderIOS : public VideoDecoder {
 public:
-    VideoDecoderIOS() : m_assetReader(nullptr), m_trackOutput(nullptr), m_textureCache(nullptr), m_cvTexture(nullptr), m_width(0), m_height(0) {}
+    VideoDecoderIOS() : m_assetReader(nullptr), m_trackOutput(nullptr), m_textureCache(nullptr), m_cvTexture(nullptr), m_width(0), m_height(0), m_running(false) {}
 
     ~VideoDecoderIOS() override {
         close();
@@ -62,56 +67,99 @@ public:
 
         [m_assetReader startReading];
 
+        m_running = true;
+        m_decodeThread = std::thread(&VideoDecoderIOS::decodeLoop, this);
+
         return Result::ok();
     }
 
-    Texture getFrameAt(int64_t timeUs) override {
-        if (!m_assetReader || !m_trackOutput) return {0, 0, 0};
-
-        // Note: AVAssetReader does not support fast seeking dynamically.
-        // For sync NLE seek, we'd typically recreate the reader with timeRange.
-        // In a true production environment, AVPlayerItemVideoOutput is better for dynamic playback,
-        // while AVAssetReader is better for sequential export. We'll simulate reading next frame here.
-
-        CMSampleBufferRef sampleBuffer = [m_trackOutput copyNextSampleBuffer];
-        if (sampleBuffer) {
-            CVPixelBufferRef pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
-            if (pixelBuffer) {
-                if (m_cvTexture) {
-                    CFRelease(m_cvTexture);
-                    m_cvTexture = nullptr;
-                }
-
-                CVReturn err = CVOpenGLESTextureCacheCreateTextureFromImage(
-                    kCFAllocatorDefault,
-                    m_textureCache,
-                    pixelBuffer,
-                    NULL,
-                    GL_TEXTURE_2D,
-                    GL_RGBA,
-                    (GLsizei)m_width,
-                    (GLsizei)m_height,
-                    GL_BGRA,
-                    GL_UNSIGNED_BYTE,
-                    0,
-                    &m_cvTexture
-                );
-
-                if (err == kCVReturnSuccess && m_cvTexture) {
-                    GLuint textureId = CVOpenGLESTextureGetName(m_cvTexture);
-                    CMSampleBufferInvalidate(sampleBuffer);
-                    CFRelease(sampleBuffer);
-                    return {textureId, (uint32_t)m_width, (uint32_t)m_height};
-                }
+    void decodeLoop() {
+        while (m_running && [m_assetReader status] == AVAssetReaderStatusReading) {
+            {
+                std::unique_lock<std::mutex> lock(m_queueMutex);
+                m_queueCv.wait(lock, [this]() { return m_frameQueue.size() < 3 || !m_running; });
             }
-            CMSampleBufferInvalidate(sampleBuffer);
-            CFRelease(sampleBuffer);
+            if (!m_running) break;
+
+            CMSampleBufferRef sampleBuffer = [m_trackOutput copyNextSampleBuffer];
+            if (sampleBuffer) {
+                CVPixelBufferRef pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
+                if (pixelBuffer) {
+                    CVPixelBufferRetain(pixelBuffer); // Retain to pass across thread
+
+                    std::shared_ptr<FrameBufferPacket> packet = std::make_shared<FrameBufferPacket>();
+                    packet->ptsUs = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer)) * 1000000;
+                    packet->width = m_width;
+                    packet->height = m_height;
+                    packet->nativeBuffer = pixelBuffer;
+
+                    {
+                        std::lock_guard<std::mutex> lock(m_queueMutex);
+                        m_frameQueue.push(packet);
+                    }
+                }
+                CFRelease(sampleBuffer);
+            } else {
+                break; // EOF
+            }
+        }
+    }
+
+    Texture getFrameAt(int64_t timeUs) override {
+        std::shared_ptr<FrameBufferPacket> targetPacket = nullptr;
+
+        {
+            std::lock_guard<std::mutex> lock(m_queueMutex);
+            while (!m_frameQueue.empty() && m_frameQueue.front()->ptsUs < timeUs - 30000) {
+                CVPixelBufferRelease((CVPixelBufferRef)m_frameQueue.front()->nativeBuffer);
+                m_frameQueue.pop();
+                m_queueCv.notify_one();
+            }
+
+            if (!m_frameQueue.empty()) {
+                targetPacket = m_frameQueue.front();
+            }
+        }
+
+        if (targetPacket && m_textureCache) {
+            CVPixelBufferRef pixelBuffer = (CVPixelBufferRef)targetPacket->nativeBuffer;
+
+            if (m_cvTexture) {
+                CFRelease(m_cvTexture);
+                m_cvTexture = nullptr;
+            }
+
+            CVReturn err = CVOpenGLESTextureCacheCreateTextureFromImage(
+                kCFAllocatorDefault,
+                m_textureCache,
+                pixelBuffer,
+                NULL,
+                GL_TEXTURE_2D,
+                GL_RGBA,
+                (GLsizei)m_width,
+                (GLsizei)m_height,
+                GL_BGRA,
+                GL_UNSIGNED_BYTE,
+                0,
+                &m_cvTexture
+            );
+
+            if (err == kCVReturnSuccess && m_cvTexture) {
+                GLuint textureId = CVOpenGLESTextureGetName(m_cvTexture);
+                return {textureId, (uint32_t)m_width, (uint32_t)m_height};
+            }
         }
 
         return {0, 0, 0};
     }
 
     void close() override {
+        m_running = false;
+        m_queueCv.notify_all();
+        if (m_decodeThread.joinable()) {
+            m_decodeThread.join();
+        }
+
         if (m_assetReader) {
             [m_assetReader cancelReading];
             m_assetReader = nil;
@@ -127,6 +175,11 @@ public:
             CFRelease(m_textureCache);
             m_textureCache = nullptr;
         }
+
+        while (!m_frameQueue.empty()) {
+            CVPixelBufferRelease((CVPixelBufferRef)m_frameQueue.front()->nativeBuffer);
+            m_frameQueue.pop();
+        }
     }
 
 private:
@@ -136,6 +189,12 @@ private:
     CVOpenGLESTextureRef m_cvTexture;
     int32_t m_width;
     int32_t m_height;
+
+    std::atomic<bool> m_running;
+    std::thread m_decodeThread;
+    std::mutex m_queueMutex;
+    std::condition_variable m_queueCv;
+    std::queue<std::shared_ptr<FrameBufferPacket>> m_frameQueue;
 };
 
 } // namespace timeline
