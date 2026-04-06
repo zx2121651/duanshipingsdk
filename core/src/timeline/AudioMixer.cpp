@@ -29,7 +29,7 @@ std::vector<int16_t> AudioMixer::mixAudioAtTime(int64_t timelineUs, int64_t dura
     // 2. Fetch active audio clips (assuming Timeline provides this. For now we use getActiveVideoClipsAtTime
     // and assume they contain audio, or getActiveAudioClipsAtTime if implemented).
     // For architectural simulation, we assume Video clips act as AV clips.
-    std::vector<ClipPtr> activeClips = m_timeline->getActiveVideoClipsAtTime(timelineUs);
+    std::vector<ClipPtr> activeClips = m_timeline->getActiveAudioClipsAtTime(timelineUs);
 
     // 3. Extract and Mix
     for (const auto& clip : activeClips) {
@@ -45,7 +45,9 @@ std::vector<int16_t> AudioMixer::mixAudioAtTime(int64_t timelineUs, int64_t dura
 
         if (!pcmData.empty()) {
             hasAudioData = true;
-            float volume = clip->getVolume();
+            // Get dynamically interpolated volume from keyframes
+            int64_t clipRelativeUs = timelineUs - clip->getTimelineIn();
+            float volume = clip->getVolume(clipRelativeUs);
 
             // Limit loop to the smallest buffer size to prevent out-of-bounds
             size_t mixCount = std::min(accumulationBuffer.size(), pcmData.size());
