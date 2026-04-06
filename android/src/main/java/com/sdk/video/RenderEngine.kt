@@ -71,26 +71,37 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     }
 
     // Recording API
-    fun startRecording(surface: Surface) {
-        nativeSetRecordingSurface(nativeHandle, surface)
+    fun startRecording(surface: Surface): Result<Unit> {
+        if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
+        val code = nativeSetRecordingSurface(nativeHandle, surface)
+        return if (code == 0) Result.success(Unit) else Result.failure(VideoSdkError.fromNativeCode(code))
     }
 
-    fun stopRecording() {
-        nativeSetRecordingSurface(nativeHandle, null)
+    fun stopRecording(): Result<Unit> {
+        if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
+        val code = nativeSetRecordingSurface(nativeHandle, null)
+        return if (code == 0) Result.success(Unit) else Result.failure(VideoSdkError.fromNativeCode(code))
     }
 
     // Parameters
-    fun setFlip(horizontal: Boolean, vertical: Boolean) {
-        nativeUpdateParameterBool(nativeHandle, "flipHorizontal", horizontal)
-        nativeUpdateParameterBool(nativeHandle, "flipVertical", vertical)
+    fun setFlip(horizontal: Boolean, vertical: Boolean): Result<Unit> {
+        if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
+        var code = nativeUpdateParameterBool(nativeHandle, "flipHorizontal", horizontal)
+        if (code != 0) return Result.failure(VideoSdkError.fromNativeCode(code))
+        code = nativeUpdateParameterBool(nativeHandle, "flipVertical", vertical)
+        return if (code == 0) Result.success(Unit) else Result.failure(VideoSdkError.fromNativeCode(code))
     }
 
-    fun updateParameterFloat(key: String, value: Float) {
-        nativeUpdateParameterFloat(nativeHandle, key, value)
+    fun updateParameterFloat(key: String, value: Float): Result<Unit> {
+        if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
+        val code = nativeUpdateParameterFloat(nativeHandle, key, value)
+        return if (code == 0) Result.success(Unit) else Result.failure(VideoSdkError.fromNativeCode(code))
     }
 
-    fun updateParameterInt(key: String, value: Int) {
-        nativeUpdateParameterInt(nativeHandle, key, value)
+    fun updateParameterInt(key: String, value: Int): Result<Unit> {
+        if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
+        val code = nativeUpdateParameterInt(nativeHandle, key, value)
+        return if (code == 0) Result.success(Unit) else Result.failure(VideoSdkError.fromNativeCode(code))
     }
 
     // Pipeline
@@ -140,10 +151,10 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     private external fun nativeInit(): Long
     private external fun nativeRelease(handle: Long)
     private external fun nativeProcessFrame(handle: Long, textureId: Int, width: Int, height: Int, matrix: FloatArray, timestampNs: Long): Int
-    private external fun nativeSetRecordingSurface(handle: Long, surface: Surface?)
-    private external fun nativeUpdateParameterFloat(handle: Long, key: String, value: Float)
-    private external fun nativeUpdateParameterInt(handle: Long, key: String, value: Int)
-    private external fun nativeUpdateParameterBool(handle: Long, key: String, value: Boolean)
+    private external fun nativeSetRecordingSurface(handle: Long, surface: Surface?): Int
+    private external fun nativeUpdateParameterFloat(handle: Long, key: String, value: Float): Int
+    private external fun nativeUpdateParameterInt(handle: Long, key: String, value: Int): Int
+    private external fun nativeUpdateParameterBool(handle: Long, key: String, value: Boolean): Int
     private external fun nativeAddFilter(handle: Long, filterType: Int): Int
     private external fun nativeRemoveAllFilters(handle: Long): Int
     private external fun nativeStartAudioRecord(handle: Long, sampleRate: Int): Int

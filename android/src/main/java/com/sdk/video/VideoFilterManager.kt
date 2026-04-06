@@ -2,6 +2,7 @@ package com.sdk.video
 
 import android.graphics.SurfaceTexture
 import android.view.Surface
+import android.util.Log
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.*
