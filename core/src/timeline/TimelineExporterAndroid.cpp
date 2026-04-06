@@ -128,7 +128,7 @@ private:
         bool muxerStarted = false;
 
         // 4. Render Loop
-        int64_t totalDurationUs = timeline->getDuration();
+        int64_t totalDurationUs = timeline->getTotalDuration();
         int64_t frameDurationUs = 1000000 / m_fps;
         int64_t currentTimeUs = 0;
         bool encoderEOS = false;

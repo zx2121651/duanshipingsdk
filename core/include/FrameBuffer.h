@@ -21,6 +21,11 @@ enum class FBOPrecision {
 class FrameBuffer {
 public:
     FrameBuffer(int width, int height, FBOPrecision precision = FBOPrecision::RGBA8888);
+
+    // 允许显式包装外部 FBO (例如 iOS 的 CVPixelBuffer FBO，或者 Android 的 EGLSurface 默认 FBO 0)
+    // 这种情况下，FrameBuffer 对象不会负责销毁这个 m_fboId。
+    FrameBuffer(int width, int height, GLuint externalFboId);
+
     ~FrameBuffer();
 
     // Non-copyable
@@ -33,6 +38,7 @@ public:
     Texture getTexture() const { return {m_textureId, static_cast<uint32_t>(m_width), static_cast<uint32_t>(m_height)}; }
     int width() const { return m_width; }
     int height() const { return m_height; }
+    GLuint getFboId() const { return m_fboId; }
     FBOPrecision precision() const { return m_precision; }
 
 private:
@@ -41,6 +47,7 @@ private:
     int m_width;
     int m_height;
     FBOPrecision m_precision;
+    bool m_ownsFbo; // 标识是否拥有所有权，防止误删外部 FBO
 };
 
 using FrameBufferPtr = std::shared_ptr<FrameBuffer>;

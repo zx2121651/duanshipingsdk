@@ -117,7 +117,7 @@ private:
         [assetWriter startWriting];
         [assetWriter startSessionAtSourceTime:kCMTimeZero];
 
-        int64_t totalDurationUs = timeline->getDuration();
+        int64_t totalDurationUs = timeline->getTotalDuration();
         int64_t frameDurationUs = 1000000 / m_fps;
         int64_t currentTimeUs = 0;
 
@@ -155,23 +155,16 @@ private:
                     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textureId, 0);
                     glViewport(0, 0, m_width, m_height);
 
-                    // We create a temporary FrameBuffer wrapper for the Compositor
-                    FrameBufferPtr fbWrapper = std::make_shared<FrameBuffer>(m_width, m_height);
-                    // Hack: Manually assign the FBO/Texture to the wrapper to force Compositor to draw here
-                    // In a clean architecture, Compositor renderFrameAtTime should take an FBO id directly, or we let it render to its own and then Blit.
-                    // For safety and zero-copy, let's let Compositor render to its own FBO, then we Blit to ours.
+                    // [P1 修复] 统一 Compositor 输出接口，去掉 iOS 的二次拷贝 hack
+                    // 使用扩展的 FrameBuffer 构造函数直接包装 CVPixelBuffer 挂载的外部 FBO。
+                    // Compositor 最后一层的 Explicit Copy Pass 会直接画到这个 FBO 里，完成真正的零拷贝编码。
 
-                    FrameBufferPtr compOutputFb = std::make_shared<FrameBuffer>(m_width, m_height);
+                    FrameBufferPtr cvExternalFbWrapper = std::make_shared<FrameBuffer>(m_width, m_height, fbo);
 
-                    compositor->renderFrameAtTime(currentTimeUs, compOutputFb);
-
-                    // Blit from compOutputFb to our CVPixelBuffer FBO
-                    glBindFramebuffer(GL_READ_FRAMEBUFFER, compOutputFb->getFboId());
-                    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fbo);
-                    glBlitFramebuffer(0, 0, m_width, m_height, 0, 0, m_width, m_height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+                    compositor->renderFrameAtTime(currentTimeUs, cvExternalFbWrapper);
 
                     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-                    glFinish(); // Ensure GL commands complete before giving buffer to encoder
+                    glFinish(); // 确保渲染指令完成
 
                     CMTime presentationTime = CMTimeMake(currentTimeUs, 1000000);
                     [adaptor appendPixelBuffer:pixelBuffer withPresentationTime:presentationTime];
