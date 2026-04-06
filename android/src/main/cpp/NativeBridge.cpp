@@ -196,7 +196,7 @@ Java_com_sdk_video_RenderEngine_nativeProcessFrame(JNIEnv *env, jobject thiz, jl
     return outTex.id;
 }
 
-JNIEXPORT void JNICALL
+JNIEXPORT jint JNICALL
 Java_com_sdk_video_RenderEngine_nativeSetRecordingSurface(JNIEnv *env, jobject thiz, jlong handle, jobject surface) {
 #ifndef WIN32
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
@@ -206,31 +206,37 @@ Java_com_sdk_video_RenderEngine_nativeSetRecordingSurface(JNIEnv *env, jobject t
         } else {
             wrapper->releaseRecordingSurface();
         }
+        return 0; // SUCCESS
     }
 #endif
+    return -1001; // ERR_INIT_CONTEXT_FAILED
 }
 
-JNIEXPORT void JNICALL
+JNIEXPORT jint JNICALL
 Java_com_sdk_video_RenderEngine_nativeUpdateParameterFloat(JNIEnv *env, jobject thiz, jlong handle, jstring key, jfloat value) {
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
     if (wrapper) {
         const char *keyStr = env->GetStringUTFChars(key, nullptr);
         wrapper->filterEngine->updateParameter(std::string(keyStr), std::any(value));
         env->ReleaseStringUTFChars(key, keyStr);
+        return 0;
     }
+    return -1001;
 }
 
-JNIEXPORT void JNICALL
+JNIEXPORT jint JNICALL
 Java_com_sdk_video_RenderEngine_nativeUpdateParameterInt(JNIEnv *env, jobject thiz, jlong handle, jstring key, jint value) {
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
     if (wrapper) {
         const char *keyStr = env->GetStringUTFChars(key, nullptr);
         wrapper->filterEngine->updateParameter(std::string(keyStr), std::any(value));
         env->ReleaseStringUTFChars(key, keyStr);
+        return 0;
     }
+    return -1001;
 }
 
-JNIEXPORT void JNICALL
+JNIEXPORT jint JNICALL
 Java_com_sdk_video_RenderEngine_nativeUpdateParameterBool(JNIEnv *env, jobject thiz, jlong handle, jstring key, jboolean value) {
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
     if (wrapper) {
@@ -238,7 +244,9 @@ Java_com_sdk_video_RenderEngine_nativeUpdateParameterBool(JNIEnv *env, jobject t
         bool val = (value == JNI_TRUE);
         wrapper->filterEngine->updateParameter(std::string(keyStr), std::any(val));
         env->ReleaseStringUTFChars(key, keyStr);
+        return 0;
     }
+    return -1001;
 }
 
 JNIEXPORT jint JNICALL
