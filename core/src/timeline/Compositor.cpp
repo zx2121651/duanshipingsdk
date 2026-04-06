@@ -8,6 +8,12 @@ namespace timeline {
 Compositor::Compositor(std::shared_ptr<Timeline> timeline, std::shared_ptr<FilterEngine> engine)
     : m_timeline(timeline), m_filterEngine(engine), m_decoderPool(nullptr) {}
 
+void Compositor::initPrograms() {
+    initCopyProgram();
+    initBlendProgram();
+    initWipeTransitionProgram();
+}
+
 void Compositor::initCopyProgram() {
     if (m_copyProgram != 0) return;
     const char* vsrc = R"(#version 300 es
@@ -84,7 +90,6 @@ void Compositor::initBlendProgram() {
         void main() {
             vec4 bg = texture(texBackground, v_texCoord);
             vec4 fg = texture(texForeground, v_texCoord);
-            // Alpha Blending (src_alpha, one_minus_src_alpha)
             vec4 blended = fg * fg.a * opacity + bg * (1.0 - fg.a * opacity);
             fragColor = vec4(blended.rgb, max(bg.a, fg.a * opacity));
         }
@@ -98,6 +103,51 @@ void Compositor::initBlendProgram() {
     m_blendProgram = glCreateProgram();
     glAttachShader(m_blendProgram, vs); glAttachShader(m_blendProgram, fs);
     glLinkProgram(m_blendProgram);
+    glDeleteShader(vs); glDeleteShader(fs);
+}
+
+void Compositor::initWipeTransitionProgram() {
+    if (m_wipeTransitionProgram != 0) return;
+
+    const char* vsrc = R"(#version 300 es
+        layout(location = 0) in vec4 position;
+        layout(location = 1) in vec2 texCoord;
+        out vec2 v_texCoord;
+        void main() {
+            gl_Position = position;
+            v_texCoord = texCoord;
+        }
+    )";
+
+    const char* fsrc = R"(#version 300 es
+        precision highp float;
+        in vec2 v_texCoord;
+        uniform sampler2D texBackground;
+        uniform sampler2D texForeground;
+        uniform float progress; // 0.0 to 1.0
+        out vec4 fragColor;
+
+        void main() {
+            vec4 bg = texture(texBackground, v_texCoord);
+            vec4 fg = texture(texForeground, v_texCoord);
+
+            // Wipe left transition
+            if (v_texCoord.x > (1.0 - progress)) {
+                fragColor = fg;
+            } else {
+                fragColor = bg;
+            }
+        }
+    )";
+
+    auto compile = [](GLenum type, const char* s) {
+        GLuint sh = glCreateShader(type); glShaderSource(sh, 1, &s, NULL); glCompileShader(sh); return sh;
+    };
+    GLuint vs = compile(GL_VERTEX_SHADER, vsrc);
+    GLuint fs = compile(GL_FRAGMENT_SHADER, fsrc);
+    m_wipeTransitionProgram = glCreateProgram();
+    glAttachShader(m_wipeTransitionProgram, vs); glAttachShader(m_wipeTransitionProgram, fs);
+    glLinkProgram(m_wipeTransitionProgram);
     glDeleteShader(vs); glDeleteShader(fs);
 }
 
@@ -131,13 +181,54 @@ Texture Compositor::blendTextures(const Texture& bg, const Texture& fg, float op
     return target->getTexture();
 }
 
+Texture Compositor::transitionTextures(const Texture& bg, const Texture& fg, TransitionType type, float progress, FrameBufferPtr target) {
+    if (!target) return bg;
+
+    target->bind();
+
+    GLuint program = m_blendProgram; // fallback
+    if (type == TransitionType::CROSSFADE) {
+        program = m_blendProgram;
+    } else if (type == TransitionType::WIPE_LEFT) {
+        program = m_wipeTransitionProgram;
+    }
+
+    glUseProgram(program);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, bg.id);
+    glUniform1i(glGetUniformLocation(program, "texBackground"), 0);
+
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, fg.id);
+    glUniform1i(glGetUniformLocation(program, "texForeground"), 1);
+
+    if (type == TransitionType::CROSSFADE) {
+        glUniform1f(glGetUniformLocation(program, "opacity"), progress);
+    } else if (type == TransitionType::WIPE_LEFT) {
+        glUniform1f(glGetUniformLocation(program, "progress"), progress);
+    }
+
+    static const float squareCoords[] = {-1, -1, 1, -1, -1, 1, 1, 1};
+    static const float textureCoords[] = {0, 0, 1, 0, 0, 1, 1, 1};
+
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, squareCoords);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, textureCoords);
+
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    target->unbind();
+
+    return target->getTexture();
+}
+
 Result Compositor::renderFrameAtTime(int64_t timelineUs, FrameBufferPtr outputFb) {
     if (!m_timeline || !m_filterEngine || !outputFb) {
         return Result::error(-3, "Compositor not properly initialized with Timeline/Engine/FBO");
     }
 
-    initBlendProgram();
-    initCopyProgram();
+    initPrograms();
 
     std::vector<ClipPtr> activeClips = m_timeline->getActiveVideoClipsAtTime(timelineUs);
 
@@ -146,7 +237,7 @@ Result Compositor::renderFrameAtTime(int64_t timelineUs, FrameBufferPtr outputFb
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
         outputFb->unbind();
-        return Result::ok(); // Blank screen is valid
+        return Result::ok();
     }
 
     Texture accumulatedTexture = {0, 0, 0};
@@ -156,37 +247,39 @@ Result Compositor::renderFrameAtTime(int64_t timelineUs, FrameBufferPtr outputFb
     FrameBufferPtr pongFb = m_filterEngine->m_frameBufferPool.getFrameBuffer(outputFb->width(), outputFb->height());
 
     for (const auto& clip : activeClips) {
-        // A. 变速与裁剪后相对时间的换算
         int64_t localTimeUs = (timelineUs - clip->getTimelineIn()) * clip->getSpeed() + clip->getTrimIn();
 
-        // B. 请求 Decoder
         Texture fgTex = m_decoderPool->getFrame(clip->getId(), localTimeUs);
-        if (fgTex.id == 0) continue; // Decoder failed or EOF
+        if (fgTex.id == 0) continue;
 
-        // C. 叠加合成
         if (isFirst) {
-            // [P0 修复] 最底下一层，绝对不能与空纹理 {0,0,0} 混合，否则引发 GL 报错
-            // 直接使用专用的 copyProgram 画到 pingFb 上作为后续的基底
             pingFb->bind();
             glClearColor(0.0, 0.0, 0.0, 1.0);
             glClear(GL_COLOR_BUFFER_BIT);
-            pingFb->unbind(); // bind in copyTexture
+            pingFb->unbind();
 
             copyTexture(fgTex, pingFb);
             accumulatedTexture = pingFb->getTexture();
             isFirst = false;
         } else {
-            // 与已有画面进行 Alpha Blending 画到 pongFb
-            accumulatedTexture = blendTextures(accumulatedTexture, fgTex, clip->getOpacity(), pongFb);
-            std::swap(pingFb, pongFb); // 交换供下一层使用
+            // Check Transition
+            int64_t clipRelativeUs = timelineUs - clip->getTimelineIn();
+            if (clip->getInTransitionType() != TransitionType::NONE && clipRelativeUs < clip->getInTransitionDurationUs()) {
+                // Inside transition window
+                float progress = static_cast<float>(clipRelativeUs) / clip->getInTransitionDurationUs();
+                accumulatedTexture = transitionTextures(accumulatedTexture, fgTex, clip->getInTransitionType(), progress, pongFb);
+            } else {
+                // Keyframe interpolated Alpha Blending
+                // Use keyframe value instead of static value!
+                float interpolatedOpacity = clip->getOpacity(clipRelativeUs);
+                accumulatedTexture = blendTextures(accumulatedTexture, fgTex, interpolatedOpacity, pongFb);
+            }
+            std::swap(pingFb, pongFb);
         }
     }
 
-    // D. 最后的合并帧还要经过 FilterEngine 做全局特效 (例如套 LUT)
     Texture finalTex = m_filterEngine->processFrame(accumulatedTexture, outputFb->width(), outputFb->height());
 
-    // E. 显式 FBO 拷贝阶段 (Explicit Copy Pass)
-    // 解决架构审查反馈：使用专用的 copyProgram 进行一次彻底的 copy pass，消除由于复用 blend program 带来的未初始化状态依赖风险。
     copyTexture(finalTex, outputFb);
 
     return Result::ok();
