@@ -386,3 +386,14 @@ Java_com_sdk_video_RenderEngine_nativeRecordDroppedFrame(JNIEnv *env, jobject th
         wrapper->filterEngine->recordDroppedFrame();
     }
 }
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeEnableGraphMode(JNIEnv *env, jobject thiz, jlong handle, jboolean enable) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->filterEngine) {
+        wrapper->filterEngine->enableGraphMode(enable == JNI_TRUE);
+        if (enable == JNI_TRUE) {
+            wrapper->filterEngine->buildCameraPipeline();
+        }
+    }
+}

@@ -33,6 +33,11 @@ public:
     // Release resources
     void release();
 
+    // Graph Builder APIs
+    void enableGraphMode(bool enable) { m_useGraphMode = enable; }
+    void buildCameraPipeline();
+    void buildTimelinePipeline(std::shared_ptr<Timeline> timeline, std::shared_ptr<Compositor> compositor);
+
     // Pipeline manipulation
     void addFilter(FilterPtr filter);
     void removeAllFilters();
@@ -50,7 +55,12 @@ void updateShaderSource(const std::string& name, const std::string& source);
 private:
     std::shared_ptr<ShaderManager> m_shaderManager;
 
-    std::vector<FilterPtr> m_filters;
+
+    bool m_useGraphMode = false;
+    std::shared_ptr<PipelineGraph> m_graph;
+    std::shared_ptr<CameraInputNode> m_cameraNode;
+    std::shared_ptr<OutputNode> m_outputNode;
+std::vector<FilterPtr> m_filters;
     ThreadCheck m_threadCheck;
     bool m_initialized;
     bool m_simulateCrash;

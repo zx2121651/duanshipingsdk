@@ -27,6 +27,29 @@ Result FilterEngine::initialize() {
 
 Texture FilterEngine::processFrame(const Texture& textureIn, int width, int height) {
     auto start_time = std::chrono::high_resolution_clock::now();
+
+    if (m_useGraphMode && m_graph && m_outputNode) {
+        if (m_cameraNode) {
+            VideoFrame inFrame;
+            inFrame.textureId = textureIn.id;
+            inFrame.width = width;
+            inFrame.height = height;
+            // Fake timestamp for testing, usually passed from facade
+            inFrame.timestampNs = std::chrono::duration_cast<std::chrono::nanoseconds>(start_time.time_since_epoch()).count();
+            m_cameraNode->pushFrame(inFrame);
+        }
+
+        m_graph->execute(0); // timestamp drives timeline, here we just trigger pull
+
+        VideoFrame outFrame = m_outputNode->getLastFrame();
+
+        auto end_time = std::chrono::high_resolution_clock::now();
+        float duration_ms = std::chrono::duration<float, std::milli>(end_time - start_time).count();
+        m_metricsCollector.recordFrameTime(duration_ms);
+
+        return Texture{outFrame.textureId, outFrame.width, outFrame.height};
+    }
+
     if (!m_threadCheck.check("processFrame must be called on the render thread")) {
         return textureIn;
     }
@@ -107,8 +130,13 @@ void FilterEngine::addFilter(FilterPtr filter) {
         m_filters.push_back(filter);
         if (m_initialized) {
             filter->initialize();
+            if (m_useGraphMode) {
+                // Rebuild pipeline dynamically
+                buildCameraPipeline();
+            }
         }
     }
+}    }
 }
 
 void FilterEngine::removeAllFilters() {
@@ -136,4 +164,48 @@ void FilterEngine::updateShaderSource(const std::string& name, const std::string
         // Actually, we need a recompile API in Filter.
         filter->recompileProgram();
     }
+}
+
+void FilterEngine::buildCameraPipeline() {
+    m_graph = std::make_shared<PipelineGraph>();
+    m_cameraNode = std::make_shared<CameraInputNode>("Camera");
+    m_outputNode = std::make_shared<OutputNode>("Display");
+
+    m_graph->addNode(m_cameraNode);
+
+    std::shared_ptr<PipelineNode> lastNode = m_cameraNode;
+
+    for (size_t i = 0; i < m_filters.size(); ++i) {
+        auto filterNode = std::make_shared<FilterNode>("Filter_" + std::to_string(i), m_filters[i]);
+        filterNode->setFrameBufferPool(&m_frameBufferPool);
+        m_graph->addNode(filterNode);
+        m_graph->connect(lastNode, filterNode);
+        lastNode = filterNode;
+    }
+
+    m_graph->addNode(m_outputNode);
+    m_graph->connect(lastNode, m_outputNode);
+    m_graph->compile();
+}
+
+void FilterEngine::buildTimelinePipeline(std::shared_ptr<Timeline> timeline, std::shared_ptr<Compositor> compositor) {
+    m_graph = std::make_shared<PipelineGraph>();
+    auto timelineNode = std::make_shared<TimelineNode>("Timeline", timeline, compositor);
+    m_outputNode = std::make_shared<OutputNode>("Display");
+
+    m_graph->addNode(timelineNode);
+
+    std::shared_ptr<PipelineNode> lastNode = timelineNode;
+
+    for (size_t i = 0; i < m_filters.size(); ++i) {
+        auto filterNode = std::make_shared<FilterNode>("Filter_" + std::to_string(i), m_filters[i]);
+        filterNode->setFrameBufferPool(&m_frameBufferPool);
+        m_graph->addNode(filterNode);
+        m_graph->connect(lastNode, filterNode);
+        lastNode = filterNode;
+    }
+
+    m_graph->addNode(m_outputNode);
+    m_graph->connect(lastNode, m_outputNode);
+    m_graph->compile();
 }

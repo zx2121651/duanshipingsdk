@@ -84,7 +84,10 @@ class VideoFilterManager(private val context: android.content.Context,
             val res = renderEngine.init(context.assets)
             if (res != 0) return Result.failure(VideoSdkError.fromNativeCode(res))
 
-            // 设置底层每处理完一帧的回调监听
+
+            // 默认开启基于 Node Graph 的新渲染架构
+            renderEngine.enableGraphMode(true)
+           // 设置底层每处理完一帧的回调监听
             renderEngine.onFrameProcessedListener = { outputTexId ->
                 if (outputTexId >= 0) {
                     // 成功渲染，发送最新的纹理 ID 给 UI 层
