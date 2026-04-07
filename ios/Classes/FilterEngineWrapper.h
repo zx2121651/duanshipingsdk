@@ -22,6 +22,9 @@ typedef NS_ENUM(NSInteger, FilterType) {
 - (int)updateParameterFloat:(NSString *)key value:(float)value;
 - (int)updateParameterInt:(NSString *)key value:(int32_t)value;
 
+
+- (NSArray<NSNumber *> *)getPerformanceMetrics;
+- (void)recordDroppedFrame;
 - (void)releaseResources;
 
 @end

@@ -142,5 +142,7 @@ void Filter::recompileProgram() {
         m_positionHandle = glGetAttribLocation(m_programId, "position");
         m_texCoordHandle = glGetAttribLocation(m_programId, "inputTextureCoordinate");
         m_inputImageTextureHandle = glGetUniformLocation(m_programId, "inputImageTexture");
+
+        onProgramRecompiled();
     }
 }

@@ -36,7 +36,10 @@ public:
     // Pipeline manipulation
     void addFilter(FilterPtr filter);
     void removeAllFilters();
-    void updateShaderSource(const std::string& name, const std::string& source);
+
+    PerformanceMetrics getPerformanceMetrics() const { return m_metricsCollector.getMetrics(); }
+    void recordDroppedFrame() { m_metricsCollector.recordDroppedFrame(); }
+void updateShaderSource(const std::string& name, const std::string& source);
 
     // 暴露 FBO 内存池供子滤镜（如 Two-pass 高斯模糊）借用
     FrameBufferPool m_frameBufferPool;
@@ -51,6 +54,8 @@ private:
     ThreadCheck m_threadCheck;
     bool m_initialized;
     bool m_simulateCrash;
+    mutable MetricsCollector m_metricsCollector;
+
 
     // 【三级防线】特征级嗅探器
     GLContextManager m_contextManager;

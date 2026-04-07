@@ -17,6 +17,7 @@ public:
     OES2RGBFilter();
     ~OES2RGBFilter() override = default;
     void initialize() override;
+    void onProgramRecompiled() override;
 protected:
     void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
     const char* getVertexShaderSource() const override;
@@ -50,6 +51,7 @@ public:
     GaussianBlurFilter(FrameBufferPool* pool);
     ~GaussianBlurFilter() override;
     void initialize() override;
+    void onProgramRecompiled() override;
 
     // 重写 processFrame 因为双趟渲染不只是一次 onDraw
     Texture processFrame(const Texture& inputTexture, FrameBufferPtr outputFb) override;
@@ -72,6 +74,7 @@ public:
     LookupFilter();
     ~LookupFilter() override;
     void initialize() override;
+    void onProgramRecompiled() override;
 
     // Call this before processing frames to set the LUT
     void setLookupTexture(GLuint textureId);
@@ -90,6 +93,7 @@ public:
     BilateralFilter();
     ~BilateralFilter() override = default;
     void initialize() override;
+    void onProgramRecompiled() override;
 protected:
     void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
     std::string getFragmentShaderSource() const override;
@@ -104,6 +108,7 @@ public:
     CinematicLookupFilter();
     ~CinematicLookupFilter() override;
     void initialize() override;
+    void onProgramRecompiled() override;
 
     // Set the 512x512 2D LUT texture
     void setLookupTexture(GLuint textureId);

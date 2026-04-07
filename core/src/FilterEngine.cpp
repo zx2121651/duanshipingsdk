@@ -26,6 +26,7 @@ Result FilterEngine::initialize() {
 }
 
 Texture FilterEngine::processFrame(const Texture& textureIn, int width, int height) {
+    auto start_time = std::chrono::high_resolution_clock::now();
     if (!m_threadCheck.check("processFrame must be called on the render thread")) {
         return textureIn;
     }
@@ -67,6 +68,10 @@ Texture FilterEngine::processFrame(const Texture& textureIn, int width, int heig
         currentTexture = outTexture;
         previousFb = targetFb;
     }
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    float duration_ms = std::chrono::duration<float, std::milli>(end_time - start_time).count();
+    m_metricsCollector.recordFrameTime(duration_ms);
 
     return currentTexture;
 }
