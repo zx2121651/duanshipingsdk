@@ -157,7 +157,7 @@ public actor VideoFilterManager {
     /// 释放引擎及 AsyncStream
 
     public func getPerformanceMetrics() -> PerformanceMetrics? {
-        guard let arr = engineWrapper.getPerformanceMetrics() else { return nil }
+        guard let arr = engine.getPerformanceMetrics() else { return nil }
         if arr.count == 5 {
             return PerformanceMetrics(
                 averageFrameTimeMs: arr[0].floatValue,
@@ -171,9 +171,10 @@ public actor VideoFilterManager {
     }
 
     public func recordDroppedFrame() {
-        engineWrapper.recordDroppedFrame()
+        engine.recordDroppedFrame()
     }
-public func release() {
+
+    public func release() {
         engine.releaseEngine()
         streamContinuation?.finish()
         self.state = .stopped

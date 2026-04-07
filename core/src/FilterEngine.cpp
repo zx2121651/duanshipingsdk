@@ -136,7 +136,6 @@ void FilterEngine::addFilter(FilterPtr filter) {
             }
         }
     }
-}    }
 }
 
 void FilterEngine::removeAllFilters() {
@@ -148,8 +147,7 @@ void FilterEngine::removeAllFilters() {
     m_filters.clear();
 }
 
-} // namespace video
-} // namespace sdk
+
 
 void FilterEngine::updateShaderSource(const std::string& name, const std::string& source) {
     if (!m_shaderManager) return;
@@ -209,3 +207,6 @@ void FilterEngine::buildTimelinePipeline(std::shared_ptr<Timeline> timeline, std
     m_graph->connect(lastNode, m_outputNode);
     m_graph->compile();
 }
+
+} // namespace video
+} // namespace sdk

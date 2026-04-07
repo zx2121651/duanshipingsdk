@@ -53,6 +53,14 @@ import OpenGLES
         wrapper.removeAllFilters()
     }
 
+
+    @objc public func getPerformanceMetrics() -> [NSNumber]? {
+        return wrapper.getPerformanceMetrics()
+    }
+
+    @objc public func recordDroppedFrame() {
+        wrapper.recordDroppedFrame()
+    }
     // Free resources
     @objc public func releaseEngine() {
         wrapper.releaseResources()
