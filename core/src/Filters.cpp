@@ -59,36 +59,7 @@ void main() {
 }
 )";
 
-const char* kGaussianBlurFragmentShader = R"(
-#version 300 es
-precision mediump float;
-in vec2 textureCoordinate;
-out vec4 fragColor;
-uniform sampler2D inputImageTexture;
-uniform float texelWidthOffset;
-uniform float texelHeightOffset;
-uniform float blurSize;
 
-// Note: For a true and efficient Gaussian Blur, this should be split into a
-// two-pass pipeline (horizontal and vertical). This single-pass implementation
-// is kept for simplicity as an example.
-void main() {
-    vec2 singleStepOffset = vec2(texelWidthOffset, texelHeightOffset) * blurSize;
-    vec4 sum = vec4(0.0);
-
-    sum += texture(inputImageTexture, textureCoordinate - singleStepOffset * 4.0) * 0.05;
-    sum += texture(inputImageTexture, textureCoordinate - singleStepOffset * 3.0) * 0.09;
-    sum += texture(inputImageTexture, textureCoordinate - singleStepOffset * 2.0) * 0.12;
-    sum += texture(inputImageTexture, textureCoordinate - singleStepOffset * 1.0) * 0.15;
-    sum += texture(inputImageTexture, textureCoordinate) * 0.18;
-    sum += texture(inputImageTexture, textureCoordinate + singleStepOffset * 1.0) * 0.15;
-    sum += texture(inputImageTexture, textureCoordinate + singleStepOffset * 2.0) * 0.12;
-    sum += texture(inputImageTexture, textureCoordinate + singleStepOffset * 3.0) * 0.09;
-    sum += texture(inputImageTexture, textureCoordinate + singleStepOffset * 4.0) * 0.05;
-
-    fragColor = sum;
-}
-)";
 
 const char* kLookupFragmentShader = R"(
 #version 300 es
@@ -136,101 +107,6 @@ void main() {
 }
 )";
 
-const char* kBilateralFragmentShader = R"(
-#version 300 es
-precision mediump float;
-
-in vec2 textureCoordinate;
-out vec4 fragColor;
-
-uniform sampler2D inputImageTexture;
-
-uniform float texelWidthOffset;
-uniform float texelHeightOffset;
-uniform float distanceNormalizationFactor; // Control smoothing strength
-
-void main() {
-    vec4 centralColor = texture(inputImageTexture, textureCoordinate);
-
-    // Quick escape for low smoothing (acts as passthrough or just performance saver)
-    if (distanceNormalizationFactor < 0.1) {
-        fragColor = centralColor;
-        return;
-    }
-
-    float gaussianWeightTotal = 0.15;
-    vec4 sum = centralColor * 0.15;
-
-    vec2 singleStepOffset = vec2(texelWidthOffset, texelHeightOffset);
-
-    float distance_diff;
-    vec4 sampleColor;
-    float weight;
-
-    // A simplified 3x3 bilateral filter kernel for real-time mobile performance
-    // It compares the central pixel color with neighbors. Neighbors with similar colors
-    // get higher weights (smoothing continuous areas like skin), while sharp edges
-    // are preserved because of high color difference lowering the weight.
-
-    // (-1, -1)
-    sampleColor = texture(inputImageTexture, textureCoordinate - singleStepOffset);
-    distance_diff = distance(centralColor.rgb, sampleColor.rgb);
-    weight = 0.05 * exp(-distance_diff * distance_diff * distanceNormalizationFactor);
-    sum += sampleColor * weight;
-    gaussianWeightTotal += weight;
-
-    // (0, -1)
-    sampleColor = texture(inputImageTexture, textureCoordinate - vec2(0.0, singleStepOffset.y));
-    distance_diff = distance(centralColor.rgb, sampleColor.rgb);
-    weight = 0.10 * exp(-distance_diff * distance_diff * distanceNormalizationFactor);
-    sum += sampleColor * weight;
-    gaussianWeightTotal += weight;
-
-    // (1, -1)
-    sampleColor = texture(inputImageTexture, textureCoordinate + vec2(singleStepOffset.x, -singleStepOffset.y));
-    distance_diff = distance(centralColor.rgb, sampleColor.rgb);
-    weight = 0.05 * exp(-distance_diff * distance_diff * distanceNormalizationFactor);
-    sum += sampleColor * weight;
-    gaussianWeightTotal += weight;
-
-    // (-1, 0)
-    sampleColor = texture(inputImageTexture, textureCoordinate - vec2(singleStepOffset.x, 0.0));
-    distance_diff = distance(centralColor.rgb, sampleColor.rgb);
-    weight = 0.10 * exp(-distance_diff * distance_diff * distanceNormalizationFactor);
-    sum += sampleColor * weight;
-    gaussianWeightTotal += weight;
-
-    // (1, 0)
-    sampleColor = texture(inputImageTexture, textureCoordinate + vec2(singleStepOffset.x, 0.0));
-    distance_diff = distance(centralColor.rgb, sampleColor.rgb);
-    weight = 0.10 * exp(-distance_diff * distance_diff * distanceNormalizationFactor);
-    sum += sampleColor * weight;
-    gaussianWeightTotal += weight;
-
-    // (-1, 1)
-    sampleColor = texture(inputImageTexture, textureCoordinate + vec2(-singleStepOffset.x, singleStepOffset.y));
-    distance_diff = distance(centralColor.rgb, sampleColor.rgb);
-    weight = 0.05 * exp(-distance_diff * distance_diff * distanceNormalizationFactor);
-    sum += sampleColor * weight;
-    gaussianWeightTotal += weight;
-
-    // (0, 1)
-    sampleColor = texture(inputImageTexture, textureCoordinate + vec2(0.0, singleStepOffset.y));
-    distance_diff = distance(centralColor.rgb, sampleColor.rgb);
-    weight = 0.10 * exp(-distance_diff * distance_diff * distanceNormalizationFactor);
-    sum += sampleColor * weight;
-    gaussianWeightTotal += weight;
-
-    // (1, 1)
-    sampleColor = texture(inputImageTexture, textureCoordinate + singleStepOffset);
-    distance_diff = distance(centralColor.rgb, sampleColor.rgb);
-    weight = 0.05 * exp(-distance_diff * distance_diff * distanceNormalizationFactor);
-    sum += sampleColor * weight;
-    gaussianWeightTotal += weight;
-
-    fragColor = vec4(sum.rgb / gaussianWeightTotal, centralColor.a);
-}
-)";
 
 // Common vertex coordinates
 static const float s_vertexCoords[] = {
@@ -272,7 +148,7 @@ const char* OES2RGBFilter::getVertexShaderSource() const {
     return kOESVertexShader;
 }
 
-const char* OES2RGBFilter::getFragmentShaderSource() const {
+std::string OES2RGBFilter::getFragmentShaderSource() const {
     return kOESFragmentShader;
 }
 
@@ -332,8 +208,8 @@ void BrightnessFilter::initialize() {
     m_brightnessHandle = glGetUniformLocation(m_programId, "brightness");
 }
 
-const char* BrightnessFilter::getFragmentShaderSource() const {
-    return kBrightnessFragmentShader;
+std::string BrightnessFilter::getFragmentShaderSource() const {
+    return m_shaderManager ? m_shaderManager->getShaderSource("shaders/brightness.frag") : "";
 }
 
 void BrightnessFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {
@@ -490,7 +366,7 @@ const char* GaussianBlurFilter::getVertexShaderSource() const {
     )";
 }
 
-const char* GaussianBlurFilter::getFragmentShaderSource() const {
+std::string GaussianBlurFilter::getFragmentShaderSource() const {
     // 片段着色器:
     // 只需执行 5 次 texture 采样调用，利用不同的高斯权重(0.204164 等)进行叠加。
     // 这比传统的 O(N^2) for 循环采样快了上百倍。
@@ -537,8 +413,8 @@ void LookupFilter::setLookupTexture(GLuint textureId) {
     m_lookupTextureId = textureId;
 }
 
-const char* LookupFilter::getFragmentShaderSource() const {
-    return kLookupFragmentShader;
+std::string LookupFilter::getFragmentShaderSource() const {
+    return m_shaderManager ? m_shaderManager->getShaderSource("shaders/lookup.frag") : "";
 }
 
 void LookupFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {
@@ -599,8 +475,8 @@ void BilateralFilter::initialize() {
     m_distanceNormalizationFactorHandle = glGetUniformLocation(m_programId, "distanceNormalizationFactor");
 }
 
-const char* BilateralFilter::getFragmentShaderSource() const {
-    return kBilateralFragmentShader;
+std::string BilateralFilter::getFragmentShaderSource() const {
+    return m_shaderManager ? m_shaderManager->getShaderSource("shaders/bilateral.frag") : "";
 }
 
 void BilateralFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {
@@ -698,7 +574,7 @@ void CinematicLookupFilter::onDraw(const Texture& inputTexture, FrameBufferPtr o
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-const char* CinematicLookupFilter::getFragmentShaderSource() const {
+std::string CinematicLookupFilter::getFragmentShaderSource() const {
     return R"(#version 300 es
         precision highp float;
         in vec2 textureCoordinate;

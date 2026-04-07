@@ -14,6 +14,10 @@ namespace video {
 
 class FilterEngine {
 public:
+    std::shared_ptr<ShaderManager> getShaderManager() const { return m_shaderManager; }
+    void setAssetProvider(std::shared_ptr<IAssetProvider> provider) { m_shaderManager->setAssetProvider(provider); }
+
+public:
     FilterEngine();
     ~FilterEngine();
 
@@ -32,6 +36,7 @@ public:
     // Pipeline manipulation
     void addFilter(FilterPtr filter);
     void removeAllFilters();
+    void updateShaderSource(const std::string& name, const std::string& source);
 
     // 暴露 FBO 内存池供子滤镜（如 Two-pass 高斯模糊）借用
     FrameBufferPool m_frameBufferPool;
@@ -40,6 +45,8 @@ public:
     GLContextManager& getContextManager() { return m_contextManager; }
 
 private:
+    std::shared_ptr<ShaderManager> m_shaderManager;
+
     std::vector<FilterPtr> m_filters;
     ThreadCheck m_threadCheck;
     bool m_initialized;
