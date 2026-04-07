@@ -358,3 +358,31 @@ Java_com_sdk_video_RenderEngine_nativeUpdateShaderSource(JNIEnv *env, jobject th
 
     return sdk::video::ErrorCode::SUCCESS;
 }
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_sdk_video_RenderEngine_nativeGetMetrics(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->filterEngine) return nullptr;
+
+    auto metrics = wrapper->filterEngine->getPerformanceMetrics();
+    jfloatArray result = env->NewFloatArray(5);
+    if (result == nullptr) return nullptr;
+
+    jfloat fill[5];
+    fill[0] = metrics.averageFrameTimeMs;
+    fill[1] = metrics.p50FrameTimeMs;
+    fill[2] = metrics.p90FrameTimeMs;
+    fill[3] = metrics.p99FrameTimeMs;
+    fill[4] = static_cast<jfloat>(metrics.droppedFrames);
+
+    env->SetFloatArrayRegion(result, 0, 5, fill);
+    return result;
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeRecordDroppedFrame(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->filterEngine) {
+        wrapper->filterEngine->recordDroppedFrame();
+    }
+}

@@ -74,6 +74,9 @@ class VideoFilterManager(private val context: android.content.Context,
     )
     val processedFrames: SharedFlow<Result<Int>> = _processedFrames.asSharedFlow()
 
+    private val _performanceMetrics = MutableStateFlow<RenderEngine.PerformanceMetrics?>(null)
+    val performanceMetrics: StateFlow<RenderEngine.PerformanceMetrics?> = _performanceMetrics.asStateFlow()
+
     // 初始化引擎，必须切换到专属的 GL 线程
     fun initialize(): Result<Unit> {
         try {

@@ -208,6 +208,9 @@ void BrightnessFilter::initialize() {
     m_brightnessHandle = glGetUniformLocation(m_programId, "brightness");
 }
 
+void BrightnessFilter::onProgramRecompiled() {
+    m_brightnessHandle = glGetUniformLocation(m_programId, "brightness");
+}
 std::string BrightnessFilter::getFragmentShaderSource() const {
     return m_shaderManager ? m_shaderManager->getShaderSource("shaders/brightness.frag") : "";
 }
@@ -262,6 +265,11 @@ void GaussianBlurFilter::initialize() {
     m_blurSizeHandle = glGetUniformLocation(m_programId, "blurSize");
 }
 
+void GaussianBlurFilter::onProgramRecompiled() {
+    m_texelWidthOffsetHandle = glGetUniformLocation(m_programId, "texelWidthOffset");
+    m_texelHeightOffsetHandle = glGetUniformLocation(m_programId, "texelHeightOffset");
+    m_blurSizeHandle = glGetUniformLocation(m_programId, "blurSize");
+}
 Texture GaussianBlurFilter::processFrame(const Texture& inputTexture, FrameBufferPtr outputFb) {
     if (!m_pool) return inputTexture;
 
@@ -388,6 +396,10 @@ void LookupFilter::setLookupTexture(GLuint textureId) {
     m_lookupTextureId = textureId;
 }
 
+void LookupFilter::onProgramRecompiled() {
+    m_intensityHandle = glGetUniformLocation(m_programId, "intensity");
+    m_lookupTextureUniformHandle = glGetUniformLocation(m_programId, "lookupTexture");
+}
 std::string LookupFilter::getFragmentShaderSource() const {
     return m_shaderManager ? m_shaderManager->getShaderSource("shaders/lookup.frag") : "";
 }
@@ -450,6 +462,11 @@ void BilateralFilter::initialize() {
     m_distanceNormalizationFactorHandle = glGetUniformLocation(m_programId, "distanceNormalizationFactor");
 }
 
+void BilateralFilter::onProgramRecompiled() {
+    m_texelWidthOffsetHandle = glGetUniformLocation(m_programId, "texelWidthOffset");
+    m_texelHeightOffsetHandle = glGetUniformLocation(m_programId, "texelHeightOffset");
+    m_distanceNormalizationFactorHandle = glGetUniformLocation(m_programId, "distanceNormalizationFactor");
+}
 std::string BilateralFilter::getFragmentShaderSource() const {
     return m_shaderManager ? m_shaderManager->getShaderSource("shaders/bilateral.frag") : "";
 }
@@ -549,6 +566,10 @@ void CinematicLookupFilter::onDraw(const Texture& inputTexture, FrameBufferPtr o
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
+void CinematicLookupFilter::onProgramRecompiled() {
+    m_intensityHandle = glGetUniformLocation(m_programId, "intensity");
+    m_lookupTextureUniformHandle = glGetUniformLocation(m_programId, "lookupTexture");
+}
 std::string CinematicLookupFilter::getFragmentShaderSource() const {
     return m_shaderManager ? m_shaderManager->getShaderSource("shaders/cinematic_lookup.frag") : "";
 }

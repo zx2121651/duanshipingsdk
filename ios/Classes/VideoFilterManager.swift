@@ -25,6 +25,14 @@ public enum FilterEngineState {
  *    Actor 可以确保内部所有的滤镜添加、销毁和状态修改都在一个串行的执行上下文中，完美解决了线程安全问题。
  * 2. 引入 `AsyncStream` 供上层消费者（SwiftUI 视图）非阻塞地获取最新帧。
  */
+
+public struct PerformanceMetrics {
+    public let averageFrameTimeMs: Float
+    public let p50FrameTimeMs: Float
+    public let p90FrameTimeMs: Float
+    public let p99FrameTimeMs: Float
+    public let droppedFrames: Int
+}
 public actor VideoFilterManager {
 
     // 底层 C++ / Objective-C++ 引擎包装器
@@ -147,7 +155,25 @@ public actor VideoFilterManager {
     }
 
     /// 释放引擎及 AsyncStream
-    public func release() {
+
+    public func getPerformanceMetrics() -> PerformanceMetrics? {
+        guard let arr = engineWrapper.getPerformanceMetrics() else { return nil }
+        if arr.count == 5 {
+            return PerformanceMetrics(
+                averageFrameTimeMs: arr[0].floatValue,
+                p50FrameTimeMs: arr[1].floatValue,
+                p90FrameTimeMs: arr[2].floatValue,
+                p99FrameTimeMs: arr[3].floatValue,
+                droppedFrames: arr[4].intValue
+            )
+        }
+        return nil
+    }
+
+    public func recordDroppedFrame() {
+        engineWrapper.recordDroppedFrame()
+    }
+public func release() {
         engine.releaseEngine()
         streamContinuation?.finish()
         self.state = .stopped

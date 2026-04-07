@@ -39,6 +39,26 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
         }
         return -1001 // ERR_INIT_CONTEXT_FAILED
     }
+
+    class PerformanceMetrics(
+        val averageFrameTimeMs: Float,
+        val p50FrameTimeMs: Float,
+        val p90FrameTimeMs: Float,
+        val p99FrameTimeMs: Float,
+        val droppedFrames: Int
+    )
+
+    fun getMetrics(): PerformanceMetrics? {
+        if (nativeHandle == 0L) return null
+        val arr = nativeGetMetrics(nativeHandle) ?: return null
+        return PerformanceMetrics(arr[0], arr[1], arr[2], arr[3], arr[4].toInt())
+    }
+
+    fun recordDroppedFrame() {
+        if (nativeHandle != 0L) {
+            nativeRecordDroppedFrame(nativeHandle)
+        }
+    }
 fun init(assetManager: android.content.res.AssetManager): Int {
         nativeHandle = nativeInit(assetManager)
         if (nativeHandle == 0L) return -1
@@ -164,7 +184,10 @@ fun init(assetManager: android.content.res.AssetManager): Int {
 
     // Native methods
     private external fun nativeUpdateShaderSource(handle: Long, name: String, source: String): Int
-    private external fun nativeInit(assetManager: android.content.res.AssetManager): Long
+
+    private external fun nativeGetMetrics(handle: Long): FloatArray?
+    private external fun nativeRecordDroppedFrame(handle: Long)
+private external fun nativeInit(assetManager: android.content.res.AssetManager): Long
     private external fun nativeRelease(handle: Long)
     private external fun nativeProcessFrame(handle: Long, textureId: Int, width: Int, height: Int, matrix: FloatArray, timestampNs: Long): Int
     private external fun nativeSetRecordingSurface(handle: Long, surface: Surface?): Int

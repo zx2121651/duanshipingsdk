@@ -223,3 +223,21 @@ using namespace sdk::video;
 }
 
 @end
+
+- (NSArray<NSNumber *> *)getPerformanceMetrics {
+    if (!engine) return nil;
+    sdk::video::PerformanceMetrics metrics = engine->getPerformanceMetrics();
+    return @[
+        @(metrics.averageFrameTimeMs),
+        @(metrics.p50FrameTimeMs),
+        @(metrics.p90FrameTimeMs),
+        @(metrics.p99FrameTimeMs),
+        @(metrics.droppedFrames)
+    ];
+}
+
+- (void)recordDroppedFrame {
+    if (engine) {
+        engine->recordDroppedFrame();
+    }
+}
