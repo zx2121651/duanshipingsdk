@@ -20,7 +20,7 @@ public:
 protected:
     void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
     const char* getVertexShaderSource() const override;
-    const char* getFragmentShaderSource() const override;
+    std::string getFragmentShaderSource() const override;
 private:
     GLuint m_textureMatrixHandle;
     GLuint m_flipHorizontalHandle;
@@ -34,7 +34,7 @@ public:
     void initialize() override;
 protected:
     void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
-    const char* getFragmentShaderSource() const override;
+    std::string getFragmentShaderSource() const override;
 private:
     GLuint m_brightnessHandle;
 };
@@ -57,7 +57,7 @@ public:
 protected:
     void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
     const char* getVertexShaderSource() const override;
-    const char* getFragmentShaderSource() const override;
+    std::string getFragmentShaderSource() const override;
 
 private:
     FrameBufferPool* m_pool;
@@ -78,7 +78,7 @@ public:
 
 protected:
     void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
-    const char* getFragmentShaderSource() const override;
+    std::string getFragmentShaderSource() const override;
 private:
     GLuint m_lookupTextureHandle;
     GLuint m_intensityHandle;
@@ -92,7 +92,7 @@ public:
     void initialize() override;
 protected:
     void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
-    const char* getFragmentShaderSource() const override;
+    std::string getFragmentShaderSource() const override;
 private:
     GLuint m_texelWidthOffsetHandle;
     GLuint m_texelHeightOffsetHandle;
@@ -110,7 +110,7 @@ public:
 
 protected:
     void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
-    const char* getFragmentShaderSource() const override;
+    std::string getFragmentShaderSource() const override;
 private:
     GLuint m_lookupTextureHandle;
     GLuint m_intensityHandle;
@@ -136,7 +136,7 @@ public:
 protected:
     void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
     const char* getVertexShaderSource() const override { return ""; }
-    const char* getFragmentShaderSource() const override { return ""; }
+    std::string getFragmentShaderSource() const override { return ""; }
 
     const char* getComputeShaderSource() const;
 

@@ -5,7 +5,7 @@
 namespace sdk {
 namespace video {
 
-FilterEngine::FilterEngine() : m_initialized(false), m_simulateCrash(false) {}
+FilterEngine::FilterEngine() : m_initialized(false), m_simulateCrash(false) { m_shaderManager = std::make_shared<ShaderManager>(); }
 
 FilterEngine::~FilterEngine() {
     release();
@@ -98,6 +98,7 @@ void FilterEngine::release() {
 
 void FilterEngine::addFilter(FilterPtr filter) {
     if (filter) {
+        filter->setShaderManager(m_shaderManager);
         m_filters.push_back(filter);
         if (m_initialized) {
             filter->initialize();
@@ -116,3 +117,18 @@ void FilterEngine::removeAllFilters() {
 
 } // namespace video
 } // namespace sdk
+
+void FilterEngine::updateShaderSource(const std::string& name, const std::string& source) {
+    if (!m_shaderManager) return;
+
+    m_shaderManager->updateShaderSource(name, source);
+
+    // We need to notify all filters to reload their shaders if they use this one.
+    // However, since we don't know which filter uses which shader name,
+    // we should just call initialize() on all of them to trigger a recompilation.
+    for (auto& filter : m_filters) {
+        // filter->release();  // If we release, we lose other states. We should just re-init program.
+        // Actually, we need a recompile API in Filter.
+        filter->recompileProgram();
+    }
+}

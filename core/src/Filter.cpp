@@ -61,7 +61,7 @@ void Filter::setParameter(const std::string& key, const std::any& value) {
     m_parameters[key] = value;
 }
 
-const char* Filter::getVertexShaderSource() const {
+std::string Filter::getVertexShaderSource() const {
     return kDefaultVertexShader;
 }
 
@@ -124,3 +124,23 @@ GLuint Filter::createProgram(const char* pVertexSource, const char* pFragmentSou
 
 } // namespace video
 } // namespace sdk
+
+void Filter::recompileProgram() {
+    std::string vertexShaderSource = getVertexShaderSource();
+    std::string fragmentShaderSource = getFragmentShaderSource();
+
+    // Create new program
+    GLuint newProgramId = GLUtils::createProgram(vertexShaderSource.c_str(), fragmentShaderSource.c_str());
+    if (newProgramId != 0) {
+        // Delete old
+        if (m_programId != 0) {
+            glDeleteProgram(m_programId);
+        }
+        m_programId = newProgramId;
+
+        // Update locations
+        m_positionHandle = glGetAttribLocation(m_programId, "position");
+        m_texCoordHandle = glGetAttribLocation(m_programId, "inputTextureCoordinate");
+        m_inputImageTextureHandle = glGetUniformLocation(m_programId, "inputImageTexture");
+    }
+}

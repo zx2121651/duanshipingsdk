@@ -1,5 +1,6 @@
 #pragma once
 #include "GLTypes.h"
+#include "ShaderManager.h"
 #include "FrameBuffer.h"
 #include <string>
 #include <map>
@@ -21,6 +22,8 @@ public:
     virtual ~Filter();
 
     virtual void initialize();
+    virtual void recompileProgram();
+    void setShaderManager(std::shared_ptr<ShaderManager> manager) { m_shaderManager = manager; }
     virtual void release();
 
     // Renders the input texture to an output framebuffer and returns the output texture.
@@ -29,6 +32,7 @@ public:
     virtual void setParameter(const std::string& key, const std::any& value);
 
 protected:
+    std::shared_ptr<ShaderManager> m_shaderManager;
     // Core rendering logic to be implemented by derived classes.
     virtual void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) = 0;
 
@@ -37,8 +41,8 @@ protected:
     GLuint createProgram(const char* vertexSource, const char* fragmentSource);
 
     // Virtual methods for specific shader sources
-    virtual const char* getVertexShaderSource() const;
-    virtual const char* getFragmentShaderSource() const = 0; // Pure virtual
+    virtual std::string getVertexShaderSource() const;
+    virtual std::string getFragmentShaderSource() const = 0; // Pure virtual
 
     GLuint m_programId;
     std::map<std::string, std::any> m_parameters;

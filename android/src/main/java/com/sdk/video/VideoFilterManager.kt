@@ -24,7 +24,7 @@ enum class FilterEngineState {
  * 2. 使用 SharedFlow (共享数据流) 作为生产者-消费者模型，向外界抛出处理后的纹理 ID，解耦底层渲染与上层 UI。
  */
 @OptIn(InternalApi::class)
-class VideoFilterManager(
+class VideoFilterManager(private val context: android.content.Context,
     private val width: Int,
     private val height: Int,
     // 允许外部传入协程作用域，默认创建一个后台任务域
@@ -78,7 +78,7 @@ class VideoFilterManager(
     fun initialize(): Result<Unit> {
         try {
             _engineState.value = FilterEngineState.INITIALIZING
-            val res = renderEngine.init()
+            val res = renderEngine.init(context.assets)
             if (res != 0) return Result.failure(VideoSdkError.fromNativeCode(res))
 
             // 设置底层每处理完一帧的回调监听
@@ -187,7 +187,14 @@ class VideoFilterManager(
     }
 
     // 释放所有的硬件及线程资源
-    fun release() {
+
+    fun updateShaderSource(name: String, source: String) {
+        // Switch to GL thread
+        scope.launch(glThreadDispatcher) {
+            renderEngine.updateShaderSource(name, source)
+        }
+    }
+fun release() {
         inputSurface?.release()
         inputSurface = null
         try { renderEngine.release() } catch (e: Exception) { Log.e("VideoFilterManager", "Error releasing RenderEngine", e) }

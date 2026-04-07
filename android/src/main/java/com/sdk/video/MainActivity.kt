@@ -122,7 +122,7 @@ class MainActivity : ComponentActivity() {
                 val oldManager = filterManager
                 oldManager?.scope?.launch { oldManager.release() }
 
-                val newManager = VideoFilterManager(resolution.width, resolution.height)
+                val newManager = VideoFilterManager(this@MainActivity, resolution.width, resolution.height)
 
                 newManager.setOnPerformanceUpdateListener { durationMs ->
                     // 确保 Compose State 的更新发生主线程

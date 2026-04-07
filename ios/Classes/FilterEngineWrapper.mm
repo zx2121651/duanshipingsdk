@@ -1,5 +1,6 @@
 #import "FilterEngineWrapper.h"
 #import "../../../core/include/FilterEngine.h"
+#import "IOSAssetProvider.h"
 #import "../../../core/include/Filters.h"
 
 using namespace sdk::video;
@@ -23,6 +24,7 @@ using namespace sdk::video;
     self = [super init];
     if (self) {
         engine = std::make_shared<FilterEngine>();
+        engine->setAssetProvider(std::make_shared<IOSAssetProvider>());
         textureCache = NULL;
         pixelBufferPool = NULL;
         poolWidth = 0;

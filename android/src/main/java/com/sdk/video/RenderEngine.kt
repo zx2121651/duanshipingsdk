@@ -31,8 +31,14 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     var onPerformanceUpdateListener: ((durationMs: Long) -> Unit)? = null
 
     // Call on GL thread to initialize
-    fun init(): Int {
-        nativeHandle = nativeInit()
+
+    fun updateShaderSource(name: String, source: String) {
+        if (nativeHandle != 0L) {
+            nativeUpdateShaderSource(nativeHandle, name, source)
+        }
+    }
+fun init(assetManager: android.content.res.AssetManager): Int {
+        nativeHandle = nativeInit(assetManager)
         if (nativeHandle == 0L) return -1
 
         val textures = IntArray(1)
@@ -148,7 +154,8 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     }
 
     // Native methods
-    private external fun nativeInit(): Long
+    private external fun nativeUpdateShaderSource(handle: Long, name: String, source: String)
+    private external fun nativeInit(assetManager: android.content.res.AssetManager): Long
     private external fun nativeRelease(handle: Long)
     private external fun nativeProcessFrame(handle: Long, textureId: Int, width: Int, height: Int, matrix: FloatArray, timestampNs: Long): Int
     private external fun nativeSetRecordingSurface(handle: Long, surface: Surface?): Int

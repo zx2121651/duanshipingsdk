@@ -11,6 +11,9 @@
 #include <GLES3/gl3.h>
 #endif
 
+
+#include <android/asset_manager_jni.h>
+#include "AndroidAssetProvider.h"
 #include "../../../../core/include/FilterEngine.h"
 #include "../../../../core/include/Filters.h"
 #include "OboeAudioEngine.h"
@@ -146,9 +149,18 @@ struct EngineWrapper {
 extern "C" {
 
 JNIEXPORT jlong JNICALL
-Java_com_sdk_video_RenderEngine_nativeInit(JNIEnv *env, jobject thiz) {
+Java_com_sdk_video_RenderEngine_nativeInit(JNIEnv *env, jobject thiz, jobject assetManager) {
     EngineWrapper* wrapper = new EngineWrapper();
-    wrapper->filterEngine->addFilter(std::make_shared<OES2RGBFilter>());
+    wrapper->filterEngine = std::make_shared<FilterEngine>();
+
+    if (assetManager) {
+        AAssetManager* nativeAssetManager = AAssetManager_fromJava(env, assetManager);
+        auto assetProvider = std::make_shared<AndroidAssetProvider>(nativeAssetManager);
+        wrapper->filterEngine->setAssetProvider(assetProvider);
+    }
+
+    auto oesFilter = std::make_shared<OES2RGBFilter>();
+    wrapper->filterEngine->addFilter(oesFilter);
     wrapper->filterEngine->initialize();
     return reinterpret_cast<jlong>(wrapper);
 }
@@ -328,3 +340,17 @@ Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jl
 }
 
 } // extern "C"
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeUpdateShaderSource(JNIEnv *env, jobject thiz, jlong handle, jstring name, jstring source) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->filterEngine) {
+        const char* nameStr = env->GetStringUTFChars(name, nullptr);
+        const char* sourceStr = env->GetStringUTFChars(source, nullptr);
+
+        wrapper->filterEngine->updateShaderSource(nameStr, sourceStr);
+
+        env->ReleaseStringUTFChars(name, nameStr);
+        env->ReleaseStringUTFChars(source, sourceStr);
+    }
+}
