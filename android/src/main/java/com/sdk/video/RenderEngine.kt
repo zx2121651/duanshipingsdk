@@ -48,7 +48,13 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
         val droppedFrames: Int
     )
 
-    fun getMetrics(): PerformanceMetrics? {
+
+    fun enableGraphMode(enable: Boolean) {
+        if (nativeHandle != 0L) {
+            nativeEnableGraphMode(nativeHandle, enable)
+        }
+    }
+fun getMetrics(): PerformanceMetrics? {
         if (nativeHandle == 0L) return null
         val arr = nativeGetMetrics(nativeHandle) ?: return null
         return PerformanceMetrics(arr[0], arr[1], arr[2], arr[3], arr[4].toInt())
@@ -185,7 +191,8 @@ fun init(assetManager: android.content.res.AssetManager): Int {
     // Native methods
     private external fun nativeUpdateShaderSource(handle: Long, name: String, source: String): Int
 
-    private external fun nativeGetMetrics(handle: Long): FloatArray?
+        private external fun nativeEnableGraphMode(handle: Long, enable: Boolean)
+private external fun nativeGetMetrics(handle: Long): FloatArray?
     private external fun nativeRecordDroppedFrame(handle: Long)
 private external fun nativeInit(assetManager: android.content.res.AssetManager): Long
     private external fun nativeRelease(handle: Long)
