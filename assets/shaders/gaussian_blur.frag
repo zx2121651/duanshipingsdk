@@ -1,25 +1,17 @@
 #version 300 es
 precision mediump float;
-in vec2 textureCoordinate;
-out vec4 fragColor;
+
 uniform sampler2D inputImageTexture;
-uniform float texelWidthOffset;
-uniform float texelHeightOffset;
-uniform float blurSize;
+in vec2 blurCoordinates[5];
+
+out vec4 fragColor;
 
 void main() {
-    vec2 singleStepOffset = vec2(texelWidthOffset, texelHeightOffset);
     vec4 sum = vec4(0.0);
-
-    sum += texture(inputImageTexture, textureCoordinate - singleStepOffset * 4.0) * 0.05;
-    sum += texture(inputImageTexture, textureCoordinate - singleStepOffset * 3.0) * 0.09;
-    sum += texture(inputImageTexture, textureCoordinate - singleStepOffset * 2.0) * 0.12;
-    sum += texture(inputImageTexture, textureCoordinate - singleStepOffset * 1.0) * 0.15;
-    sum += texture(inputImageTexture, textureCoordinate) * 0.18;
-    sum += texture(inputImageTexture, textureCoordinate + singleStepOffset * 1.0) * 0.15;
-    sum += texture(inputImageTexture, textureCoordinate + singleStepOffset * 2.0) * 0.12;
-    sum += texture(inputImageTexture, textureCoordinate + singleStepOffset * 3.0) * 0.09;
-    sum += texture(inputImageTexture, textureCoordinate + singleStepOffset * 4.0) * 0.05;
-
+    sum += texture(inputImageTexture, blurCoordinates[0]) * 0.204164;
+    sum += texture(inputImageTexture, blurCoordinates[1]) * 0.304005;
+    sum += texture(inputImageTexture, blurCoordinates[2]) * 0.304005;
+    sum += texture(inputImageTexture, blurCoordinates[3]) * 0.093913;
+    sum += texture(inputImageTexture, blurCoordinates[4]) * 0.093913;
     fragColor = sum;
 }

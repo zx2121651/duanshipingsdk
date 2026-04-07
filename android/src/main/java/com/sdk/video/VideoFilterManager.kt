@@ -188,10 +188,10 @@ class VideoFilterManager(private val context: android.content.Context,
 
     // 释放所有的硬件及线程资源
 
-    fun updateShaderSource(name: String, source: String) {
-        // Switch to GL thread
-        scope.launch(glThreadDispatcher) {
-            renderEngine.updateShaderSource(name, source)
+    fun updateShaderSource(name: String, source: String): Result<Unit> {
+        return runBlocking(glThreadDispatcher) {
+            val res = renderEngine.updateShaderSource(name, source)
+            if (res == 0) Result.success(Unit) else Result.failure(VideoSdkError.fromNativeCode(res))
         }
     }
 fun release() {

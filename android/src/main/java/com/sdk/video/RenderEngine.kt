@@ -29,13 +29,15 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
 
     var onFrameProcessedListener: ((outputTextureId: Int) -> Unit)? = null
     var onPerformanceUpdateListener: ((durationMs: Long) -> Unit)? = null
+    var onRenderErrorListener: ((errorCode: Int) -> Unit)? = null
 
     // Call on GL thread to initialize
 
-    fun updateShaderSource(name: String, source: String) {
+    fun updateShaderSource(name: String, source: String): Int {
         if (nativeHandle != 0L) {
-            nativeUpdateShaderSource(nativeHandle, name, source)
+            return nativeUpdateShaderSource(nativeHandle, name, source)
         }
+        return -1001 // ERR_INIT_CONTEXT_FAILED
     }
 fun init(assetManager: android.content.res.AssetManager): Int {
         nativeHandle = nativeInit(assetManager)
@@ -72,8 +74,15 @@ fun init(assetManager: android.content.res.AssetManager): Int {
 
         val outputTexId = nativeProcessFrame(nativeHandle, oesTextureId, width, height, transformMatrix, timestampNs)
 
-        onFrameProcessedListener?.invoke(outputTexId)
-        onPerformanceUpdateListener?.invoke(lastFrameTimeMs)
+        // 如果返回值是负数，表示产生了错误
+        if (outputTexId < 0) {
+            onRenderErrorListener?.invoke(outputTexId)
+        } else {
+            onFrameProcessedListener?.invoke(outputTexId)
+            if (lastFrameTimeMs > 0) {
+                onPerformanceUpdateListener?.invoke(lastFrameTimeMs)
+            }
+        }
     }
 
     // Recording API
@@ -154,7 +163,7 @@ fun init(assetManager: android.content.res.AssetManager): Int {
     }
 
     // Native methods
-    private external fun nativeUpdateShaderSource(handle: Long, name: String, source: String)
+    private external fun nativeUpdateShaderSource(handle: Long, name: String, source: String): Int
     private external fun nativeInit(assetManager: android.content.res.AssetManager): Long
     private external fun nativeRelease(handle: Long)
     private external fun nativeProcessFrame(handle: Long, textureId: Int, width: Int, height: Int, matrix: FloatArray, timestampNs: Long): Int

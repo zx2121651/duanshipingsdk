@@ -177,7 +177,7 @@ Java_com_sdk_video_RenderEngine_nativeRelease(JNIEnv *env, jobject thiz, jlong h
 JNIEXPORT jint JNICALL
 Java_com_sdk_video_RenderEngine_nativeProcessFrame(JNIEnv *env, jobject thiz, jlong handle, jint textureId, jint width, jint height, jfloatArray matrix, jlong timestampNs) {
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
-    if (!wrapper || !wrapper->filterEngine) return textureId;
+    if (!wrapper || !wrapper->filterEngine) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
 
     auto start = std::chrono::high_resolution_clock::now();
 
@@ -189,8 +189,12 @@ Java_com_sdk_video_RenderEngine_nativeProcessFrame(JNIEnv *env, jobject thiz, jl
         wrapper->filterEngine->updateParameter("textureMatrix", std::any(textureMatrix));
     }
 
-    Texture inTex = {static_cast<uint32_t>(textureId), width, height};
+    Texture inTex = {static_cast<uint32_t>(textureId), static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
     Texture outTex = wrapper->filterEngine->processFrame(inTex, width, height);
+    if (outTex.id == 0) {
+        // Assume failure in processing if output texture is 0
+        return sdk::video::ErrorCode::ERR_RENDER_INVALID_STATE;
+    }
 
 #ifndef WIN32
     wrapper->renderToRecordingSurface(outTex, width, height, timestampNs);
@@ -212,58 +216,57 @@ JNIEXPORT jint JNICALL
 Java_com_sdk_video_RenderEngine_nativeSetRecordingSurface(JNIEnv *env, jobject thiz, jlong handle, jobject surface) {
 #ifndef WIN32
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
-    if (wrapper) {
-        if (surface) {
-            wrapper->setupRecordingSurface(env, surface);
-        } else {
-            wrapper->releaseRecordingSurface();
-        }
-        return 0; // SUCCESS
+    if (!wrapper) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
+
+    if (surface) {
+        wrapper->setupRecordingSurface(env, surface);
+    } else {
+        wrapper->releaseRecordingSurface();
     }
+    return sdk::video::ErrorCode::SUCCESS;
+#else
+    return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
 #endif
-    return -1001; // ERR_INIT_CONTEXT_FAILED
 }
 
 JNIEXPORT jint JNICALL
 Java_com_sdk_video_RenderEngine_nativeUpdateParameterFloat(JNIEnv *env, jobject thiz, jlong handle, jstring key, jfloat value) {
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
-    if (wrapper) {
-        const char *keyStr = env->GetStringUTFChars(key, nullptr);
-        wrapper->filterEngine->updateParameter(std::string(keyStr), std::any(value));
-        env->ReleaseStringUTFChars(key, keyStr);
-        return 0;
-    }
-    return -1001;
+    if (!wrapper || !wrapper->filterEngine) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
+
+    const char *keyStr = env->GetStringUTFChars(key, nullptr);
+    wrapper->filterEngine->updateParameter(std::string(keyStr), std::any(value));
+    env->ReleaseStringUTFChars(key, keyStr);
+    return sdk::video::ErrorCode::SUCCESS;
 }
 
 JNIEXPORT jint JNICALL
 Java_com_sdk_video_RenderEngine_nativeUpdateParameterInt(JNIEnv *env, jobject thiz, jlong handle, jstring key, jint value) {
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
-    if (wrapper) {
-        const char *keyStr = env->GetStringUTFChars(key, nullptr);
-        wrapper->filterEngine->updateParameter(std::string(keyStr), std::any(value));
-        env->ReleaseStringUTFChars(key, keyStr);
-        return 0;
-    }
-    return -1001;
+    if (!wrapper || !wrapper->filterEngine) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
+
+    const char *keyStr = env->GetStringUTFChars(key, nullptr);
+    wrapper->filterEngine->updateParameter(std::string(keyStr), std::any(value));
+    env->ReleaseStringUTFChars(key, keyStr);
+    return sdk::video::ErrorCode::SUCCESS;
 }
 
 JNIEXPORT jint JNICALL
 Java_com_sdk_video_RenderEngine_nativeUpdateParameterBool(JNIEnv *env, jobject thiz, jlong handle, jstring key, jboolean value) {
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
-    if (wrapper) {
-        const char *keyStr = env->GetStringUTFChars(key, nullptr);
-        bool val = (value == JNI_TRUE);
-        wrapper->filterEngine->updateParameter(std::string(keyStr), std::any(val));
-        env->ReleaseStringUTFChars(key, keyStr);
-        return 0;
-    }
-    return -1001;
+    if (!wrapper || !wrapper->filterEngine) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
+
+    const char *keyStr = env->GetStringUTFChars(key, nullptr);
+    bool val = (value == JNI_TRUE);
+    wrapper->filterEngine->updateParameter(std::string(keyStr), std::any(val));
+    env->ReleaseStringUTFChars(key, keyStr);
+    return sdk::video::ErrorCode::SUCCESS;
 }
 
 JNIEXPORT jint JNICALL
 Java_com_sdk_video_RenderEngine_nativeAddFilter(JNIEnv *env, jobject thiz, jlong handle, jint filterType) {
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->filterEngine) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
     if (wrapper) {
         FilterPtr filter;
         switch(filterType) {
@@ -290,7 +293,7 @@ Java_com_sdk_video_RenderEngine_nativeAddFilter(JNIEnv *env, jobject thiz, jlong
         }
         if (filter) {
             wrapper->filterEngine->addFilter(filter);
-            return 0;
+            return sdk::video::ErrorCode::SUCCESS;
         }
     }
     return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
@@ -302,7 +305,7 @@ Java_com_sdk_video_RenderEngine_nativeRemoveAllFilters(JNIEnv *env, jobject thiz
     if (wrapper) {
         wrapper->filterEngine->removeAllFilters();
         wrapper->filterEngine->addFilter(std::make_shared<OES2RGBFilter>());
-        return 0;
+        return sdk::video::ErrorCode::SUCCESS;
     }
     return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
 }
@@ -320,11 +323,10 @@ Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz
 JNIEXPORT jint JNICALL
 Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
-    if (wrapper && wrapper->audioEngine) {
-        wrapper->audioEngine->stop();
-        return 0;
-    }
-    return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
+    if (!wrapper || !wrapper->audioEngine) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
+
+    wrapper->audioEngine->stop();
+    return sdk::video::ErrorCode::SUCCESS;
 }
 
 JNIEXPORT jint JNICALL
@@ -341,16 +343,18 @@ Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jl
 
 } // extern "C"
 
-JNIEXPORT void JNICALL
+JNIEXPORT jint JNICALL
 Java_com_sdk_video_RenderEngine_nativeUpdateShaderSource(JNIEnv *env, jobject thiz, jlong handle, jstring name, jstring source) {
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
-    if (wrapper && wrapper->filterEngine) {
-        const char* nameStr = env->GetStringUTFChars(name, nullptr);
-        const char* sourceStr = env->GetStringUTFChars(source, nullptr);
+    if (!wrapper || !wrapper->filterEngine) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
 
-        wrapper->filterEngine->updateShaderSource(nameStr, sourceStr);
+    const char* nameStr = env->GetStringUTFChars(name, nullptr);
+    const char* sourceStr = env->GetStringUTFChars(source, nullptr);
 
-        env->ReleaseStringUTFChars(name, nameStr);
-        env->ReleaseStringUTFChars(source, sourceStr);
-    }
+    wrapper->filterEngine->updateShaderSource(nameStr, sourceStr);
+
+    env->ReleaseStringUTFChars(name, nameStr);
+    env->ReleaseStringUTFChars(source, sourceStr);
+
+    return sdk::video::ErrorCode::SUCCESS;
 }
