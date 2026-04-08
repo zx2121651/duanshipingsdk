@@ -35,6 +35,7 @@ public:
 
     // 移除指定 ID 的片段
     void removeClip(const std::string& clipId);
+    ClipPtr getClip(const std::string& clipId) const;
 
     // 清空轨道
     void clearClips();

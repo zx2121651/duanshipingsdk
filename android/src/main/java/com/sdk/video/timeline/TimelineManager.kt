@@ -38,7 +38,27 @@ class TimelineManager(val outputWidth: Int, val outputHeight: Int, val fps: Int)
     }
 
     // 销毁 C++ 的时间线模型
-    fun release() {
+
+    enum class TransitionType(val value: Int) {
+        NONE(0), CROSSFADE(1), WIPE_LEFT(2)
+    }
+
+    fun setClipSpeed(zIndex: Int, clipId: String, speed: Float): Int {
+        return nativeSetClipSpeed(nativeHandle, zIndex, clipId, speed)
+    }
+
+    fun setClipTransition(zIndex: Int, clipId: String, type: TransitionType, durationUs: Long): Int {
+        return nativeSetClipTransition(nativeHandle, zIndex, clipId, type.value, durationUs)
+    }
+
+    fun addClipKeyframe(zIndex: Int, clipId: String, property: String, relativeTimeUs: Long, value: Float): Int {
+        return nativeAddClipKeyframe(nativeHandle, zIndex, clipId, property, relativeTimeUs, value)
+    }
+
+    fun removeClip(zIndex: Int, clipId: String): Int {
+        return nativeRemoveClip(nativeHandle, zIndex, clipId)
+    }
+fun release() {
         if (nativeHandle != 0L) {
             nativeReleaseTimeline(nativeHandle)
             nativeHandle = 0L
@@ -57,4 +77,9 @@ class TimelineManager(val outputWidth: Int, val outputHeight: Int, val fps: Int)
         handle: Long, zIndex: Int, clipId: String, sourcePath: String, mediaType: Int,
         trimInUs: Long, trimOutUs: Long, timelineInUs: Long
     ): Int
+
+    private external fun nativeSetClipSpeed(handle: Long, zIndex: Int, clipId: String, speed: Float): Int
+    private external fun nativeSetClipTransition(handle: Long, zIndex: Int, clipId: String, type: Int, durationUs: Long): Int
+    private external fun nativeAddClipKeyframe(handle: Long, zIndex: Int, clipId: String, property: String, relativeTimeUs: Long, value: Float): Int
+    private external fun nativeRemoveClip(handle: Long, zIndex: Int, clipId: String): Int
 }
