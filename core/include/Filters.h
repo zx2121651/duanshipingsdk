@@ -20,7 +20,7 @@ public:
     void onProgramRecompiled() override;
 protected:
     void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
-    const char* getVertexShaderSource() const override;
+    std::string getVertexShaderSource() const override;
     std::string getFragmentShaderSource() const override;
 private:
     GLuint m_textureMatrixHandle;
@@ -33,6 +33,7 @@ public:
     BrightnessFilter();
     ~BrightnessFilter() override = default;
     void initialize() override;
+    void onProgramRecompiled() override;
 protected:
     void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
     std::string getFragmentShaderSource() const override;
@@ -45,8 +46,6 @@ private:
 // ----------------------------------------------------------------------------
 class GaussianBlurFilter : public Filter {
 public:
-    GaussianBlurFilter(FrameBufferPool* pool);
-public:
     // 注入 FrameBufferPool 用于在 Two-Pass 之间借用临时 FBO
     GaussianBlurFilter(FrameBufferPool* pool);
     ~GaussianBlurFilter() override;
@@ -58,7 +57,7 @@ public:
 
 protected:
     void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
-    const char* getVertexShaderSource() const override;
+    std::string getVertexShaderSource() const override;
     std::string getFragmentShaderSource() const override;
 
 private:
@@ -140,7 +139,7 @@ public:
 
 protected:
     void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
-    const char* getVertexShaderSource() const override { return ""; }
+    std::string getVertexShaderSource() const override { return ""; }
     std::string getFragmentShaderSource() const override { return ""; }
 
     const char* getComputeShaderSource() const;

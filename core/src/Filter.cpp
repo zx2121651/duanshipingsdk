@@ -24,7 +24,7 @@ Filter::~Filter() {
 }
 
 void Filter::initialize() {
-    m_programId = createProgram(getVertexShaderSource(), getFragmentShaderSource());
+    m_programId = createProgram(getVertexShaderSource().c_str(), getFragmentShaderSource().c_str());
     if (m_programId == 0) {
         std::cerr << "Failed to create program." << std::endl;
         return;
@@ -122,15 +122,14 @@ GLuint Filter::createProgram(const char* pVertexSource, const char* pFragmentSou
     return program;
 }
 
-} // namespace video
-} // namespace sdk
+
 
 void Filter::recompileProgram() {
     std::string vertexShaderSource = getVertexShaderSource();
     std::string fragmentShaderSource = getFragmentShaderSource();
 
     // Create new program
-    GLuint newProgramId = GLUtils::createProgram(vertexShaderSource.c_str(), fragmentShaderSource.c_str());
+    GLuint newProgramId = createProgram(vertexShaderSource.c_str(), fragmentShaderSource.c_str());
     if (newProgramId != 0) {
         // Delete old
         if (m_programId != 0) {
@@ -146,3 +145,6 @@ void Filter::recompileProgram() {
         onProgramRecompiled();
     }
 }
+
+} // namespace video
+} // namespace sdk

@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "../../include/pipeline/PipelineGraph.h"
 #include <iostream>
 

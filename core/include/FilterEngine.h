@@ -4,6 +4,10 @@
 #include "FrameBufferPool.h"
 #include "ThreadCheck.h"
 #include "GLContextManager.h"
+#include "pipeline/PipelineGraph.h"
+#include "pipeline/Nodes.h"
+#include "pipeline/TimelineNode.h"
+#include "PerformanceMetrics.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -36,7 +40,7 @@ public:
     // Graph Builder APIs
     void enableGraphMode(bool enable) { m_useGraphMode = enable; }
     void buildCameraPipeline();
-    void buildTimelinePipeline(std::shared_ptr<Timeline> timeline, std::shared_ptr<Compositor> compositor);
+    void buildTimelinePipeline(std::shared_ptr<timeline::Timeline> timeline, std::shared_ptr<timeline::Compositor> compositor);
 
     // Pipeline manipulation
     void addFilter(FilterPtr filter);
@@ -44,7 +48,8 @@ public:
 
     PerformanceMetrics getPerformanceMetrics() const { return m_metricsCollector.getMetrics(); }
     void recordDroppedFrame() { m_metricsCollector.recordDroppedFrame(); }
-void updateShaderSource(const std::string& name, const std::string& source);
+    void updateShaderSource(const std::string& name, const std::string& source);
+
 
     // 暴露 FBO 内存池供子滤镜（如 Two-pass 高斯模糊）借用
     FrameBufferPool m_frameBufferPool;
@@ -60,7 +65,8 @@ private:
     std::shared_ptr<PipelineGraph> m_graph;
     std::shared_ptr<CameraInputNode> m_cameraNode;
     std::shared_ptr<OutputNode> m_outputNode;
-std::vector<FilterPtr> m_filters;
+    std::vector<FilterPtr> m_filters;
+
     ThreadCheck m_threadCheck;
     bool m_initialized;
     bool m_simulateCrash;

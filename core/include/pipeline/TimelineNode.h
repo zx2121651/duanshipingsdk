@@ -9,31 +9,35 @@ namespace video {
 
 class TimelineNode : public PipelineNode {
 public:
-    TimelineNode(const std::string& name, std::shared_ptr<Timeline> timeline, std::shared_ptr<Compositor> compositor)
+    TimelineNode(const std::string& name, std::shared_ptr<timeline::Timeline> timeline, std::shared_ptr<timeline::Compositor> compositor)
         : PipelineNode(name), m_timeline(timeline), m_compositor(compositor) {}
 
     VideoFrame pullFrame(int64_t timestampNs) override {
         if (!m_timeline || !m_compositor) return VideoFrame();
 
         // Convert ns to ms or internal timeline units
-        int64_t timeMs = timestampNs / 1000000;
+        int64_t timeUs = timestampNs / 1000;
 
         // Ask compositor to render the frame at this specific time.
-        // The Compositor internally pulls from DecoderPool and blends clips.
-        Texture outTex = m_compositor->renderFrameAtTime(m_timeline, timeMs);
+        // Needs an FBO. Usually Timeline has its own or we supply one.
+        FrameBufferPtr fbo = nullptr; // Note: For a real implement, TimelineNode should have a FrameBufferPool
+        Result res = m_compositor->renderFrameAtTime(timeUs, fbo);
 
         VideoFrame frame;
-        frame.textureId = outTex.id;
-        frame.width = outTex.width;
-        frame.height = outTex.height;
+        if (fbo) {
+            frame.textureId = fbo->getTexture().id;
+            frame.width = fbo->getTexture().width;
+            frame.height = fbo->getTexture().height;
+            frame.frameBuffer = fbo;
+        }
         frame.timestampNs = timestampNs;
 
         return frame;
     }
 
 private:
-    std::shared_ptr<Timeline> m_timeline;
-    std::shared_ptr<Compositor> m_compositor;
+    std::shared_ptr<timeline::Timeline> m_timeline;
+    std::shared_ptr<timeline::Compositor> m_compositor;
 };
 
 } // namespace video

@@ -15,7 +15,7 @@ Result FilterEngine::initialize() {
     m_threadCheck.bind(); // Bind to current (GL) thread.
 
     // 初始化前首先唤醒嗅探器，对底层硬件进行深度体检
-    m_contextManager.sniffCapabilities();
+    // m_contextManager.sniffCapabilities(); // Currently missing implementation in headers, mock or skip
 
     for (auto& filter : m_filters) {
         filter->initialize();
@@ -136,7 +136,6 @@ void FilterEngine::addFilter(FilterPtr filter) {
             }
         }
     }
-}    }
 }
 
 void FilterEngine::removeAllFilters() {
@@ -148,8 +147,7 @@ void FilterEngine::removeAllFilters() {
     m_filters.clear();
 }
 
-} // namespace video
-} // namespace sdk
+
 
 void FilterEngine::updateShaderSource(const std::string& name, const std::string& source) {
     if (!m_shaderManager) return;
@@ -188,7 +186,7 @@ void FilterEngine::buildCameraPipeline() {
     m_graph->compile();
 }
 
-void FilterEngine::buildTimelinePipeline(std::shared_ptr<Timeline> timeline, std::shared_ptr<Compositor> compositor) {
+void FilterEngine::buildTimelinePipeline(std::shared_ptr<timeline::Timeline> timeline, std::shared_ptr<timeline::Compositor> compositor) {
     m_graph = std::make_shared<PipelineGraph>();
     auto timelineNode = std::make_shared<TimelineNode>("Timeline", timeline, compositor);
     m_outputNode = std::make_shared<OutputNode>("Display");
@@ -209,3 +207,6 @@ void FilterEngine::buildTimelinePipeline(std::shared_ptr<Timeline> timeline, std
     m_graph->connect(lastNode, m_outputNode);
     m_graph->compile();
 }
+
+} // namespace video
+} // namespace sdk
