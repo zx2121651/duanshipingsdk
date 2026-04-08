@@ -49,12 +49,6 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     )
 
 
-    fun enableGraphMode(enable: Boolean) {
-        if (nativeHandle != 0L) {
-            nativeEnableGraphMode(nativeHandle, enable)
-        }
-    }
-
     fun getMetrics(): PerformanceMetrics? {
         if (nativeHandle == 0L) return null
         val arr = nativeGetMetrics(nativeHandle) ?: return null
@@ -192,7 +186,6 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
 
     // Native methods
     private external fun nativeUpdateShaderSource(handle: Long, name: String, source: String): Int
-    private external fun nativeEnableGraphMode(handle: Long, enable: Boolean)
     private external fun nativeGetMetrics(handle: Long): FloatArray?
     private external fun nativeRecordDroppedFrame(handle: Long)
     private external fun nativeInit(assetManager: android.content.res.AssetManager): Long

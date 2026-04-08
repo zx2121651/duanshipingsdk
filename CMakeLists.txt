@@ -13,9 +13,6 @@ set(CORE_SOURCES
     core/src/FrameBufferPool.cpp
     core/src/ShaderManager.cpp
     core/src/pipeline/PipelineGraph.cpp
-
-
-
 )
 
 # Core engine build

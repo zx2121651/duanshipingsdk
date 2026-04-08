@@ -55,7 +55,7 @@ public:
         // Allocate a frame buffer from the pool attached to this node (if provided)
         FrameBufferPtr fbo = nullptr;
         if (m_pool) {
-            fbo = m_pool->get(upstreamFrame.width, upstreamFrame.height);
+            fbo = m_pool->getFrameBuffer(upstreamFrame.width, upstreamFrame.height, m_targetPrecision);
         }
 
         Texture texOut = m_filter->processFrame(texIn, fbo);
@@ -73,10 +73,12 @@ public:
     }
 
     void setFrameBufferPool(FrameBufferPool* pool) { m_pool = pool; }
+    void setTargetPrecision(FBOPrecision precision) { m_targetPrecision = precision; }
 
 private:
     std::shared_ptr<Filter> m_filter;
     FrameBufferPool* m_pool = nullptr;
+    FBOPrecision m_targetPrecision = FBOPrecision::RGBA8888;
 };
 
 // 3. Sink Node: Collects the final output
