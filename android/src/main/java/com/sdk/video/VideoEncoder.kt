@@ -17,14 +17,18 @@ import java.util.concurrent.ConcurrentLinkedQueue
  */
 @InternalApi
 class VideoEncoder(
-    private val filterManager: VideoFilterManager, // 需要传入 RenderEngine 以调用 Oboe JNI
-    private val width: Int = 1080,
-    private val height: Int = 1920,
-    private val videoBitRate: Int = 4000000,
-    private val frameRate: Int = 30,
-    private val audioSampleRate: Int = 44100,
-    private val audioBitRate: Int = 128000
+    private val filterManager: VideoFilterManager,
+    private val config: VideoExportConfig
 ) {
+    private val width get() = config.width
+    private val height get() = config.height
+    private val videoBitRate get() = config.videoBitrate
+    private val frameRate get() = config.fps
+    private val audioSampleRate get() = config.audioSampleRate
+    private val audioBitRate get() = config.audioBitrate
+    private val iFrameInterval get() = config.iFrameInterval
+    private val outputPath get() = config.outputPath
+
     companion object {
         private const val TAG = "VideoEncoder"
         private const val MIME_TYPE_VIDEO = MediaFormat.MIMETYPE_VIDEO_AVC
@@ -38,6 +42,9 @@ class VideoEncoder(
 
     // Muxer 状态与轨道索引
     @Volatile private var isRecording = false
+    private var lastVideoPtsUs: Long = -1
+    private var lastAudioPtsUs: Long = -1
+    private val syncLock = Any()
     @Volatile private var muxerStarted = false
     private var videoTrackIndex = -1
     private var audioTrackIndex = -1
@@ -57,7 +64,7 @@ class VideoEncoder(
         val isVideo: Boolean
     )
 
-    fun startRecording(outputPath: String): Surface? {
+    fun startRecording(): Surface? {
         if (isRecording) return inputSurface
 
         try {
@@ -190,8 +197,20 @@ class VideoEncoder(
                         inputBuffer?.clear()
                         inputBuffer?.put(buffer, 0, readBytes)
 
-                        val pts = (System.nanoTime() - startTimeNs) / 1000
-                        codec.queueInputBuffer(inputBufferIndex, 0, readBytes, pts, 0)
+                        var pts = (System.nanoTime() - startTimeNs) / 1000
+                        synchronized(syncLock) {
+                            if (pts <= lastAudioPtsUs) {
+                                pts = lastAudioPtsUs + 10 // enforce monotonic strictness
+                            }
+                            lastAudioPtsUs = pts
+                        }
+
+                        try {
+                            codec.queueInputBuffer(inputBufferIndex, 0, readBytes, pts, 0)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Audio codec exception", e)
+                            break
+                        }
                     }
                 } else {
                     // 如果底层队列暂时没数据，稍作休眠防止空转 CPU
@@ -212,10 +231,24 @@ class VideoEncoder(
                 encodedData.position(info.offset)
                 encodedData.limit(info.offset + info.size)
 
+                synchronized(syncLock) {
+                    if (isVideo) {
+                        if (info.presentationTimeUs <= lastVideoPtsUs) {
+                            info.presentationTimeUs = lastVideoPtsUs + 10
+                        }
+                        lastVideoPtsUs = info.presentationTimeUs
+                    }
+                }
+
                 synchronized(this) {
                     if (muxerStarted) {
                         val track = if (isVideo) videoTrackIndex else audioTrackIndex
-                        muxer?.writeSampleData(track, encodedData, info)
+                        try {
+                            muxer?.writeSampleData(track, encodedData, info)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Muxer write exception", e)
+                            stopRecording(isFallback = true)
+                        }
                     } else {
                         val copyBuffer = ByteBuffer.allocateDirect(info.size)
                         copyBuffer.put(encodedData)
@@ -241,12 +274,18 @@ class VideoEncoder(
             while (pendingFrames.isNotEmpty()) {
                 val frame = pendingFrames.poll() ?: break
                 val track = if (frame.isVideo) videoTrackIndex else audioTrackIndex
-                muxer?.writeSampleData(track, frame.buffer, frame.info)
+                try {
+                    muxer?.writeSampleData(track, frame.buffer, frame.info)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Muxer write exception", e)
+                    stopRecording(isFallback = true)
+                    break
+                }
             }
         }
     }
 
-    fun stopRecording() {
+    fun stopRecording(isFallback: Boolean = false) {
         isRecording = false
         encoderScope.coroutineContext.cancelChildren()
 
