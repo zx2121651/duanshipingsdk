@@ -30,6 +30,8 @@ class VideoFilterManager(private val context: android.content.Context,
     // 允许外部传入协程作用域，默认创建一个后台任务域
     val scope: CoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 ) {
+    private var videoEncoder: VideoEncoder? = null
+
     // 实例化底层的 C++ JNI 包装类
     private val renderEngine = RenderEngine(width, height)
 
@@ -83,10 +85,7 @@ class VideoFilterManager(private val context: android.content.Context,
             val res = renderEngine.init(context.assets)
             if (res != 0) return Result.failure(VideoSdkError.fromNativeCode(res))
 
-
-            // 默认开启基于 Node Graph 的新渲染架构
-            renderEngine.enableGraphMode(true)
-           // 设置底层每处理完一帧的回调监听
+            // 设置底层每处理完一帧的回调监听
             renderEngine.onFrameProcessedListener = { outputTexId ->
                 if (outputTexId >= 0) {
                     // 成功渲染，发送最新的纹理 ID 给 UI 层
@@ -158,12 +157,25 @@ class VideoFilterManager(private val context: android.content.Context,
 
     // --- 音视频录制代理方法 ---
 
-    fun startVideoRecording(surface: Surface) {
-        renderEngine.startRecording(surface)
+    fun startVideoRecording(config: VideoExportConfig): Result<Unit> {
+        return try {
+            val encoder = VideoEncoder(this, config)
+            val surface = encoder.startRecording()
+            if (surface != null) {
+                videoEncoder = encoder
+                renderEngine.startRecording(surface)
+            } else {
+                Result.failure(VideoSdkError.InvalidOperation("Failed to start MediaCodec encoder"))
+            }
+        } catch (e: Exception) {
+            Result.failure(VideoSdkError.InvalidOperation(e.message ?: "Encoder exception"))
+        }
     }
 
-    fun stopVideoRecording() {
+    fun stopVideoRecording(isFallback: Boolean = false) {
         renderEngine.stopRecording()
+        videoEncoder?.stopRecording(isFallback)
+        videoEncoder = null
     }
 
     // Oboe 音频控制不需要强制在 GL 线程，但为了统一管理也可以放进来
@@ -194,7 +206,7 @@ class VideoFilterManager(private val context: android.content.Context,
     // 释放所有的硬件及线程资源
 
     fun updateShaderSource(name: String, source: String): Result<Unit> {
-        return runBlocking(glThreadDispatcher) {
+        return runOnGLThread {
             val res = renderEngine.updateShaderSource(name, source)
             if (res == 0) Result.success(Unit) else Result.failure(VideoSdkError.fromNativeCode(res))
         }

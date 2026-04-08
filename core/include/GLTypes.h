@@ -42,6 +42,20 @@ enum ErrorCode {
     ERR_TIMELINE_CLIP_NOT_FOUND = -3003
 };
 
+
+// ----------------------------------------------------------------------------
+// 导出/录制 配置参数
+// ----------------------------------------------------------------------------
+struct VideoExportConfig {
+    int width = 1080;
+    int height = 1920;
+    int fps = 30;
+    int videoBitrate = 10000000; // 10 Mbps
+    int audioBitrate = 128000;   // 128 Kbps
+    int gopSize = 30;            // I-frame interval (frames)
+    bool useHwEncoder = true;
+    bool enableHdr = false;
+};
 class Result {
 public:
     static Result ok() { return Result(true, ErrorCode::SUCCESS, ""); }

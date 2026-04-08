@@ -73,4 +73,76 @@ Java_com_sdk_video_timeline_TimelineManager_nativeAddClip(
     return sdk::video::ErrorCode::ERR_TIMELINE_TRACK_NOT_FOUND;
 }
 
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_timeline_TimelineManager_nativeSetClipSpeed(JNIEnv *env, jobject thiz, jlong handle, jint zIndex, jstring clipId, jfloat speed) {
+    auto timelinePtr = reinterpret_cast<std::shared_ptr<Timeline>*>(handle);
+    if (!timelinePtr || !(*timelinePtr)) return -3001; // ERR_TIMELINE_NULL
+
+    auto track = (*timelinePtr)->getTrack(zIndex);
+    if (!track) return -3002; // ERR_TIMELINE_TRACK_NOT_FOUND
+
+    const char* idStr = env->GetStringUTFChars(clipId, nullptr);
+    auto clip = track->getClip(std::string(idStr));
+    env->ReleaseStringUTFChars(clipId, idStr);
+
+    if (!clip) return -3003; // ERR_TIMELINE_CLIP_NOT_FOUND
+
+    clip->setSpeed(speed);
+    return 0; // SUCCESS
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_timeline_TimelineManager_nativeSetClipTransition(JNIEnv *env, jobject thiz, jlong handle, jint zIndex, jstring clipId, jint type, jlong durationUs) {
+    auto timelinePtr = reinterpret_cast<std::shared_ptr<Timeline>*>(handle);
+    if (!timelinePtr || !(*timelinePtr)) return -3001;
+
+    auto track = (*timelinePtr)->getTrack(zIndex);
+    if (!track) return -3002;
+
+    const char* idStr = env->GetStringUTFChars(clipId, nullptr);
+    auto clip = track->getClip(std::string(idStr));
+    env->ReleaseStringUTFChars(clipId, idStr);
+
+    if (!clip) return -3003;
+
+    clip->setInTransition(static_cast<TransitionType>(type), durationUs);
+    return 0;
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_timeline_TimelineManager_nativeAddClipKeyframe(JNIEnv *env, jobject thiz, jlong handle, jint zIndex, jstring clipId, jstring property, jlong relativeTimeUs, jfloat value) {
+    auto timelinePtr = reinterpret_cast<std::shared_ptr<Timeline>*>(handle);
+    if (!timelinePtr || !(*timelinePtr)) return -3001;
+
+    auto track = (*timelinePtr)->getTrack(zIndex);
+    if (!track) return -3002;
+
+    const char* idStr = env->GetStringUTFChars(clipId, nullptr);
+    auto clip = track->getClip(std::string(idStr));
+    env->ReleaseStringUTFChars(clipId, idStr);
+
+    if (!clip) return -3003;
+
+    const char* propStr = env->GetStringUTFChars(property, nullptr);
+    clip->addKeyframe(std::string(propStr), relativeTimeUs, value);
+    env->ReleaseStringUTFChars(property, propStr);
+
+    return 0;
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_timeline_TimelineManager_nativeRemoveClip(JNIEnv *env, jobject thiz, jlong handle, jint zIndex, jstring clipId) {
+    auto timelinePtr = reinterpret_cast<std::shared_ptr<Timeline>*>(handle);
+    if (!timelinePtr || !(*timelinePtr)) return -3001;
+
+    auto track = (*timelinePtr)->getTrack(zIndex);
+    if (!track) return -3002;
+
+    const char* idStr = env->GetStringUTFChars(clipId, nullptr);
+    track->removeClip(std::string(idStr));
+    env->ReleaseStringUTFChars(clipId, idStr);
+
+    return 0;
+}
 } // extern "C"

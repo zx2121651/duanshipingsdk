@@ -133,17 +133,19 @@ public actor VideoFilterManager {
 
 
     /// 开始录制
-    public func startVideoRecording(outputURL: URL, width: Int, height: Int) throws {
-        let encoder = VideoEncoder(width: width, height: height)
-        try encoder.startRecording(outputURL: outputURL)
+    public func startVideoRecording(config: VideoExportConfig) throws {
+        let encoder = VideoEncoder(config: config)
+        try encoder.startRecording()
         self.videoEncoder = encoder
     }
 
     /// 停止录制
-    public func stopVideoRecording() async throws {
+    public func stopVideoRecording(completion: ((URL?) -> Void)? = nil) {
         if let encoder = videoEncoder {
-            try await encoder.stopRecording()
+            encoder.stopRecording(isFallback: false, completion: completion)
             self.videoEncoder = nil
+        } else {
+            completion?(nil)
         }
     }
 

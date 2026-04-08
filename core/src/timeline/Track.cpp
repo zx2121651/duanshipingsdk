@@ -72,3 +72,12 @@ int64_t Track::getMaxTimelineOut() const {
 } // namespace timeline
 } // namespace video
 } // namespace sdk
+
+ClipPtr Track::getClip(const std::string& clipId) const {
+    for (auto& c : m_clips) {
+        if (c->getId() == clipId) {
+            return c;
+        }
+    }
+    return nullptr;
+}

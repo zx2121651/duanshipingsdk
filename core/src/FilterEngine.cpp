@@ -26,9 +26,30 @@ Result FilterEngine::initialize() {
 }
 
 Texture FilterEngine::processFrame(const Texture& textureIn, int width, int height) {
+    if (!m_threadCheck.check("processFrame must be called on the render thread")) {
+        return Texture{0, static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
+    }
+
+    if (m_simulateCrash) {
+        return Texture{0, static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
+    }
+
+    if (!m_initialized) {
+        std::cerr << "FilterEngine not initialized!" << std::endl;
+        return Texture{0, static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
+    }
+
     auto start_time = std::chrono::high_resolution_clock::now();
 
-    if (m_useGraphMode && m_graph && m_outputNode) {
+    // Auto-recompile Pipeline Graph if filters changed
+    if (m_isGraphDirty) {
+        // Here we build the Camera Pipeline as the default real-time processing graph.
+        // For Timeline export, facade should explicitly call buildTimelinePipeline.
+        buildCameraPipeline();
+        m_isGraphDirty = false;
+    }
+
+    if (m_graph && m_outputNode) {
         if (m_cameraNode) {
             VideoFrame inFrame;
             inFrame.textureId = textureIn.id;
@@ -39,7 +60,7 @@ Texture FilterEngine::processFrame(const Texture& textureIn, int width, int heig
             m_cameraNode->pushFrame(inFrame);
         }
 
-        m_graph->execute(0); // timestamp drives timeline, here we just trigger pull
+        m_graph->execute(0); // Pull model executes backwards from Sink
 
         VideoFrame outFrame = m_outputNode->getLastFrame();
 
@@ -47,56 +68,13 @@ Texture FilterEngine::processFrame(const Texture& textureIn, int width, int heig
         float duration_ms = std::chrono::duration<float, std::milli>(end_time - start_time).count();
         m_metricsCollector.recordFrameTime(duration_ms);
 
+        if (!outFrame.isValid()) {
+            return Texture{0, static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
+        }
         return Texture{outFrame.textureId, outFrame.width, outFrame.height};
     }
 
-    if (!m_threadCheck.check("processFrame must be called on the render thread")) {
-        return textureIn;
-    }
-
-    if (m_simulateCrash) {
-        return Texture{0, static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
-    }
-
-    if (!m_initialized) {
-        std::cerr << "FilterEngine not initialized!" << std::endl;
-        return textureIn;
-    }
-
-    if (m_filters.empty()) {
-        return textureIn; // Passthrough
-    }
-
-    Texture currentTexture = textureIn;
-    FrameBufferPtr previousFb = nullptr;
-
-    for (size_t i = 0; i < m_filters.size(); ++i) {
-        // [三级平滑降级策略] - 根据硬件嗅探结果，智能决定 FBO 精度
-        FBOPrecision targetPrecision = FBOPrecision::RGBA8888;
-
-        bool isIntermediate = (i < m_filters.size() - 1);
-        if (isIntermediate) {
-            if (m_contextManager.isFP16RenderTargetSupported()) {
-                // Tier 3 旗舰：开启 16 位浮点 HDR 渲染，防止高光色阶断层
-                targetPrecision = FBOPrecision::FP16;
-            } else {
-                // Tier 2/1 降级：开启 RGB565，带宽砍半，省电防卡顿
-                targetPrecision = FBOPrecision::RGB565;
-            }
-        }
-
-        FrameBufferPtr targetFb = m_frameBufferPool.getFrameBuffer(width, height, targetPrecision);
-
-        Texture outTexture = m_filters[i]->processFrame(currentTexture, targetFb);
-        currentTexture = outTexture;
-        previousFb = targetFb;
-    }
-
-    auto end_time = std::chrono::high_resolution_clock::now();
-    float duration_ms = std::chrono::duration<float, std::milli>(end_time - start_time).count();
-    m_metricsCollector.recordFrameTime(duration_ms);
-
-    return currentTexture;
+    return Texture{0, static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
 }
 
 void FilterEngine::updateParameter(const std::string& key, const std::any& value) {
@@ -130,10 +108,7 @@ void FilterEngine::addFilter(FilterPtr filter) {
         m_filters.push_back(filter);
         if (m_initialized) {
             filter->initialize();
-            if (m_useGraphMode) {
-                // Rebuild pipeline dynamically
-                buildCameraPipeline();
-            }
+            m_isGraphDirty = true;
         }
     }
 }
@@ -145,6 +120,7 @@ void FilterEngine::removeAllFilters() {
         }
     }
     m_filters.clear();
+    m_isGraphDirty = true;
 }
 
 
@@ -175,7 +151,20 @@ void FilterEngine::buildCameraPipeline() {
 
     for (size_t i = 0; i < m_filters.size(); ++i) {
         auto filterNode = std::make_shared<FilterNode>("Filter_" + std::to_string(i), m_filters[i]);
+
+        // Restore FBOPrecision logic from legacy mode
+        FBOPrecision targetPrecision = FBOPrecision::RGBA8888;
+        bool isIntermediate = (i < m_filters.size() - 1);
+        if (isIntermediate) {
+            if (m_contextManager.isFP16RenderTargetSupported()) {
+                targetPrecision = FBOPrecision::FP16;
+            } else {
+                targetPrecision = FBOPrecision::RGB565;
+            }
+        }
         filterNode->setFrameBufferPool(&m_frameBufferPool);
+        filterNode->setTargetPrecision(targetPrecision);
+
         m_graph->addNode(filterNode);
         m_graph->connect(lastNode, filterNode);
         lastNode = filterNode;
@@ -183,7 +172,8 @@ void FilterEngine::buildCameraPipeline() {
 
     m_graph->addNode(m_outputNode);
     m_graph->connect(lastNode, m_outputNode);
-    m_graph->compile();
+    Result res = m_graph->compile();
+    if (!res.isOk()) { std::cerr << "Pipeline Compile Failed: " << res.getMessage() << std::endl; }
 }
 
 void FilterEngine::buildTimelinePipeline(std::shared_ptr<timeline::Timeline> timeline, std::shared_ptr<timeline::Compositor> compositor) {
@@ -197,7 +187,20 @@ void FilterEngine::buildTimelinePipeline(std::shared_ptr<timeline::Timeline> tim
 
     for (size_t i = 0; i < m_filters.size(); ++i) {
         auto filterNode = std::make_shared<FilterNode>("Filter_" + std::to_string(i), m_filters[i]);
+
+        // Restore FBOPrecision logic from legacy mode
+        FBOPrecision targetPrecision = FBOPrecision::RGBA8888;
+        bool isIntermediate = (i < m_filters.size() - 1);
+        if (isIntermediate) {
+            if (m_contextManager.isFP16RenderTargetSupported()) {
+                targetPrecision = FBOPrecision::FP16;
+            } else {
+                targetPrecision = FBOPrecision::RGB565;
+            }
+        }
         filterNode->setFrameBufferPool(&m_frameBufferPool);
+        filterNode->setTargetPrecision(targetPrecision);
+
         m_graph->addNode(filterNode);
         m_graph->connect(lastNode, filterNode);
         lastNode = filterNode;
@@ -205,7 +208,8 @@ void FilterEngine::buildTimelinePipeline(std::shared_ptr<timeline::Timeline> tim
 
     m_graph->addNode(m_outputNode);
     m_graph->connect(lastNode, m_outputNode);
-    m_graph->compile();
+    Result res = m_graph->compile();
+    if (!res.isOk()) { std::cerr << "Pipeline Compile Failed: " << res.getMessage() << std::endl; }
 }
 
 } // namespace video

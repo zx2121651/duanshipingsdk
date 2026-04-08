@@ -134,3 +134,14 @@ int main() {
 
     return passed ? 0 : -1;
 }
+
+namespace sdk {
+namespace video {
+namespace timeline {
+    #include "../core/include/timeline/Compositor.h"
+Result Compositor::renderFrameAtTime(int64_t timelineUs, FrameBufferPtr outputFb) {
+        return Result::ok();
+    }
+}
+}
+}

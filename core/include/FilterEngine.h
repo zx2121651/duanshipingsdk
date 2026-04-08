@@ -38,7 +38,6 @@ public:
     void release();
 
     // Graph Builder APIs
-    void enableGraphMode(bool enable) { m_useGraphMode = enable; }
     void buildCameraPipeline();
     void buildTimelinePipeline(std::shared_ptr<timeline::Timeline> timeline, std::shared_ptr<timeline::Compositor> compositor);
 
@@ -61,7 +60,7 @@ private:
     std::shared_ptr<ShaderManager> m_shaderManager;
 
 
-    bool m_useGraphMode = false;
+    bool m_isGraphDirty = true;
     std::shared_ptr<PipelineGraph> m_graph;
     std::shared_ptr<CameraInputNode> m_cameraNode;
     std::shared_ptr<OutputNode> m_outputNode;
