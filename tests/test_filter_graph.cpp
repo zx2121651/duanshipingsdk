@@ -1,14 +1,3 @@
-#include "../core/include/timeline/Compositor.h"
-
-namespace sdk {
-namespace video {
-namespace timeline {
-    Result Compositor::renderFrameAtTime(int64_t timelineUs, FrameBufferPtr outputFb) {
-        return Result::ok();
-    }
-}
-}
-}
 
 #include <iostream>
 #include <cassert>

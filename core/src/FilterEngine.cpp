@@ -15,7 +15,7 @@ Result FilterEngine::initialize() {
     m_threadCheck.bind(); // Bind to current (GL) thread.
 
     // 初始化前首先唤醒嗅探器，对底层硬件进行深度体检
-    // m_contextManager.sniffCapabilities(); // Currently missing implementation in headers, mock or skip
+    m_contextManager.sniffCapabilities();
 
     for (auto& filter : m_filters) {
         filter->initialize();

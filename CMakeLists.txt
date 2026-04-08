@@ -13,13 +13,15 @@ set(CORE_SOURCES
     core/src/FrameBufferPool.cpp
     core/src/ShaderManager.cpp
     core/src/pipeline/PipelineGraph.cpp
+    core/src/ThreadCheck.cpp
+    core/src/GLContextManager.cpp
 )
 
 # Core engine build
 add_library(video_sdk_core STATIC ${CORE_SOURCES})
 
 # Basic API logic test (no GL windowing dependencies)
-add_executable(test_filter_graph tests/test_filter_graph.cpp)
+add_executable(test_filter_graph tests/test_filter_graph.cpp tests/mocks/MockCompositor.cpp)
 target_link_libraries(test_filter_graph video_sdk_core)
 
 # If we are on Windows and using vcpkg, configure ANGLE (GLES implementation)
@@ -27,7 +29,7 @@ if(WIN32 AND DEFINED CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES "vcpk
     find_package(unofficial-angle CONFIG REQUIRED)
 
     # Real rendering test that relies on EGL/GLES context
-    add_executable(test_render_angle tests/test_render_angle.cpp)
+    add_executable(test_render_angle tests/test_render_angle.cpp tests/mocks/MockCompositor.cpp)
     target_link_libraries(test_render_angle
         video_sdk_core
         unofficial::angle::libGLESv2
@@ -49,7 +51,7 @@ else()
             # Also build a mock render test if on linux and GLES/EGL are found
             find_library(EGL_LIBRARY EGL)
             if(EGL_LIBRARY)
-                add_executable(test_render_angle tests/test_render_angle.cpp)
+                add_executable(test_render_angle tests/test_render_angle.cpp tests/mocks/MockCompositor.cpp)
                 target_link_libraries(test_render_angle video_sdk_core ${GLES2_LIBRARY} ${EGL_LIBRARY})
             endif()
         else()

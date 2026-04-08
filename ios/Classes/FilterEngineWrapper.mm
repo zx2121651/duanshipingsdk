@@ -222,8 +222,6 @@ using namespace sdk::video;
     }
 }
 
-@end
-
 - (NSArray<NSNumber *> *)getPerformanceMetrics {
     if (!engine) return nil;
     sdk::video::PerformanceMetrics metrics = engine->getPerformanceMetrics();
@@ -241,3 +239,5 @@ using namespace sdk::video;
         engine->recordDroppedFrame();
     }
 }
+
+@end

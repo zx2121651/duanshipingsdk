@@ -8,7 +8,19 @@
     #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, "GLContextManager", __VA_ARGS__)
 #else
     #define LOGE(...) std::cerr << "GLContextManager: " << __VA_ARGS__ << std::endl
-    #define LOGI(...) std::cout << "GLContextManager: " << __VA_ARGS__ << std::endl
+
+#include <cstdarg>
+#include <cstdio>
+void logi(const char* fmt, ...) {
+    char buffer[256];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buffer, sizeof(buffer), fmt, args);
+    va_end(args);
+    std::cout << "GLContextManager: " << buffer << std::endl;
+}
+#define LOGI logi
+
 #endif
 
 namespace sdk {
