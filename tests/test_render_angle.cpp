@@ -94,7 +94,12 @@ int main() {
 
     // 4. Process frame through C++ Pipeline
     Texture inputTex = {inputTextureId, width, height};
-    Texture outputTex = engine.processFrame(inputTex, width, height);
+    auto res = engine.processFrame(inputTex, width, height);
+    if (!res.isOk()) {
+        std::cerr << "Process Frame Failed: " << res.getMessage() << std::endl;
+        return -1;
+    }
+    Texture outputTex = res.getValue();
 
     // 5. Read output and verify
     // Create an FBO to read the output texture pixels

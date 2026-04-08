@@ -29,7 +29,7 @@ public:
     Result initialize();
 
     // Process a frame through the pipeline
-    Texture processFrame(const Texture& textureIn, int width, int height);
+    ResultPayload<Texture> processFrame(const Texture& textureIn, int width, int height);
 
     // Update filter parameters
     void updateParameter(const std::string& key, const std::any& value);

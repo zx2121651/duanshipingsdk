@@ -81,7 +81,14 @@ using namespace sdk::video;
 
     // Process the frame via C++ core engine
     Texture inTex = {inputTextureId, (uint32_t)width, (uint32_t)height};
-    Texture outTex = engine->processFrame(inTex, (int)width, (int)height);
+    auto result = engine->processFrame(inTex, (int)width, (int)height);
+    if (!result.isOk()) {
+        NSLog(@"FilterEngineWrapper: processFrame failed [%d] %s", result.getErrorCode(), result.getMessage().c_str());
+        CVBufferRelease(cvTexture);
+        return nil; // Return nil so Swift bypasses or emits fallback
+    }
+
+    Texture outTex = result.getValue();
 
     // Zero-copy output: Create a CVPixelBuffer backed texture, and blit the result to it
     if (poolWidth != width || poolHeight != height || !pixelBufferPool) {
