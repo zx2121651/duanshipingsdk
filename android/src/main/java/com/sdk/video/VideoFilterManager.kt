@@ -40,8 +40,7 @@ class VideoFilterManager(private val context: android.content.Context,
     // 在 OpenGL 中，所有的 Context 和 Texture ID 都绑定在特定的线程上。
     // 必须确保所有对 renderEngine 的调用都在这个单线程中进行。
 
-
-        // GL 线程分发器：为了消除对具体 UI 控件 (GLSurfaceView) 的直接依赖，
+    // GL 线程分发器：为了消除对具体 UI 控件 (GLSurfaceView) 的直接依赖，
     // 我们强制外部消费者在创建引擎时提供一个回调，用于将任务派发给 EGL 绑定的渲染线程。
     // 这解决了之前 "依靠约定保证单线程" 带来的巨大维护隐患。
     var glThreadDispatcher: ((Runnable) -> Unit)? = null
@@ -200,7 +199,7 @@ class VideoFilterManager(private val context: android.content.Context,
             if (res == 0) Result.success(Unit) else Result.failure(VideoSdkError.fromNativeCode(res))
         }
     }
-fun release() {
+    fun release() {
         inputSurface?.release()
         inputSurface = null
         try { renderEngine.release() } catch (e: Exception) { Log.e("VideoFilterManager", "Error releasing RenderEngine", e) }

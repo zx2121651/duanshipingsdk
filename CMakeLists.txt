@@ -11,6 +11,11 @@ set(CORE_SOURCES
     core/src/FilterEngine.cpp
     core/src/FrameBuffer.cpp
     core/src/FrameBufferPool.cpp
+    core/src/ShaderManager.cpp
+    core/src/pipeline/PipelineGraph.cpp
+
+
+
 )
 
 # Core engine build

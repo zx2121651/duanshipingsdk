@@ -144,10 +144,15 @@ void OES2RGBFilter::initialize() {
     m_flipVerticalHandle = glGetUniformLocation(m_programId, "flipVertical");
 }
 
-const char* OES2RGBFilter::getVertexShaderSource() const {
+std::string OES2RGBFilter::getVertexShaderSource() const {
     return kOESVertexShader;
 }
 
+void OES2RGBFilter::onProgramRecompiled() {
+    m_textureMatrixHandle = glGetUniformLocation(m_programId, "textureMatrix");
+    m_flipHorizontalHandle = glGetUniformLocation(m_programId, "flipHorizontal");
+    m_flipVerticalHandle = glGetUniformLocation(m_programId, "flipVertical");
+}
 std::string OES2RGBFilter::getFragmentShaderSource() const {
     return kOESFragmentShader;
 }
@@ -343,7 +348,7 @@ void GaussianBlurFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outp
     // 留空，因为我们在重写的 processFrame 中已经完成了所有的绘制调度
 }
 
-const char* GaussianBlurFilter::getVertexShaderSource() const {
+std::string GaussianBlurFilter::getVertexShaderSource() const {
     // 顶点着色器预计算优化 (VS Pre-calculation):
     // 提前计算 5 个采样点的纹理坐标偏移。在 Vertex Shader 中做这件事，
     // 可以避免在 Fragment Shader 中针对每一个像素（可能数百万个）进行重复计算，极大地节省 ALU 算力。
@@ -398,7 +403,7 @@ void LookupFilter::setLookupTexture(GLuint textureId) {
 
 void LookupFilter::onProgramRecompiled() {
     m_intensityHandle = glGetUniformLocation(m_programId, "intensity");
-    m_lookupTextureUniformHandle = glGetUniformLocation(m_programId, "lookupTexture");
+    m_lookupTextureHandle = glGetUniformLocation(m_programId, "lookupTexture");
 }
 std::string LookupFilter::getFragmentShaderSource() const {
     return m_shaderManager ? m_shaderManager->getShaderSource("shaders/lookup.frag") : "";
@@ -511,8 +516,7 @@ void BilateralFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputF
     outputFb->unbind();
 }
 
-} // namespace video
-} // namespace sdk
+
 
 // --- CinematicLookupFilter Implementation ---
 // 这是电影级调色的滤镜，采用 GPUImage 风格的 512x512 2D 展开图来模拟 64x64x64 的 3D LUT (查找表)。
@@ -568,7 +572,7 @@ void CinematicLookupFilter::onDraw(const Texture& inputTexture, FrameBufferPtr o
 
 void CinematicLookupFilter::onProgramRecompiled() {
     m_intensityHandle = glGetUniformLocation(m_programId, "intensity");
-    m_lookupTextureUniformHandle = glGetUniformLocation(m_programId, "lookupTexture");
+    m_lookupTextureHandle = glGetUniformLocation(m_programId, "lookupTexture");
 }
 std::string CinematicLookupFilter::getFragmentShaderSource() const {
     return m_shaderManager ? m_shaderManager->getShaderSource("shaders/cinematic_lookup.frag") : "";
@@ -712,3 +716,6 @@ const char* ComputeBlurFilter::getComputeShaderSource() const {
     )";
 }
 #endif
+
+} // namespace video
+} // namespace sdk

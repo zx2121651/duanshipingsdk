@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 
+#include <string>
 #ifdef __APPLE__
     #include <OpenGLES/ES3/gl.h>
 #else

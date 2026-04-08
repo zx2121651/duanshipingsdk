@@ -1,13 +1,15 @@
 #pragma once
 #include "Timeline.h"
-#include "../FilterEngine.h"
+
 #include "../GLTypes.h"
+#include "../FrameBuffer.h"
 #include <memory>
 #include <vector>
 #include <functional>
 
 namespace sdk {
 namespace video {
+class FilterEngine;
 namespace timeline {
 
 class IDecoderPool {

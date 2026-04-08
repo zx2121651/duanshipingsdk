@@ -1,0 +1,27 @@
+name: Core C++ CI
+
+on:
+  push:
+    branches: [ "main", "develop", "feature/*", "hotfix/*" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+
+jobs:
+  build:
+    name: Build Core Engine
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (Mesa GLES)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgles2-mesa-dev libegl1-mesa-dev g++ cmake make
+
+      - name: Configure CMake
+        run: cmake -B build -S .
+
+      - name: Build Core
+        run: cmake --build build --config Release
