@@ -9,6 +9,7 @@
 #include "pipeline/TimelineNode.h"
 #include "PerformanceMetrics.h"
 #include <memory>
+#include "FilterFactory.h"
 #include <string>
 #include <vector>
 #include <any>
@@ -29,7 +30,7 @@ public:
     Result initialize();
 
     // Process a frame through the pipeline
-    Texture processFrame(const Texture& textureIn, int width, int height);
+    ResultPayload<Texture> processFrame(const Texture& textureIn, int width, int height);
 
     // Update filter parameters
     void updateParameter(const std::string& key, const std::any& value);
@@ -42,7 +43,8 @@ public:
     void buildTimelinePipeline(std::shared_ptr<timeline::Timeline> timeline, std::shared_ptr<timeline::Compositor> compositor);
 
     // Pipeline manipulation
-    void addFilter(FilterPtr filter);
+        void addFilter(FilterType type);
+    void addFilterRaw(FilterPtr filter); // Expose for internal nodes like OES2RGB
     void removeAllFilters();
 
     PerformanceMetrics getPerformanceMetrics() const { return m_metricsCollector.getMetrics(); }

@@ -78,7 +78,8 @@ Result PipelineGraph::compile() {
     // Initialize all nodes
     for (auto* node : m_sortedNodes) {
         node->initialize();
-    }   m_isCompiled = true;
+    }
+    m_isCompiled = true;
     return Result::ok();
 }
 

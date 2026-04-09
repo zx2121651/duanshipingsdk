@@ -25,26 +25,22 @@ Result FilterEngine::initialize() {
     return Result::ok();
 }
 
-Texture FilterEngine::processFrame(const Texture& textureIn, int width, int height) {
+ResultPayload<Texture> FilterEngine::processFrame(const Texture& textureIn, int width, int height) {
     if (!m_threadCheck.check("processFrame must be called on the render thread")) {
-        return Texture{0, static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
+        return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "GL Thread violation detected during processFrame");
     }
 
     if (m_simulateCrash) {
-        return Texture{0, static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
+        return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Simulated crash active");
     }
 
     if (!m_initialized) {
-        std::cerr << "FilterEngine not initialized!" << std::endl;
-        return Texture{0, static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
+        return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "FilterEngine not initialized before processing frame");
     }
 
     auto start_time = std::chrono::high_resolution_clock::now();
 
-    // Auto-recompile Pipeline Graph if filters changed
     if (m_isGraphDirty) {
-        // Here we build the Camera Pipeline as the default real-time processing graph.
-        // For Timeline export, facade should explicitly call buildTimelinePipeline.
         buildCameraPipeline();
         m_isGraphDirty = false;
     }
@@ -55,12 +51,11 @@ Texture FilterEngine::processFrame(const Texture& textureIn, int width, int heig
             inFrame.textureId = textureIn.id;
             inFrame.width = width;
             inFrame.height = height;
-            // Fake timestamp for testing, usually passed from facade
             inFrame.timestampNs = std::chrono::duration_cast<std::chrono::nanoseconds>(start_time.time_since_epoch()).count();
             m_cameraNode->pushFrame(inFrame);
         }
 
-        m_graph->execute(0); // Pull model executes backwards from Sink
+        m_graph->execute(0);
 
         VideoFrame outFrame = m_outputNode->getLastFrame();
 
@@ -69,12 +64,12 @@ Texture FilterEngine::processFrame(const Texture& textureIn, int width, int heig
         m_metricsCollector.recordFrameTime(duration_ms);
 
         if (!outFrame.isValid()) {
-            return Texture{0, static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
+            return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Pipeline executed but produced an invalid output texture");
         }
-        return Texture{outFrame.textureId, outFrame.width, outFrame.height};
+        return ResultPayload<Texture>::ok(Texture{outFrame.textureId, outFrame.width, outFrame.height});
     }
 
-    return Texture{0, static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
+    return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Pipeline graph or output node is uninitialized");
 }
 
 void FilterEngine::updateParameter(const std::string& key, const std::any& value) {
@@ -102,7 +97,18 @@ void FilterEngine::release() {
     m_filters.clear();
 }
 
-void FilterEngine::addFilter(FilterPtr filter) {
+void FilterEngine::addFilterRaw(FilterPtr filter) {
+    if (filter) {
+        filter->setShaderManager(m_shaderManager);
+        m_filters.push_back(filter);
+        if (m_initialized) {
+            filter->initialize();
+            m_isGraphDirty = true;
+        }
+    }
+}
+void FilterEngine::addFilter(FilterType type) {
+    FilterPtr filter = FilterFactory::createFilter(type, m_contextManager, &m_frameBufferPool);
     if (filter) {
         filter->setShaderManager(m_shaderManager);
         m_filters.push_back(filter);

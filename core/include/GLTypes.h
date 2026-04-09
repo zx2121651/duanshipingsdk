@@ -66,12 +66,30 @@ public:
     int getErrorCode() const { return m_errorCode; }
     std::string getMessage() const { return m_message; }
 
-private:
+protected:
     Result(bool isOk, int code, const std::string& msg) : m_isOk(isOk), m_errorCode(code), m_message(msg) {}
     bool m_isOk;
     int m_errorCode;
     std::string m_message;
 };
+
+// 带有负载数据的 Result<T> 泛型模板，用于替换直接返回值的危险做法
+template <typename T>
+class ResultPayload : public Result {
+public:
+    static ResultPayload<T> ok(const T& val) { return ResultPayload<T>(true, ErrorCode::SUCCESS, "", val); }
+    static ResultPayload<T> error(int code, const std::string& msg) { return ResultPayload<T>(false, code, msg, T{}); }
+    static ResultPayload<T> error(const std::string& msg) { return ResultPayload<T>(false, -1, msg, T{}); }
+
+    T getValue() const { return m_value; }
+
+private:
+    ResultPayload(bool isOk, int code, const std::string& msg, const T& val)
+        : Result(isOk, code, msg), m_value(val) {}
+
+    T m_value;
+};
+
 
 
 } // namespace video

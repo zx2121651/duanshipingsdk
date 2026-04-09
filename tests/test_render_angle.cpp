@@ -88,13 +88,17 @@ int main() {
     engine.initialize();
 
     // Add a brightness filter to double the brightness
-    auto brightnessFilter = std::make_shared<BrightnessFilter>();
-    engine.addFilter(brightnessFilter);
+    engine.addFilter(FilterType::BRIGHTNESS);
     engine.updateParameter("brightness", 100.0f / 255.0f); // Add roughly 100 to RGB values
 
     // 4. Process frame through C++ Pipeline
     Texture inputTex = {inputTextureId, width, height};
-    Texture outputTex = engine.processFrame(inputTex, width, height);
+    auto res = engine.processFrame(inputTex, width, height);
+    if (!res.isOk()) {
+        std::cerr << "Process Frame Failed: " << res.getMessage() << std::endl;
+        return -1;
+    }
+    Texture outputTex = res.getValue();
 
     // 5. Read output and verify
     // Create an FBO to read the output texture pixels
