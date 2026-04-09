@@ -88,8 +88,7 @@ int main() {
     engine.initialize();
 
     // Add a brightness filter to double the brightness
-    auto brightnessFilter = std::make_shared<BrightnessFilter>();
-    engine.addFilter(brightnessFilter);
+    engine.addFilter(FilterType::BRIGHTNESS);
     engine.updateParameter("brightness", 100.0f / 255.0f); // Add roughly 100 to RGB values
 
     // 4. Process frame through C++ Pipeline

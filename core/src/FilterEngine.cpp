@@ -97,7 +97,18 @@ void FilterEngine::release() {
     m_filters.clear();
 }
 
-void FilterEngine::addFilter(FilterPtr filter) {
+void FilterEngine::addFilterRaw(FilterPtr filter) {
+    if (filter) {
+        filter->setShaderManager(m_shaderManager);
+        m_filters.push_back(filter);
+        if (m_initialized) {
+            filter->initialize();
+            m_isGraphDirty = true;
+        }
+    }
+}
+void FilterEngine::addFilter(FilterType type) {
+    FilterPtr filter = FilterFactory::createFilter(type, m_contextManager, &m_frameBufferPool);
     if (filter) {
         filter->setShaderManager(m_shaderManager);
         m_filters.push_back(filter);

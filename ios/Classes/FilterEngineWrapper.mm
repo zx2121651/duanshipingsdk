@@ -171,28 +171,14 @@ using namespace sdk::video;
 
 - (int)addFilter:(FilterType)type {
     if (!engine) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
-
-    FilterPtr filter;
-    switch(type) {
-        case FilterTypeBrightness: filter = std::make_shared<BrightnessFilter>(); break;
-        case FilterTypeGaussianBlur: filter = std::make_shared<GaussianBlurFilter>(&(self->engine->m_frameBufferPool)); break;
-        case FilterTypeLookup: filter = std::make_shared<LookupFilter>(); break;
-        case FilterTypeBilateral: filter = std::make_shared<BilateralFilter>(); break;
-        case FilterTypeCinematicLookup: filter = std::make_shared<CinematicLookupFilter>(); break;
-        default: return sdk::video::ErrorCode::ERR_RENDER_COMPUTE_NOT_SUPPORTED; // ComputeBlurFilter is not supported on iOS (GLES 3.1)
-    }
-
-    if (filter) {
-        engine->addFilter(filter);
-        return 0;
-    }
-    return sdk::video::ErrorCode::ERR_RENDER_INVALID_STATE;
+    engine->addFilter(static_cast<sdk::video::FilterType>(type));
+    return sdk::video::ErrorCode::SUCCESS;
 }
 
 - (int)removeAllFilters {
     if (!engine) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
     engine->removeAllFilters();
-    return 0;
+    return sdk::video::ErrorCode::SUCCESS;
 }
 
 - (int)updateParameterFloat:(NSString *)key value:(float)value {
