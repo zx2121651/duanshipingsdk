@@ -191,11 +191,13 @@ Java_com_sdk_video_RenderEngine_nativeProcessFrame(JNIEnv *env, jobject thiz, jl
     }
 
     Texture inTex = {static_cast<uint32_t>(textureId), static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
-    Texture outTex = wrapper->filterEngine->processFrame(inTex, width, height);
-    if (outTex.id == 0) {
-        // Assume failure in processing if output texture is 0
-        return sdk::video::ErrorCode::ERR_RENDER_INVALID_STATE;
+    auto result = wrapper->filterEngine->processFrame(inTex, width, height);
+    if (!result.isOk()) {
+        __android_log_print(ANDROID_LOG_ERROR, "NativeBridge", "Frame rendering failed: [%d] %s", result.getErrorCode(), result.getMessage().c_str());
+        return result.getErrorCode();
     }
+
+    Texture outTex = result.getValue();
 
 #ifndef WIN32
     wrapper->renderToRecordingSurface(outTex, width, height, timestampNs);
