@@ -47,15 +47,25 @@ class VideoFilterManager(private val context: android.content.Context,
     // 这解决了之前 "依靠约定保证单线程" 带来的巨大维护隐患。
     var glThreadDispatcher: ((Runnable) -> Unit)? = null
 
-    // 将所有的配置更新请求统一收敛并安全分发给 GL 线程
-    private fun runOnGLThread(action: () -> Unit): Result<Unit> {
+    // 将所有的配置更新请求统一收敛并安全分发给 GL 线程，并挂起等待执行结果
+    private suspend fun <T> runOnGLThread(action: () -> Result<T>): Result<T> {
         val dispatcher = glThreadDispatcher
-        if (dispatcher != null) {
-            dispatcher.invoke(Runnable { action() })
-            return Result.success(Unit)
-        } else {
-            // Fail-fast: 拒绝在未知线程执行可能导致崩溃的 GL 调用
-            return Result.failure(IllegalStateException("GL thread dispatcher not bound. Cannot execute GL action."))
+            ?: return Result.failure(IllegalStateException("GL thread dispatcher not bound. Cannot execute GL action."))
+
+        return suspendCancellableCoroutine { continuation ->
+            val runnable = Runnable {
+                try {
+                    val result = action()
+                    if (continuation.isActive) {
+                        continuation.resume(result, null)
+                    }
+                } catch (e: Exception) {
+                    if (continuation.isActive) {
+                        continuation.resume(Result.failure(e), null)
+                    }
+                }
+            }
+            dispatcher.invoke(runnable)
         }
     }
 
@@ -125,32 +135,32 @@ class VideoFilterManager(private val context: android.content.Context,
     }
 
     // 动态添加滤镜
-    fun addFilter(type: VideoFilterType): Result<Unit> {
+    suspend fun addFilter(type: VideoFilterType): Result<Unit> {
         return runOnGLThread {
             val typeInt = when (type) {
                 VideoFilterType.BRIGHTNESS -> RenderEngine.FILTER_TYPE_BRIGHTNESS
                 VideoFilterType.GAUSSIAN_BLUR -> RenderEngine.FILTER_TYPE_GAUSSIAN_BLUR
                 VideoFilterType.LOOKUP -> RenderEngine.FILTER_TYPE_LOOKUP
                 VideoFilterType.BILATERAL -> RenderEngine.FILTER_TYPE_BILATERAL
-                VideoFilterType.CINEMATIC_LOOKUP -> 4 // 刚才在 C++ 里新增的电影级 LUT
-                VideoFilterType.COMPUTE_BLUR -> 5 // OpenGL ES 3.1 计算着色器测试
+                VideoFilterType.CINEMATIC_LOOKUP -> 4
+                VideoFilterType.COMPUTE_BLUR -> 5
             }
             renderEngine.addFilter(typeInt)
         }
     }
 
     // 清空滤镜管线
-    fun removeAllFilters(): Result<Unit> {
+    suspend fun removeAllFilters(): Result<Unit> {
         return runOnGLThread { renderEngine.removeAllFilters() }
     }
 
     // 更新滤镜参数 (Float)
-    fun updateParameter(key: String, value: Float): Result<Unit> {
+    suspend fun updateParameter(key: String, value: Float): Result<Unit> {
         return runOnGLThread { renderEngine.updateParameterFloat(key, value) }
     }
 
     // 更新滤镜参数 (Int)
-    fun updateParameter(key: String, value: Int): Result<Unit> {
+    suspend fun updateParameter(key: String, value: Int): Result<Unit> {
         return runOnGLThread { renderEngine.updateParameterInt(key, value) }
     }
 
@@ -201,7 +211,7 @@ class VideoFilterManager(private val context: android.content.Context,
 
     // 释放所有的硬件及线程资源
 
-    fun updateShaderSource(name: String, source: String): Result<Unit> {
+    suspend fun updateShaderSource(name: String, source: String): Result<Unit> {
         return runOnGLThread {
             val res = renderEngine.updateShaderSource(name, source)
             if (res == 0) Result.success(Unit) else Result.failure(VideoSdkError.fromNativeCode(res))

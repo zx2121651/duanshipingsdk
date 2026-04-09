@@ -31,7 +31,9 @@ fun FilterCameraPreview(
 
     // React to Slider changes
     LaunchedEffect(intensity) {
-        filterManager.updateParameter("blurSize", intensity * 10f)
+        scope.launch {
+            filterManager.updateParameter("blurSize", intensity * 10f)
+        }
     }
 
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -168,7 +170,9 @@ fun FilterCameraPreview(
 
             // Hidden/Debug Crash Simulator
             Button(onClick = {
-                filterManager.updateParameter("simulateCrash", 1f)
+                scope.launch {
+                    filterManager.updateParameter("simulateCrash", 1f)
+                }
             }) {
                 Text("Simulate Overload (Test Degradation)")
             }
