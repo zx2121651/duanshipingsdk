@@ -38,13 +38,13 @@ import java.util.concurrent.Executors
 class MainActivity : ComponentActivity() {
 
     private var filterManager: VideoFilterManager? = null
-    private var videoEncoder: VideoEncoder? = null
     private var activeCameraResolution: Size? = null
     private lateinit var cameraExecutor: ExecutorService
 
     // Compose State
     private var isRecordingState = mutableStateOf(false)
     private var performanceMs = mutableStateOf(0L)
+    private var droppedFrames = mutableStateOf(0)
 
     companion object {
         private const val REQUEST_CODE_PERMISSIONS = 10
@@ -73,13 +73,20 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
-                Text(
-                    text = "${performanceMs.value} ms",
-                    color = if (performanceMs.value > 16) Color.Red else Color.Green,
+                Column(
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(16.dp)
-                )
+                ) {
+                    Text(
+                        text = "Frame: ${performanceMs.value} ms",
+                        color = if (performanceMs.value > 16) Color.Red else Color.Green
+                    )
+                    Text(
+                        text = "Dropped: ${droppedFrames.value}",
+                        color = if (droppedFrames.value > 0) Color.Red else Color.White
+                    )
+                }
 
                 Button(
                     onClick = {
@@ -124,9 +131,16 @@ class MainActivity : ComponentActivity() {
 
                 val newManager = VideoFilterManager(this@MainActivity, resolution.width, resolution.height)
 
-                newManager.setOnPerformanceUpdateListener { durationMs ->
-                    // 确保 Compose State 的更新发生主线程
-                    runOnUiThread { performanceMs.value = durationMs }
+                // Observe unified performance metrics
+                newManager.scope.launch {
+                    newManager.performanceMetrics.collect { metrics ->
+                        metrics?.let {
+                            runOnUiThread {
+                                performanceMs.value = it.averageFrameTimeMs.toLong()
+                                droppedFrames.value = it.droppedFrames
+                            }
+                        }
+                    }
                 }
 
                 // 启动引擎的唯一合法入口 (移交 GLSurfaceView 内部初始化)
@@ -170,14 +184,22 @@ class MainActivity : ComponentActivity() {
         val timeStamp: String = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val outputFile = File(moviesDir, "VideoSDK_$timeStamp.mp4")
 
-        videoEncoder = VideoEncoder(filterManager = fm, width = safeSize.width, height = safeSize.height)
-        val recordingSurface = videoEncoder?.startRecording(outputFile.absolutePath)
+        val config = VideoExportConfig(
+            width = safeSize.width,
+            height = safeSize.height,
+            fps = 30,
+            videoBitrate = 10_000_000,
+            audioBitrate = 128_000,
+            iFrameInterval = 1,
+            outputPath = outputFile.absolutePath
+        )
 
-        if (recordingSurface != null) {
-            fm.startVideoRecording(recordingSurface)
+        val result = fm.startVideoRecording(config)
+        if (result.isSuccess) {
             isRecordingState.value = true
+            Toast.makeText(this, "Recording started", Toast.LENGTH_SHORT).show()
         } else {
-            Toast.makeText(this, "Failed to start recording", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Failed to start recording: ${result.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -185,13 +207,11 @@ class MainActivity : ComponentActivity() {
         val fm = filterManager
         fm?.scope?.launch {
             fm.stopVideoRecording()
+            runOnUiThread {
+                isRecordingState.value = false
+                Toast.makeText(this@MainActivity, "Video saved!", Toast.LENGTH_SHORT).show()
+            }
         }
-
-        videoEncoder?.stopRecording()
-        videoEncoder = null
-        isRecordingState.value = false
-
-        Toast.makeText(this, "Video saved!", Toast.LENGTH_SHORT).show()
     }
 
     private fun allPermissionsGranted() = REQUIRED_PERMISSIONS.all {

@@ -192,10 +192,6 @@ class VideoFilterManager(private val context: android.content.Context,
     }
 
     // 暴露性能监控监听器供外部（或者修改为 StateFlow 抛出）
-    fun setOnPerformanceUpdateListener(listener: (Long) -> Unit) {
-        renderEngine.onPerformanceUpdateListener = listener
-    }
-
     // 手动触发一帧处理
     fun processFrame() {
         renderEngine.getSurfaceTexture()?.let { st ->
