@@ -85,16 +85,17 @@ Result PipelineGraph::compile() {
     return Result::ok();
 }
 
-void PipelineGraph::execute(int64_t timestampNs) {
+Result PipelineGraph::execute(int64_t timestampNs) {
     if (!m_isCompiled) {
-        std::cerr << "PipelineGraph executed before successful compile()" << std::endl;
-        return;
+        return Result::error(ErrorCode::ERR_RENDER_INVALID_STATE, "PipelineGraph executed before successful compile()");
     }
 
     // In a pure pull model, we just ask the sinks to pull.
     for (auto* sink : m_sinkNodes) {
         sink->pullFrame(timestampNs);
     }
+
+    return Result::ok();
 }
 
 void PipelineGraph::release() {

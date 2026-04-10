@@ -23,7 +23,7 @@ public:
     Result compile();
 
     // Drives the graph from the sink nodes (outputs) pulling upstream
-    void execute(int64_t timestampNs);
+    Result execute(int64_t timestampNs);
 
     const std::vector<NodePtr>& getNodes() const { return m_nodes; }
     void detachAllNodes() { m_nodes.clear(); m_sortedNodes.clear(); m_sinkNodes.clear(); }

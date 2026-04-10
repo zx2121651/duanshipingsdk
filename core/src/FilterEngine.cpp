@@ -58,7 +58,10 @@ ResultPayload<Texture> FilterEngine::processFrame(const Texture& textureIn, int 
             m_cameraNode->pushFrame(inFrame);
         }
 
-        m_graph->execute(0);
+        Result execRes = m_graph->execute(0);
+        if (!execRes.isOk()) {
+            return ResultPayload<Texture>::error(execRes.getErrorCode(), execRes.getMessage());
+        }
 
         VideoFrame outFrame = m_outputNode->getLastFrame();
 
