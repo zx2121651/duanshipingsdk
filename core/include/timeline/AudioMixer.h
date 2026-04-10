@@ -20,11 +20,11 @@ public:
 
     /**
      * @brief 获取多轨混合后的 PCM 音频
-     * @param timelineUs 当前主时间线的起始请求时间
-     * @param durationUs 请求时长 (通常根据需要的采样点数计算)
+     * @param timelineNs 当前主时间线的起始请求时间
+     * @param durationNs 请求时长 (通常根据需要的采样点数计算)
      * @return 混合后的 16-bit PCM 数组 (44.1kHz Stereo)
      */
-    std::vector<int16_t> mixAudioAtTime(int64_t timelineUs, int64_t durationUs);
+    std::vector<int16_t> mixAudioAtTime(int64_t timelineNs, int64_t durationNs);
 
 private:
     std::shared_ptr<Timeline> m_timeline;

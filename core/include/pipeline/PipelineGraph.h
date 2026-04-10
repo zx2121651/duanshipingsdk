@@ -16,8 +16,8 @@ public:
     PipelineGraph() = default;
     ~PipelineGraph() { release(); }
 
-    void addNode(NodePtr node);
-    bool connect(NodePtr from, NodePtr to);
+    Result addNode(NodePtr node);
+    Result connect(NodePtr from, NodePtr to);
 
     // Validates topology, checks for cycles, and prepares the execution order
     Result compile();
@@ -25,6 +25,7 @@ public:
     // Drives the graph from the sink nodes (outputs) pulling upstream
     void execute(int64_t timestampNs);
 
+    const std::vector<NodePtr>& getNodes() const { return m_nodes; }
     void release();
 
 private:

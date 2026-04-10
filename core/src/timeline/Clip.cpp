@@ -20,11 +20,11 @@ void Clip::setTransform(float scale, float rotation, float transX, float transY)
     m_transY = transY;
 }
 
-void Clip::addKeyframe(const std::string& paramName, int64_t relativeTimeUs, float value) {
-    m_keyframes[paramName][relativeTimeUs] = value;
+void Clip::addKeyframe(const std::string& paramName, int64_t relativeTimeNs, float value) {
+    m_keyframes[paramName][relativeTimeNs] = value;
 }
 
-float Clip::getInterpolatedParam(const std::string& paramName, int64_t relativeTimeUs, float defaultValue) const {
+float Clip::getInterpolatedParam(const std::string& paramName, int64_t relativeTimeNs, float defaultValue) const {
     auto itParam = m_keyframes.find(paramName);
     if (itParam == m_keyframes.end() || itParam->second.empty()) {
         return defaultValue; // No keyframes for this param
@@ -32,8 +32,8 @@ float Clip::getInterpolatedParam(const std::string& paramName, int64_t relativeT
 
     const auto& timeMap = itParam->second;
 
-    // upper_bound finds the first element whose key is > relativeTimeUs
-    auto itNext = timeMap.upper_bound(relativeTimeUs);
+    // upper_bound finds the first element whose key is > relativeTimeNs
+    auto itNext = timeMap.upper_bound(relativeTimeNs);
 
     if (itNext == timeMap.begin()) {
         // Requested time is before the first keyframe, return the first value
@@ -55,7 +55,7 @@ float Clip::getInterpolatedParam(const std::string& paramName, int64_t relativeT
     int64_t t1 = itNext->first;
     float v1 = itNext->second;
 
-    float ratio = static_cast<float>(relativeTimeUs - t0) / static_cast<float>(t1 - t0);
+    float ratio = static_cast<float>(relativeTimeNs - t0) / static_cast<float>(t1 - t0);
     return v0 + (v1 - v0) * ratio;
 }
 

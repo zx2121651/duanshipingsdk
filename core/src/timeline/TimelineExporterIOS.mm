@@ -121,9 +121,9 @@ private:
         [assetWriter startWriting];
         [assetWriter startSessionAtSourceTime:kCMTimeZero];
 
-        int64_t totalDurationUs = timeline->getTotalDuration();
-        int64_t frameDurationUs = 1000000 / m_fps;
-        int64_t currentTimeUs = 0;
+        int64_t totalDurationNs = timeline->getTotalDuration();
+        int64_t frameDurationNs = 1000000000 / m_fps;
+        int64_t currentTimeNs = 0;
 
         CVPixelBufferPoolRef pool = adaptor.pixelBufferPool;
 
@@ -131,7 +131,7 @@ private:
         GLuint fbo;
         glGenFramebuffers(1, &fbo);
 
-        while (currentTimeUs <= totalDurationUs && !m_canceled) {
+        while (currentTimeNs <= totalDurationNs && !m_canceled) {
             @autoreleasepool {
                 while (!videoInput.readyForMoreMediaData && !m_canceled) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(5));
@@ -165,12 +165,12 @@ private:
 
                     FrameBufferPtr cvExternalFbWrapper = std::make_shared<FrameBuffer>(m_width, m_height, fbo);
 
-                    compositor->renderFrameAtTime(currentTimeUs, cvExternalFbWrapper);
+                    compositor->renderFrameAtTime(currentTimeNs, cvExternalFbWrapper);
 
                     glBindFramebuffer(GL_FRAMEBUFFER, 0);
                     glFinish(); // 确保渲染指令完成
 
-                    CMTime presentationTime = CMTimeMake(currentTimeUs, 1000000);
+                    CMTime presentationTime = CMTimeMake(currentTimeNs, 1000000);
                     [adaptor appendPixelBuffer:pixelBuffer withPresentationTime:presentationTime];
 
                     CFRelease(cvTexture);
@@ -180,10 +180,10 @@ private:
                 CVPixelBufferRelease(pixelBuffer);
 
                 if (onProgress) {
-                    onProgress(static_cast<float>(currentTimeUs) / static_cast<float>(totalDurationUs));
+                    onProgress(static_cast<float>(currentTimeNs) / static_cast<float>(totalDurationNs));
                 }
 
-                currentTimeUs += frameDurationUs;
+                currentTimeNs += frameDurationNs;
             }
         }
 

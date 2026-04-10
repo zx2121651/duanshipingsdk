@@ -107,16 +107,22 @@ public actor VideoFilterManager {
     }
 
     /// 动态添加滤镜到处理管线
-    public func addFilter(_ type: VideoFilterType) {
+    public func addFilter(_ type: VideoFilterType) throws {
         guard case .running = state else { return }
         guard let swiftType = SwiftFilterType(rawValue: type.rawValue) else { return }
-        engine.addFilter(swiftType)
+        let res = engine.addFilter(swiftType)
+        if res != 0 {
+            throw NSError(domain: "VideoFilterManager", code: Int(res), userInfo: [NSLocalizedDescriptionKey: "Add filter failed"])
+        }
     }
 
     /// 移除所有滤镜
-    public func removeAllFilters() {
+    public func removeAllFilters() throws {
         guard case .running = state else { return }
-        engine.removeAllFilters()
+        let res = engine.removeAllFilters()
+        if res != 0 {
+            throw NSError(domain: "VideoFilterManager", code: Int(res), userInfo: [NSLocalizedDescriptionKey: "Remove all filters failed"])
+        }
     }
 
     /// 实时更新滤镜的浮点参数（例如调节 intensity）

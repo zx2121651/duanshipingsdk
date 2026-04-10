@@ -43,14 +43,14 @@ import OpenGLES
     }
 
     // Add filter to the pipeline
-    @objc public func addFilter(_ type: SwiftFilterType) {
+    @objc public func addFilter(_ type: SwiftFilterType) -> Int32 {
         // Assume mapping matches FilterType
-        wrapper.addFilter(FilterType(rawValue: type.rawValue)!)
+        return wrapper.addFilter(FilterType(rawValue: type.rawValue)!)
     }
 
     // Clear pipeline
-    @objc public func removeAllFilters() {
-        wrapper.removeAllFilters()
+    @objc public func removeAllFilters() -> Int32 {
+        return wrapper.removeAllFilters()
     }
 
 

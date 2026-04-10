@@ -18,10 +18,10 @@ void test_timeline_creation() {
 
     auto clip = std::make_shared<Clip>("clip_1", "path/to/video.mp4", Clip::MediaType::VIDEO);
     clip->setTimelineIn(0);
-    clip->setTrimOut(5000000); // 5 seconds
+    clip->setTrimOut(5000000000); // 5 seconds
     track->addClip(clip);
 
-    auto activeClip = track->getActiveClipAtTime(1000000); // 1 second
+    auto activeClip = track->getActiveClipAtTime(1000000000); // 1 second
     assert(activeClip != nullptr);
     assert(activeClip->getId() == "clip_1");
 

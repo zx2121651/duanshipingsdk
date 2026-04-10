@@ -60,9 +60,9 @@ Java_com_sdk_video_timeline_TimelineManager_nativeAddClip(
         const char *cPath = env->GetStringUTFChars(sourcePath, nullptr);
 
         auto clip = std::make_shared<Clip>(cId, cPath, static_cast<Clip::MediaType>(mediaType));
-        clip->setTrimIn(trimInUs);
-        clip->setTrimOut(trimOutUs);
-        clip->setTimelineIn(timelineInUs);
+        clip->setTrimIn(trimInUs * 1000);
+        clip->setTrimOut(trimOutUs * 1000);
+        clip->setTimelineIn(timelineInUs * 1000);
 
         track->addClip(clip);
 
@@ -106,7 +106,7 @@ Java_com_sdk_video_timeline_TimelineManager_nativeSetClipTransition(JNIEnv *env,
 
     if (!clip) return -3003;
 
-    clip->setInTransition(static_cast<TransitionType>(type), durationUs);
+    clip->setInTransition(static_cast<TransitionType>(type), durationUs * 1000);
     return 0;
 }
 
@@ -125,7 +125,7 @@ Java_com_sdk_video_timeline_TimelineManager_nativeAddClipKeyframe(JNIEnv *env, j
     if (!clip) return -3003;
 
     const char* propStr = env->GetStringUTFChars(property, nullptr);
-    clip->addKeyframe(std::string(propStr), relativeTimeUs, value);
+    clip->addKeyframe(std::string(propStr), relativeTimeUs * 1000, value);
     env->ReleaseStringUTFChars(property, propStr);
 
     return 0;

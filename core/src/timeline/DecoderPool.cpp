@@ -46,7 +46,7 @@ void DecoderPool::releaseMedia(const std::string& clipId) {
     std::cout << "[DecoderPool] Released media " << clipId << std::endl;
 }
 
-Texture DecoderPool::getFrame(const std::string& clipId, int64_t localTimeUs) {
+Texture DecoderPool::getFrame(const std::string& clipId, int64_t localTimeNs) {
     std::lock_guard<std::mutex> lock(m_mutex);
 
     auto it = m_decoders.find(clipId);
@@ -59,10 +59,10 @@ Texture DecoderPool::getFrame(const std::string& clipId, int64_t localTimeUs) {
 
     if (ctx->decoder) {
         // Platform hardware decoding
-        Texture tex = ctx->decoder->getFrameAt(localTimeUs);
+        Texture tex = ctx->decoder->getFrameAt(localTimeNs);
         if (tex.id != 0) {
             ctx->lastDecodedFrame = tex;
-            ctx->lastDecodedTimeUs = localTimeUs;
+            ctx->lastDecodedTimeNs = localTimeNs;
         }
         return ctx->lastDecodedFrame;
     } else {
@@ -71,7 +71,7 @@ Texture DecoderPool::getFrame(const std::string& clipId, int64_t localTimeUs) {
             ctx->lastDecodedFrame = {1, 1920, 1080}; // Dummy ID
             ctx->isInitialized = true;
         }
-        ctx->lastDecodedTimeUs = localTimeUs;
+        ctx->lastDecodedTimeNs = localTimeNs;
         return ctx->lastDecodedFrame;
     }
 }

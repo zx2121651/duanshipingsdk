@@ -20,11 +20,11 @@ public:
 
     /**
      * @brief 请求指定时间段的 PCM 数据
-     * @param timeUs 请求的起始相对时间 (微秒)
-     * @param durationUs 请求的持续时间 (微秒)
+     * @param timeNs 请求的起始相对时间 (微秒)
+     * @param durationNs 请求的持续时间 (微秒)
      * @return 16-bit PCM 样本数组 (交错双声道: L R L R...)
      */
-    virtual std::vector<int16_t> getPcmData(int64_t timeUs, int64_t durationUs) = 0;
+    virtual std::vector<int16_t> getPcmData(int64_t timeNs, int64_t durationNs) = 0;
 
     virtual void close() = 0;
 };
@@ -36,7 +36,7 @@ public:
     virtual void registerMedia(const std::string& clipId, const std::string& sourcePath) = 0;
     virtual void releaseMedia(const std::string& clipId) = 0;
 
-    virtual std::vector<int16_t> getPcmData(const std::string& clipId, int64_t localTimeUs, int64_t durationUs) = 0;
+    virtual std::vector<int16_t> getPcmData(const std::string& clipId, int64_t localTimeNs, int64_t durationNs) = 0;
 };
 
 using AudioDecoderPoolPtr = std::shared_ptr<AudioDecoderPool>;

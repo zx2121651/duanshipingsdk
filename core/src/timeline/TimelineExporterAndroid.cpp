@@ -132,14 +132,14 @@ private:
         bool muxerStarted = false;
 
         // 4. Render Loop
-        int64_t totalDurationUs = timeline->getTotalDuration();
-        int64_t frameDurationUs = 1000000 / m_fps;
-        int64_t currentTimeUs = 0;
+        int64_t totalDurationNs = timeline->getTotalDuration();
+        int64_t frameDurationNs = 1000000000 / m_fps;
+        int64_t currentTimeNs = 0;
         bool encoderEOS = false;
 
         while (!encoderEOS && !m_canceled) {
             // Push frame
-            if (currentTimeUs <= totalDurationUs) {
+            if (currentTimeNs <= totalDurationNs) {
                 glViewport(0, 0, m_width, m_height);
                 glClearColor(0,0,0,1);
                 glClear(GL_COLOR_BUFFER_BIT);
@@ -147,20 +147,20 @@ private:
                 // Compositor draws directly to the default framebuffer (EGLSurface -> MediaCodec)
                 // We create a dummy wrapper for ID 0
                 FrameBufferPtr screenFb = std::make_shared<FrameBuffer>(m_width, m_height, 0);
-                compositor->renderFrameAtTime(currentTimeUs, screenFb);
+                compositor->renderFrameAtTime(currentTimeNs, screenFb);
 
                 if (eglPresentationTimeANDROID) {
-                    eglPresentationTimeANDROID(display, eglSurface, currentTimeUs * 1000); // ns
+                    eglPresentationTimeANDROID(display, eglSurface, currentTimeNs); // ns
                 }
                 eglSwapBuffers(display, eglSurface);
 
                 if (onProgress) {
-                    onProgress(static_cast<float>(currentTimeUs) / static_cast<float>(totalDurationUs));
+                    onProgress(static_cast<float>(currentTimeNs) / static_cast<float>(totalDurationNs));
                 }
 
-                currentTimeUs += frameDurationUs;
+                currentTimeNs += frameDurationNs;
 
-                if (currentTimeUs > totalDurationUs) {
+                if (currentTimeNs > totalDurationNs) {
                     AMediaCodec_signalEndOfInputStream(encoder);
                 }
             }

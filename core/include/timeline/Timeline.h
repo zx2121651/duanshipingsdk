@@ -1,3 +1,5 @@
+#include <mutex>
+#include <shared_mutex>
 #pragma once
 #include "Track.h"
 #include <vector>
@@ -41,10 +43,10 @@ public:
 
     // 获取当前时间点 (Timeline T) 应该渲染的所有素材（按 Z-Index 从底到顶排列）
     // 这个接口将直接喂给离屏合成器 (Offscreen Compositor) 进行多 FBO 混合
-    std::vector<ClipPtr> getActiveVideoClipsAtTime(int64_t timelineUs) const;
+    std::vector<ClipPtr> getActiveVideoClipsAtTime(int64_t timelineNs) const;
 
     // 同理，获取当前时间点所有需要混音 (Audio Mixing) 的素材
-    std::vector<ClipPtr> getActiveAudioClipsAtTime(int64_t timelineUs) const;
+    std::vector<ClipPtr> getActiveAudioClipsAtTime(int64_t timelineNs) const;
 
 private:
     int m_outputWidth;
@@ -52,6 +54,7 @@ private:
     int m_fps;
 
     std::map<int, TrackPtr> m_tracks;
+    mutable std::shared_mutex m_tracksMutex;
 };
 
 using TimelinePtr = std::shared_ptr<Timeline>;

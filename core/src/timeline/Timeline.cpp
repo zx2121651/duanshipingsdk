@@ -23,6 +23,7 @@ int64_t Timeline::getTotalDuration() const {
 }
 
 TrackPtr Timeline::addTrack(int zIndex, Track::TrackType type) {
+    std::unique_lock<std::shared_mutex> lock(m_tracksMutex);
     if (m_tracks.find(zIndex) == m_tracks.end()) {
         m_tracks[zIndex] = std::make_shared<Track>(zIndex, type);
     }
@@ -30,10 +31,12 @@ TrackPtr Timeline::addTrack(int zIndex, Track::TrackType type) {
 }
 
 void Timeline::removeTrack(int zIndex) {
+    std::unique_lock<std::shared_mutex> lock(m_tracksMutex);
     m_tracks.erase(zIndex);
 }
 
 TrackPtr Timeline::getTrack(int zIndex) const {
+    std::shared_lock<std::shared_mutex> lock(m_tracksMutex);
     auto it = m_tracks.find(zIndex);
     if (it != m_tracks.end()) {
         return it->second;
@@ -41,7 +44,7 @@ TrackPtr Timeline::getTrack(int zIndex) const {
     return nullptr;
 }
 
-std::vector<ClipPtr> Timeline::getActiveVideoClipsAtTime(int64_t timelineUs) const {
+std::vector<ClipPtr> Timeline::getActiveVideoClipsAtTime(int64_t timelineNs) const {
     std::vector<ClipPtr> activeClips;
 
     // m_tracks 是 std::map<int, TrackPtr>，已经按 key (Z-Index) 从小到大排序好了。
@@ -54,7 +57,7 @@ std::vector<ClipPtr> Timeline::getActiveVideoClipsAtTime(int64_t timelineUs) con
         if (track->getType() == Track::TrackType::MAIN_VIDEO ||
             track->getType() == Track::TrackType::PIP_VIDEO) {
 
-            ClipPtr clip = track->getActiveClipAtTime(timelineUs);
+            ClipPtr clip = track->getActiveClipAtTime(timelineNs);
             if (clip) {
                 activeClips.push_back(clip);
             }
@@ -64,18 +67,19 @@ std::vector<ClipPtr> Timeline::getActiveVideoClipsAtTime(int64_t timelineUs) con
     return activeClips;
 }
 
-std::vector<ClipPtr> Timeline::getActiveAudioClipsAtTime(int64_t timelineUs) const {
+std::vector<ClipPtr> Timeline::getActiveAudioClipsAtTime(int64_t timelineNs) const {
     std::vector<ClipPtr> activeAudio;
+    std::shared_lock<std::shared_mutex> lock(m_tracksMutex);
 
     // 对于音频，无论什么轨道类型，只要该轨道没被静音，并且包含了可播放的素材，都要参与混音。
     for (const auto& pair : m_tracks) {
         TrackPtr track = pair.second;
         if (!track || track->getTrackVolume() <= 0.0f) continue;
 
-        ClipPtr clip = track->getActiveClipAtTime(timelineUs);
+        ClipPtr clip = track->getActiveClipAtTime(timelineNs);
         if (clip) {
-            int64_t relativeUs = timelineUs - clip->getTimelineIn();
-            if (clip->getVolume(relativeUs) > 0.0f) {
+            int64_t relativeNs = timelineNs - clip->getTimelineIn();
+            if (clip->getVolume(relativeNs) > 0.0f) {
                 activeAudio.push_back(clip);
             }
         }

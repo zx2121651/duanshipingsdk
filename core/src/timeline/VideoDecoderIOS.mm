@@ -88,7 +88,7 @@ public:
                     CVPixelBufferRetain(pixelBuffer); // Retain to pass across thread
 
                     std::shared_ptr<FrameBufferPacket> packet = std::make_shared<FrameBufferPacket>();
-                    packet->ptsUs = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer)) * 1000000;
+                    packet->ptsNs = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer)) * 1000000000;
                     packet->width = m_width;
                     packet->height = m_height;
                     packet->nativeBuffer = pixelBuffer;
@@ -105,12 +105,12 @@ public:
         }
     }
 
-    Texture getFrameAt(int64_t timeUs) override {
+    Texture getFrameAt(int64_t timeNs) override {
         std::shared_ptr<FrameBufferPacket> targetPacket = nullptr;
 
         {
             std::lock_guard<std::mutex> lock(m_queueMutex);
-            while (!m_frameQueue.empty() && m_frameQueue.front()->ptsUs < timeUs - 30000) {
+            while (!m_frameQueue.empty() && m_frameQueue.front()->ptsNs < timeNs - 30000000) {
                 CVPixelBufferRelease((CVPixelBufferRef)m_frameQueue.front()->nativeBuffer);
                 m_frameQueue.pop();
                 m_queueCv.notify_one();
