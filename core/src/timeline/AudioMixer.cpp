@@ -29,10 +29,10 @@ std::vector<int16_t> AudioMixer::mixAudioAtTime(int64_t timelineNs, int64_t dura
     // 2. Fetch active audio clips (assuming Timeline provides this. For now we use getActiveVideoClipsAtTime
     // and assume they contain audio, or getActiveAudioClipsAtTime if implemented).
     // For architectural simulation, we assume Video clips act as AV clips.
-    std::vector<ClipPtr> activeClips = m_timeline->getActiveAudioClipsAtTime(timelineNs);
+    m_timeline->getActiveAudioClipsAtTime(timelineNs, m_activeClips);
 
     // 3. Extract and Mix
-    for (const auto& clip : activeClips) {
+    for (const auto& clip : m_activeClips) {
         // Calculate the relative time inside the media source
         // Example: If clip is placed at Timeline=5s, TrimIn=2s, and we want Timeline=6s -> localTime = 6-5+2 = 3s
         int64_t localTimeNs = (timelineNs - clip->getTimelineIn()) * clip->getSpeed() + clip->getTrimIn();

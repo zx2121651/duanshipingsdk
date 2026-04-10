@@ -231,9 +231,9 @@ Result Compositor::renderFrameAtTime(int64_t timelineNs, FrameBufferPtr outputFb
 
     initPrograms();
 
-    std::vector<ClipPtr> activeClips = m_timeline->getActiveVideoClipsAtTime(timelineNs);
+    m_timeline->getActiveVideoClipsAtTime(timelineNs, m_activeClips);
 
-    if (activeClips.empty() || !m_decoderPool) {
+    if (m_activeClips.empty() || !m_decoderPool) {
         outputFb->bind();
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
@@ -247,7 +247,7 @@ Result Compositor::renderFrameAtTime(int64_t timelineNs, FrameBufferPtr outputFb
     FrameBufferPtr pingFb = m_filterEngine->getFrameBufferPool()->getFrameBuffer(outputFb->width(), outputFb->height());
     FrameBufferPtr pongFb = m_filterEngine->getFrameBufferPool()->getFrameBuffer(outputFb->width(), outputFb->height());
 
-    for (const auto& clip : activeClips) {
+    for (const auto& clip : m_activeClips) {
         int64_t localTimeNs = (timelineNs - clip->getTimelineIn()) * clip->getSpeed() + clip->getTrimIn();
 
         Texture fgTex = m_decoderPool->getFrame(clip->getId(), localTimeNs);

@@ -102,8 +102,8 @@ public:
                         sawInputEOS = true;
                     }
 
-                    int64_t presentationTimeNs = AMediaExtractor_getSampleTime(m_extractor);
-                    AMediaCodec_queueInputBuffer(m_codec, bufIdx, 0, sampleSize, presentationTimeNs,
+                    int64_t presentationTimeUs = AMediaExtractor_getSampleTime(m_extractor);
+                    AMediaCodec_queueInputBuffer(m_codec, bufIdx, 0, sampleSize, presentationTimeUs,
                                                  sawInputEOS ? AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM : 0);
 
                     AMediaExtractor_advance(m_extractor);
