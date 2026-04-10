@@ -100,10 +100,8 @@ void FilterEngine::updateParameterMat4(const std::string& key, const float* matr
 void FilterEngine::release() {
     if (m_initialized) {
         if (m_graph) {
-            for (const auto& node : m_graph->getNodes()) {
-                node->release();
-            }
             m_graph->release();
+            m_graph.reset();
         }
         m_frameBufferPool.clear();
         m_initialized = false;
@@ -140,11 +138,6 @@ Result FilterEngine::addFilter(FilterType type) {
 
 Result FilterEngine::removeAllFilters() {
     if (m_graph) {
-        if (m_initialized) {
-            for (const auto& node : m_graph->getNodes()) {
-                node->release();
-            }
-        }
         m_graph->release();
         m_graph = std::make_shared<PipelineGraph>();
     }
@@ -185,17 +178,21 @@ Result FilterEngine::buildCameraPipeline() {
 
     // Keep existing filters
     if (m_graph) {
-        std::vector<std::shared_ptr<FilterNode>> filters;
+        std::vector<std::shared_ptr<Filter>> rawFilters;
         for (const auto& node : m_graph->getNodes()) {
             if (auto filterNode = std::dynamic_pointer_cast<FilterNode>(node)) {
-                filters.push_back(filterNode);
+                rawFilters.push_back(filterNode->getFilter());
             }
         }
-        for (size_t i = 0; i < filters.size(); ++i) {
-            auto filterNode = filters[i];
+
+        // Properly release the old graph as instructed
+        m_graph->release();
+
+        for (size_t i = 0; i < rawFilters.size(); ++i) {
+            auto filterNode = std::make_shared<FilterNode>("Filter_" + std::to_string(i), rawFilters[i]);
 
             FBOPrecision targetPrecision = FBOPrecision::RGBA8888;
-            bool isIntermediate = (i < filters.size() - 1);
+            bool isIntermediate = (i < rawFilters.size() - 1);
             if (isIntermediate) {
                 if (m_contextManager.isFP16RenderTargetSupported()) {
                     targetPrecision = FBOPrecision::FP16;
@@ -214,10 +211,6 @@ Result FilterEngine::buildCameraPipeline() {
 
     newGraph->connect(lastNode, m_outputNode);
 
-    // Explicitly release old graph to prevent memory leak and properly free FBOs/OpenGL state
-    if (m_graph) {
-        m_graph->release();
-    }
     m_graph = newGraph;
 
 
@@ -239,17 +232,21 @@ Result FilterEngine::buildTimelinePipeline(std::shared_ptr<timeline::Timeline> t
 
     // Keep existing filters
     if (m_graph) {
-        std::vector<std::shared_ptr<FilterNode>> filters;
+        std::vector<std::shared_ptr<Filter>> rawFilters;
         for (const auto& node : m_graph->getNodes()) {
             if (auto filterNode = std::dynamic_pointer_cast<FilterNode>(node)) {
-                filters.push_back(filterNode);
+                rawFilters.push_back(filterNode->getFilter());
             }
         }
-        for (size_t i = 0; i < filters.size(); ++i) {
-            auto filterNode = filters[i];
+
+        // Properly release the old graph as instructed
+        m_graph->release();
+
+        for (size_t i = 0; i < rawFilters.size(); ++i) {
+            auto filterNode = std::make_shared<FilterNode>("Filter_" + std::to_string(i), rawFilters[i]);
 
             FBOPrecision targetPrecision = FBOPrecision::RGBA8888;
-            bool isIntermediate = (i < filters.size() - 1);
+            bool isIntermediate = (i < rawFilters.size() - 1);
             if (isIntermediate) {
                 if (m_contextManager.isFP16RenderTargetSupported()) {
                     targetPrecision = FBOPrecision::FP16;
@@ -268,10 +265,6 @@ Result FilterEngine::buildTimelinePipeline(std::shared_ptr<timeline::Timeline> t
 
     newGraph->connect(lastNode, m_outputNode);
 
-    // Explicitly release old graph to prevent memory leak and properly free FBOs/OpenGL state
-    if (m_graph) {
-        m_graph->release();
-    }
     m_graph = newGraph;
 
 

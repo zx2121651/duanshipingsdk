@@ -29,6 +29,7 @@ public:
 private:
     std::shared_ptr<Timeline> m_timeline;
     AudioDecoderPoolPtr m_decoderPool;
+    std::vector<ClipPtr> m_activeClips;
 
     // 基础的 Hard Clipping 保护算法：将 int32 累加值钳制在 int16 范围内
     void applyClippingProtection(std::vector<int32_t>& mixBuffer, std::vector<int16_t>& outputBuffer);

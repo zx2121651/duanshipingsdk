@@ -33,6 +33,7 @@ private:
     std::shared_ptr<Timeline> m_timeline;
     std::shared_ptr<FilterEngine> m_filterEngine;
     std::shared_ptr<IDecoderPool> m_decoderPool;
+    std::vector<ClipPtr> m_activeClips;
 
     GLuint m_blendProgram = 0;
     GLuint m_copyProgram = 0;

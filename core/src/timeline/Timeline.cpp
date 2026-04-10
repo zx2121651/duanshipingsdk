@@ -44,8 +44,9 @@ TrackPtr Timeline::getTrack(int zIndex) const {
     return nullptr;
 }
 
-std::vector<ClipPtr> Timeline::getActiveVideoClipsAtTime(int64_t timelineNs) const {
-    std::vector<ClipPtr> activeClips;
+void Timeline::getActiveVideoClipsAtTime(int64_t timelineNs, std::vector<ClipPtr>& outClips) const {
+    outClips.clear();
+    std::shared_lock<std::shared_mutex> lock(m_tracksMutex);
 
     // m_tracks 是 std::map<int, TrackPtr>，已经按 key (Z-Index) 从小到大排序好了。
     // 这保证了底层轨道（如 z=0, 主轴）排在最前面，高层轨道（如 z=10, 贴纸画中画）在后面，
@@ -59,16 +60,14 @@ std::vector<ClipPtr> Timeline::getActiveVideoClipsAtTime(int64_t timelineNs) con
 
             ClipPtr clip = track->getActiveClipAtTime(timelineNs);
             if (clip) {
-                activeClips.push_back(clip);
+                outClips.push_back(clip);
             }
         }
     }
-
-    return activeClips;
 }
 
-std::vector<ClipPtr> Timeline::getActiveAudioClipsAtTime(int64_t timelineNs) const {
-    std::vector<ClipPtr> activeAudio;
+void Timeline::getActiveAudioClipsAtTime(int64_t timelineNs, std::vector<ClipPtr>& outClips) const {
+    outClips.clear();
     std::shared_lock<std::shared_mutex> lock(m_tracksMutex);
 
     // 对于音频，无论什么轨道类型，只要该轨道没被静音，并且包含了可播放的素材，都要参与混音。
@@ -80,12 +79,10 @@ std::vector<ClipPtr> Timeline::getActiveAudioClipsAtTime(int64_t timelineNs) con
         if (clip) {
             int64_t relativeNs = timelineNs - clip->getTimelineIn();
             if (clip->getVolume(relativeNs) > 0.0f) {
-                activeAudio.push_back(clip);
+                outClips.push_back(clip);
             }
         }
     }
-
-    return activeAudio;
 }
 
 } // namespace timeline
