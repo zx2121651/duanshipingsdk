@@ -5,18 +5,20 @@
 namespace sdk {
 namespace video {
 
-void PipelineGraph::addNode(NodePtr node) {
+Result PipelineGraph::addNode(NodePtr node) {
     if (node) {
         m_nodes.push_back(node);
         m_isCompiled = false;
+        return Result::ok();
     }
+    return Result::error(-2002, "Null node");
 }
 
-bool PipelineGraph::connect(NodePtr from, NodePtr to) {
-    if (!from || !to) return false;
+Result PipelineGraph::connect(NodePtr from, NodePtr to) {
+    if (!from || !to) return Result::error(-2002, "Null node connect");
     from->addOutput(to);
     m_isCompiled = false;
-    return true;
+    return Result::ok();
 }
 
 bool PipelineGraph::detectCycleUtil(PipelineNode* node, std::unordered_set<PipelineNode*>& visited, std::unordered_set<PipelineNode*>& recStack) {

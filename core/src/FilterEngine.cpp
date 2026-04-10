@@ -5,7 +5,7 @@
 namespace sdk {
 namespace video {
 
-FilterEngine::FilterEngine() : m_initialized(false), m_simulateCrash(false) { m_shaderManager = std::make_shared<ShaderManager>(); }
+FilterEngine::FilterEngine() : m_initialized(false) { m_shaderManager = std::make_shared<ShaderManager>(); }
 
 FilterEngine::~FilterEngine() {
     release();
@@ -17,8 +17,10 @@ Result FilterEngine::initialize() {
     // 初始化前首先唤醒嗅探器，对底层硬件进行深度体检
     m_contextManager.sniffCapabilities();
 
-    for (auto& filter : m_filters) {
-        filter->initialize();
+    if (m_graph) {
+        for (const auto& node : m_graph->getNodes()) {
+            node->initialize();
+        }
     }
 
     m_initialized = true;
@@ -30,9 +32,7 @@ ResultPayload<Texture> FilterEngine::processFrame(const Texture& textureIn, int 
         return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "GL Thread violation detected during processFrame");
     }
 
-    if (m_simulateCrash) {
-        return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Simulated crash active");
-    }
+
 
     if (!m_initialized) {
         return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "FilterEngine not initialized before processing frame");
@@ -73,60 +73,71 @@ ResultPayload<Texture> FilterEngine::processFrame(const Texture& textureIn, int 
 }
 
 void FilterEngine::updateParameter(const std::string& key, const std::any& value) {
-    if (key == "simulateCrash") {
-        try {
-            float val = std::any_cast<float>(value);
-            m_simulateCrash = (val > 0.5f);
-        } catch (const std::bad_any_cast& e) { std::cerr << "updateParameter type cast error: " << e.what() << std::endl; }
-        return;
-    }
 
-    for (auto& filter : m_filters) {
-        filter->setParameter(key, value);
+
+    if (m_graph) {
+        for (const auto& node : m_graph->getNodes()) {
+            auto filterNode = std::dynamic_pointer_cast<FilterNode>(node);
+            if (filterNode && filterNode->getFilter()) {
+                filterNode->getFilter()->setParameter(key, value);
+            }
+        }
     }
 }
 
 void FilterEngine::release() {
     if (m_initialized) {
-        for (auto& filter : m_filters) {
-            filter->release();
+        if (m_graph) {
+            for (const auto& node : m_graph->getNodes()) {
+                node->release();
+            }
+            m_graph->release();
         }
         m_frameBufferPool.clear();
         m_initialized = false;
     }
-    m_filters.clear();
 }
 
-void FilterEngine::addFilterRaw(FilterPtr filter) {
+Result FilterEngine::addFilterRaw(FilterPtr filter) {
     if (filter) {
         filter->setShaderManager(m_shaderManager);
-        m_filters.push_back(filter);
+        if (!m_graph) { m_graph = std::make_shared<PipelineGraph>(); }
+        auto filterNode = std::make_shared<FilterNode>("Filter_" + std::to_string(m_graph->getNodes().size()), filter);
+        m_graph->addNode(filterNode);
         if (m_initialized) {
             filter->initialize();
-            m_isGraphDirty = true;
         }
+        m_isGraphDirty = true;
     }
+    return Result::ok();
 }
-void FilterEngine::addFilter(FilterType type) {
+Result FilterEngine::addFilter(FilterType type) {
     FilterPtr filter = FilterFactory::createFilter(type, m_contextManager, &m_frameBufferPool);
     if (filter) {
         filter->setShaderManager(m_shaderManager);
-        m_filters.push_back(filter);
+        if (!m_graph) { m_graph = std::make_shared<PipelineGraph>(); }
+        auto filterNode = std::make_shared<FilterNode>("Filter_" + std::to_string(m_graph->getNodes().size()), filter);
+        m_graph->addNode(filterNode);
         if (m_initialized) {
             filter->initialize();
-            m_isGraphDirty = true;
         }
+        m_isGraphDirty = true;
     }
+    return Result::ok();
 }
 
-void FilterEngine::removeAllFilters() {
-    for (auto& filter : m_filters) {
+Result FilterEngine::removeAllFilters() {
+    if (m_graph) {
         if (m_initialized) {
-            filter->release();
+            for (const auto& node : m_graph->getNodes()) {
+                node->release();
+            }
         }
+        m_graph->release();
+        m_graph = std::make_shared<PipelineGraph>();
     }
-    m_filters.clear();
     m_isGraphDirty = true;
+    return Result::ok();
 }
 
 
@@ -139,83 +150,112 @@ void FilterEngine::updateShaderSource(const std::string& name, const std::string
     // We need to notify all filters to reload their shaders if they use this one.
     // However, since we don't know which filter uses which shader name,
     // we should just call initialize() on all of them to trigger a recompilation.
-    for (auto& filter : m_filters) {
-        // filter->release();  // If we release, we lose other states. We should just re-init program.
-        // Actually, we need a recompile API in Filter.
-        filter->recompileProgram();
+    if (m_graph) {
+        for (const auto& node : m_graph->getNodes()) {
+            auto filterNode = std::dynamic_pointer_cast<FilterNode>(node);
+            if (filterNode && filterNode->getFilter()) {
+                filterNode->getFilter()->recompileProgram();
+            }
+        }
     }
 }
 
-void FilterEngine::buildCameraPipeline() {
-    m_graph = std::make_shared<PipelineGraph>();
+Result FilterEngine::buildCameraPipeline() {
     m_cameraNode = std::make_shared<CameraInputNode>("Camera");
     m_outputNode = std::make_shared<OutputNode>("Display");
 
-    m_graph->addNode(m_cameraNode);
-
     std::shared_ptr<PipelineNode> lastNode = m_cameraNode;
 
-    for (size_t i = 0; i < m_filters.size(); ++i) {
-        auto filterNode = std::make_shared<FilterNode>("Filter_" + std::to_string(i), m_filters[i]);
+    // Create new graph
+    auto newGraph = std::make_shared<PipelineGraph>();
+    newGraph->addNode(m_cameraNode);
+    newGraph->addNode(m_outputNode);
 
-        // Restore FBOPrecision logic from legacy mode
-        FBOPrecision targetPrecision = FBOPrecision::RGBA8888;
-        bool isIntermediate = (i < m_filters.size() - 1);
-        if (isIntermediate) {
-            if (m_contextManager.isFP16RenderTargetSupported()) {
-                targetPrecision = FBOPrecision::FP16;
-            } else {
-                targetPrecision = FBOPrecision::RGB565;
+    // Keep existing filters
+    if (m_graph) {
+        std::vector<std::shared_ptr<FilterNode>> filters;
+        for (const auto& node : m_graph->getNodes()) {
+            if (auto filterNode = std::dynamic_pointer_cast<FilterNode>(node)) {
+                filters.push_back(filterNode);
             }
         }
-        filterNode->setFrameBufferPool(&m_frameBufferPool);
-        filterNode->setTargetPrecision(targetPrecision);
+        for (size_t i = 0; i < filters.size(); ++i) {
+            auto filterNode = filters[i];
 
-        m_graph->addNode(filterNode);
-        m_graph->connect(lastNode, filterNode);
-        lastNode = filterNode;
+            FBOPrecision targetPrecision = FBOPrecision::RGBA8888;
+            bool isIntermediate = (i < filters.size() - 1);
+            if (isIntermediate) {
+                if (m_contextManager.isFP16RenderTargetSupported()) {
+                    targetPrecision = FBOPrecision::FP16;
+                } else {
+                    targetPrecision = FBOPrecision::RGB565;
+                }
+            }
+            filterNode->setFrameBufferPool(&m_frameBufferPool);
+            filterNode->setTargetPrecision(targetPrecision);
+
+            newGraph->addNode(filterNode);
+            newGraph->connect(lastNode, filterNode);
+            lastNode = filterNode;
+        }
     }
 
-    m_graph->addNode(m_outputNode);
-    m_graph->connect(lastNode, m_outputNode);
+    newGraph->connect(lastNode, m_outputNode);
+    m_graph = newGraph;
+
+
     Result res = m_graph->compile();
-    if (!res.isOk()) { std::cerr << "Pipeline Compile Failed: " << res.getMessage() << std::endl; }
+    if (!res.isOk()) { std::cerr << "Pipeline Compile Failed: " << res.getMessage() << std::endl; return res; }
+    return Result::ok();
 }
 
-void FilterEngine::buildTimelinePipeline(std::shared_ptr<timeline::Timeline> timeline, std::shared_ptr<timeline::Compositor> compositor) {
-    m_graph = std::make_shared<PipelineGraph>();
+Result FilterEngine::buildTimelinePipeline(std::shared_ptr<timeline::Timeline> timeline, std::shared_ptr<timeline::Compositor> compositor) {
     auto timelineNode = std::make_shared<TimelineNode>("Timeline", timeline, compositor);
     m_outputNode = std::make_shared<OutputNode>("Display");
 
-    m_graph->addNode(timelineNode);
-
     std::shared_ptr<PipelineNode> lastNode = timelineNode;
 
-    for (size_t i = 0; i < m_filters.size(); ++i) {
-        auto filterNode = std::make_shared<FilterNode>("Filter_" + std::to_string(i), m_filters[i]);
+    // Create new graph
+    auto newGraph = std::make_shared<PipelineGraph>();
+    newGraph->addNode(timelineNode);
+    newGraph->addNode(m_outputNode);
 
-        // Restore FBOPrecision logic from legacy mode
-        FBOPrecision targetPrecision = FBOPrecision::RGBA8888;
-        bool isIntermediate = (i < m_filters.size() - 1);
-        if (isIntermediate) {
-            if (m_contextManager.isFP16RenderTargetSupported()) {
-                targetPrecision = FBOPrecision::FP16;
-            } else {
-                targetPrecision = FBOPrecision::RGB565;
+    // Keep existing filters
+    if (m_graph) {
+        std::vector<std::shared_ptr<FilterNode>> filters;
+        for (const auto& node : m_graph->getNodes()) {
+            if (auto filterNode = std::dynamic_pointer_cast<FilterNode>(node)) {
+                filters.push_back(filterNode);
             }
         }
-        filterNode->setFrameBufferPool(&m_frameBufferPool);
-        filterNode->setTargetPrecision(targetPrecision);
+        for (size_t i = 0; i < filters.size(); ++i) {
+            auto filterNode = filters[i];
 
-        m_graph->addNode(filterNode);
-        m_graph->connect(lastNode, filterNode);
-        lastNode = filterNode;
+            FBOPrecision targetPrecision = FBOPrecision::RGBA8888;
+            bool isIntermediate = (i < filters.size() - 1);
+            if (isIntermediate) {
+                if (m_contextManager.isFP16RenderTargetSupported()) {
+                    targetPrecision = FBOPrecision::FP16;
+                } else {
+                    targetPrecision = FBOPrecision::RGB565;
+                }
+            }
+            filterNode->setFrameBufferPool(&m_frameBufferPool);
+            filterNode->setTargetPrecision(targetPrecision);
+
+            newGraph->addNode(filterNode);
+            newGraph->connect(lastNode, filterNode);
+            lastNode = filterNode;
+        }
     }
 
-    m_graph->addNode(m_outputNode);
-    m_graph->connect(lastNode, m_outputNode);
+    newGraph->connect(lastNode, m_outputNode);
+    m_graph = newGraph;
+
+
     Result res = m_graph->compile();
-    if (!res.isOk()) { std::cerr << "Pipeline Compile Failed: " << res.getMessage() << std::endl; }
+    if (!res.isOk()) { std::cerr << "Pipeline Compile Failed: " << res.getMessage() << std::endl; return res; }
+    return Result::ok();
 }
 
 } // namespace video

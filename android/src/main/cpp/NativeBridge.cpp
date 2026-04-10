@@ -275,17 +275,18 @@ Java_com_sdk_video_RenderEngine_nativeAddFilter(JNIEnv *env, jobject thiz, jlong
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
     if (!wrapper || !wrapper->filterEngine) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
 
-    wrapper->filterEngine->addFilter(static_cast<sdk::video::FilterType>(filterType));
-    return sdk::video::ErrorCode::SUCCESS;
+    auto res = wrapper->filterEngine->addFilter(static_cast<sdk::video::FilterType>(filterType));
+    return res.isOk() ? sdk::video::ErrorCode::SUCCESS : res.getErrorCode();
 }
 
 JNIEXPORT jint JNICALL
 Java_com_sdk_video_RenderEngine_nativeRemoveAllFilters(JNIEnv *env, jobject thiz, jlong handle) {
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
     if (wrapper) {
-        wrapper->filterEngine->removeAllFilters();
-        wrapper->filterEngine->addFilterRaw(std::make_shared<OES2RGBFilter>());
-        return sdk::video::ErrorCode::SUCCESS;
+        auto res1 = wrapper->filterEngine->removeAllFilters();
+        if (!res1.isOk()) return res1.getErrorCode();
+        auto res2 = wrapper->filterEngine->addFilterRaw(std::make_shared<OES2RGBFilter>());
+        return res2.isOk() ? sdk::video::ErrorCode::SUCCESS : res2.getErrorCode();
     }
     return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
 }

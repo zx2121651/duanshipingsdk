@@ -171,14 +171,14 @@ using namespace sdk::video;
 
 - (int)addFilter:(FilterType)type {
     if (!engine) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
-    engine->addFilter(static_cast<sdk::video::FilterType>(type));
-    return sdk::video::ErrorCode::SUCCESS;
+    auto res = engine->addFilter(static_cast<sdk::video::FilterType>(type));
+    return res.isOk() ? sdk::video::ErrorCode::SUCCESS : res.getErrorCode();
 }
 
 - (int)removeAllFilters {
     if (!engine) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
-    engine->removeAllFilters();
-    return sdk::video::ErrorCode::SUCCESS;
+    auto res = engine->removeAllFilters();
+    return res.isOk() ? sdk::video::ErrorCode::SUCCESS : res.getErrorCode();
 }
 
 - (int)updateParameterFloat:(NSString *)key value:(float)value {

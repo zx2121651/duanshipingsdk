@@ -15,7 +15,7 @@ namespace timeline {
 class IDecoderPool {
 public:
     virtual ~IDecoderPool() = default;
-    virtual Texture getFrame(const std::string& clipId, int64_t localTimeUs) = 0;
+    virtual Texture getFrame(const std::string& clipId, int64_t localTimeNs) = 0;
 };
 
 class Compositor {
@@ -27,7 +27,7 @@ public:
         m_decoderPool = decoderPool;
     }
 
-    Result renderFrameAtTime(int64_t timelineUs, FrameBufferPtr outputFb);
+    Result renderFrameAtTime(int64_t timelineNs, FrameBufferPtr outputFb);
 
 private:
     std::shared_ptr<Timeline> m_timeline;

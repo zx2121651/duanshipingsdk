@@ -44,7 +44,7 @@ public:
     // 播放游标寻址 (Seek and Playback)
     // 根据主时间线的当前时间 T，找出该轨道上在这个时刻唯一可见/发声的 Clip
     // ------------------------------------------------------------------------
-    ClipPtr getActiveClipAtTime(int64_t timelineUs) const;
+    ClipPtr getActiveClipAtTime(int64_t timelineNs) const;
 
     // ------------------------------------------------------------------------
     // 混合属性 (Blending Properties)

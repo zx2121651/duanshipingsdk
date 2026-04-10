@@ -224,14 +224,14 @@ Texture Compositor::transitionTextures(const Texture& bg, const Texture& fg, Tra
     return target->getTexture();
 }
 
-Result Compositor::renderFrameAtTime(int64_t timelineUs, FrameBufferPtr outputFb) {
+Result Compositor::renderFrameAtTime(int64_t timelineNs, FrameBufferPtr outputFb) {
     if (!m_timeline || !m_filterEngine || !outputFb) {
         return Result::error(-3, "Compositor not properly initialized with Timeline/Engine/FBO");
     }
 
     initPrograms();
 
-    std::vector<ClipPtr> activeClips = m_timeline->getActiveVideoClipsAtTime(timelineUs);
+    std::vector<ClipPtr> activeClips = m_timeline->getActiveVideoClipsAtTime(timelineNs);
 
     if (activeClips.empty() || !m_decoderPool) {
         outputFb->bind();
@@ -244,13 +244,13 @@ Result Compositor::renderFrameAtTime(int64_t timelineUs, FrameBufferPtr outputFb
     Texture accumulatedTexture = {0, 0, 0};
     bool isFirst = true;
 
-    FrameBufferPtr pingFb = m_filterEngine->m_frameBufferPool.getFrameBuffer(outputFb->width(), outputFb->height());
-    FrameBufferPtr pongFb = m_filterEngine->m_frameBufferPool.getFrameBuffer(outputFb->width(), outputFb->height());
+    FrameBufferPtr pingFb = m_filterEngine->getFrameBufferPool()->getFrameBuffer(outputFb->width(), outputFb->height());
+    FrameBufferPtr pongFb = m_filterEngine->getFrameBufferPool()->getFrameBuffer(outputFb->width(), outputFb->height());
 
     for (const auto& clip : activeClips) {
-        int64_t localTimeUs = (timelineUs - clip->getTimelineIn()) * clip->getSpeed() + clip->getTrimIn();
+        int64_t localTimeNs = (timelineNs - clip->getTimelineIn()) * clip->getSpeed() + clip->getTrimIn();
 
-        Texture fgTex = m_decoderPool->getFrame(clip->getId(), localTimeUs);
+        Texture fgTex = m_decoderPool->getFrame(clip->getId(), localTimeNs);
         if (fgTex.id == 0) continue;
 
         if (isFirst) {
@@ -264,15 +264,15 @@ Result Compositor::renderFrameAtTime(int64_t timelineUs, FrameBufferPtr outputFb
             isFirst = false;
         } else {
             // Check Transition
-            int64_t clipRelativeUs = timelineUs - clip->getTimelineIn();
-            if (clip->getInTransitionType() != TransitionType::NONE && clipRelativeUs < clip->getInTransitionDurationUs()) {
+            int64_t clipRelativeNs = timelineNs - clip->getTimelineIn();
+            if (clip->getInTransitionType() != TransitionType::NONE && clipRelativeNs < clip->getInTransitionDurationNs()) {
                 // Inside transition window
-                float progress = static_cast<float>(clipRelativeUs) / clip->getInTransitionDurationUs();
+                float progress = static_cast<float>(clipRelativeNs) / clip->getInTransitionDurationNs();
                 accumulatedTexture = transitionTextures(accumulatedTexture, fgTex, clip->getInTransitionType(), progress, pongFb);
             } else {
                 // Keyframe interpolated Alpha Blending
-                // Use keyframe value instead of static value!
-                float interpolatedOpacity = clip->getOpacity(clipRelativeUs);
+                // Nse keyframe value instead of static value!
+                float interpolatedOpacity = clip->getOpacity(clipRelativeNs);
                 accumulatedTexture = blendTextures(accumulatedTexture, fgTex, interpolatedOpacity, pongFb);
             }
             std::swap(pingFb, pongFb);

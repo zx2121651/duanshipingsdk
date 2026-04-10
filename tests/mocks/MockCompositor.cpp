@@ -14,7 +14,7 @@ void Compositor::initBlendProgram() {}
 void Compositor::initWipeTransitionProgram() {}
 Texture Compositor::blendTextures(const Texture& bg, const Texture& fg, float opacity, FrameBufferPtr target) { return Texture(); }
 Texture Compositor::transitionTextures(const Texture& bg, const Texture& fg, TransitionType type, float progress, FrameBufferPtr target) { return Texture(); }
-Result Compositor::renderFrameAtTime(int64_t timelineUs, FrameBufferPtr outputFb) {
+Result Compositor::renderFrameAtTime(int64_t timelineNs, FrameBufferPtr outputFb) {
     return Result::ok();
 }
 

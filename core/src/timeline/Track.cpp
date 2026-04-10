@@ -33,7 +33,7 @@ void Track::clearClips() {
     m_clips.clear();
 }
 
-ClipPtr Track::getActiveClipAtTime(int64_t timelineUs) const {
+ClipPtr Track::getActiveClipAtTime(int64_t timelineNs) const {
     if (m_clips.empty()) return nullptr;
 
     // 因为 m_clips 是按 TimelineIn 有序的，可以用二分查找 (std::lower_bound) 优化，
@@ -43,12 +43,12 @@ ClipPtr Track::getActiveClipAtTime(int64_t timelineUs) const {
         int64_t end = clip->getTimelineOut();
 
         // 游标落入 [TimelineIn, TimelineOut) 区间，则该 Clip 目前应该被渲染/发声
-        if (timelineUs >= start && timelineUs < end) {
+        if (timelineNs >= start && timelineNs < end) {
             return clip;
         }
 
         // 如果游标早于当前 Clip，说明后面的都无需找了（因为序列是有序的）
-        if (timelineUs < start) break;
+        if (timelineNs < start) break;
     }
 
     // 轨道在这个时间点是空的 (比如两段素材之间的黑屏过渡)

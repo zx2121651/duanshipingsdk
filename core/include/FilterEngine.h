@@ -39,13 +39,13 @@ public:
     void release();
 
     // Graph Builder APIs
-    void buildCameraPipeline();
-    void buildTimelinePipeline(std::shared_ptr<timeline::Timeline> timeline, std::shared_ptr<timeline::Compositor> compositor);
+    Result buildCameraPipeline();
+    Result buildTimelinePipeline(std::shared_ptr<timeline::Timeline> timeline, std::shared_ptr<timeline::Compositor> compositor);
 
     // Pipeline manipulation
-        void addFilter(FilterType type);
-    void addFilterRaw(FilterPtr filter); // Expose for internal nodes like OES2RGB
-    void removeAllFilters();
+        Result addFilter(FilterType type);
+    Result addFilterRaw(FilterPtr filter); // Expose for internal nodes like OES2RGB
+    Result removeAllFilters();
 
     PerformanceMetrics getPerformanceMetrics() const { return m_metricsCollector.getMetrics(); }
     void recordDroppedFrame() { m_metricsCollector.recordDroppedFrame(); }
@@ -53,12 +53,13 @@ public:
 
 
     // 暴露 FBO 内存池供子滤镜（如 Two-pass 高斯模糊）借用
-    FrameBufferPool m_frameBufferPool;
+    FrameBufferPool* getFrameBufferPool() { return &m_frameBufferPool; }
 
     // 暴露 ContextManager 给 NativeBridge 探测
     GLContextManager& getContextManager() { return m_contextManager; }
 
 private:
+    FrameBufferPool m_frameBufferPool;
     std::shared_ptr<ShaderManager> m_shaderManager;
 
 
@@ -66,11 +67,9 @@ private:
     std::shared_ptr<PipelineGraph> m_graph;
     std::shared_ptr<CameraInputNode> m_cameraNode;
     std::shared_ptr<OutputNode> m_outputNode;
-    std::vector<FilterPtr> m_filters;
 
     ThreadCheck m_threadCheck;
     bool m_initialized;
-    bool m_simulateCrash;
     mutable MetricsCollector m_metricsCollector;
 
 

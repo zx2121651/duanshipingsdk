@@ -102,8 +102,8 @@ public:
                         sawInputEOS = true;
                     }
 
-                    int64_t presentationTimeUs = AMediaExtractor_getSampleTime(m_extractor);
-                    AMediaCodec_queueInputBuffer(m_codec, bufIdx, 0, sampleSize, presentationTimeUs,
+                    int64_t presentationTimeNs = AMediaExtractor_getSampleTime(m_extractor);
+                    AMediaCodec_queueInputBuffer(m_codec, bufIdx, 0, sampleSize, presentationTimeNs,
                                                  sawInputEOS ? AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM : 0);
 
                     AMediaExtractor_advance(m_extractor);
@@ -123,7 +123,7 @@ public:
                     uint8_t* buf = AMediaCodec_getOutputBuffer(m_codec, status, &bufSize);
 
                     std::shared_ptr<FrameBufferPacket> packet = std::make_shared<FrameBufferPacket>();
-                    packet->ptsUs = info.presentationTimeUs;
+                    packet->ptsNs = info.presentationTimeUs * 1000;
                     packet->width = m_width;
                     packet->height = m_height;
                     packet->data.assign(buf, buf + info.size);
@@ -205,7 +205,7 @@ public:
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 
-    Texture getFrameAt(int64_t timeUs) override {
+    Texture getFrameAt(int64_t timeNs) override {
         initYUVProgram();
 
         std::shared_ptr<FrameBufferPacket> targetPacket = nullptr;
@@ -213,7 +213,7 @@ public:
         {
             std::lock_guard<std::mutex> lock(m_queueMutex);
             // Drop old frames
-            while (!m_frameQueue.empty() && m_frameQueue.front()->ptsUs < timeUs - 30000) {
+            while (!m_frameQueue.empty() && m_frameQueue.front()->ptsNs < timeNs - 30000000) {
                 m_frameQueue.pop();
                 m_queueCv.notify_one();
             }

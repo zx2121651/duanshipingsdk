@@ -16,13 +16,13 @@ public:
         if (!m_timeline || !m_compositor) return VideoFrame();
 
         // Convert ns to ms or internal timeline units
-        int64_t timeUs = timestampNs / 1000;
+        int64_t timeNs = timestampNs;
 
         int width = m_timeline->getOutputWidth();
         int height = m_timeline->getOutputHeight();
 
         FrameBufferPtr fbo = m_frameBufferPool.getFrameBuffer(width, height);
-        Result res = m_compositor->renderFrameAtTime(timeUs, fbo);
+        Result res = m_compositor->renderFrameAtTime(timeNs, fbo);
 
         VideoFrame frame;
         if (fbo) {

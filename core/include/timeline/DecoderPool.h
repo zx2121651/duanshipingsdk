@@ -21,8 +21,8 @@ public:
     DecoderPool();
     ~DecoderPool() override;
 
-    // 核心接口：获取在 localTimeUs 微秒时刻，clipId 对应的视频解码后的 GL 纹理
-    Texture getFrame(const std::string& clipId, int64_t localTimeUs) override;
+    // 核心接口：获取在 localTimeNs 微秒时刻，clipId 对应的视频解码后的 GL 纹理
+    Texture getFrame(const std::string& clipId, int64_t localTimeNs) override;
 
     // 向池中注册一个需要被解码的视频素材
     void registerMedia(const std::string& clipId, const std::string& sourcePath);
@@ -38,7 +38,7 @@ private:
         std::shared_ptr<VideoDecoder> decoder;
         bool isInitialized = false;
         Texture lastDecodedFrame = {0, 0, 0};
-        int64_t lastDecodedTimeUs = -1;
+        int64_t lastDecodedTimeNs = -1;
     };
 
     std::map<std::string, std::shared_ptr<DecoderContext>> m_decoders;

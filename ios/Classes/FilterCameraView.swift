@@ -27,7 +27,7 @@ public struct FilterCameraView: View {
                 .edgesIgnoringSafeArea(.all)
                 .task {
                     // 视图挂载时，默认加载电影级 LUT 滤镜
-                    await filterManager.addFilter(.cinematicLookup)
+                    try? await filterManager.addFilter(.cinematicLookup)
                 }
 
             // 顶层 UI 控制浮层

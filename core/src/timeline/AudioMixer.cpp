@@ -8,14 +8,14 @@ namespace timeline {
 AudioMixer::AudioMixer(std::shared_ptr<Timeline> timeline, AudioDecoderPoolPtr decoderPool)
     : m_timeline(timeline), m_decoderPool(decoderPool) {}
 
-std::vector<int16_t> AudioMixer::mixAudioAtTime(int64_t timelineUs, int64_t durationUs) {
+std::vector<int16_t> AudioMixer::mixAudioAtTime(int64_t timelineNs, int64_t durationNs) {
     if (!m_timeline || !m_decoderPool) return {};
 
     // Note: Assuming standard 44.1kHz, 2 channels (Stereo).
-    // Samples needed = (durationUs / 1,000,000) * 44100 * 2 channels.
+    // Samples needed = (durationNs / 1,000,000) * 44100 * 2 channels.
     const int SAMPLE_RATE = 44100;
     const int CHANNELS = 2;
-    size_t samplesNeeded = static_cast<size_t>((durationUs / 1000000.0) * SAMPLE_RATE * CHANNELS);
+    size_t samplesNeeded = static_cast<size_t>((durationNs / 1000000.0) * SAMPLE_RATE * CHANNELS);
 
     // Safety check: Avoid huge allocations if duration is wrong
     if (samplesNeeded <= 0 || samplesNeeded > SAMPLE_RATE * CHANNELS * 5) {
@@ -29,25 +29,25 @@ std::vector<int16_t> AudioMixer::mixAudioAtTime(int64_t timelineUs, int64_t dura
     // 2. Fetch active audio clips (assuming Timeline provides this. For now we use getActiveVideoClipsAtTime
     // and assume they contain audio, or getActiveAudioClipsAtTime if implemented).
     // For architectural simulation, we assume Video clips act as AV clips.
-    std::vector<ClipPtr> activeClips = m_timeline->getActiveAudioClipsAtTime(timelineUs);
+    std::vector<ClipPtr> activeClips = m_timeline->getActiveAudioClipsAtTime(timelineNs);
 
     // 3. Extract and Mix
     for (const auto& clip : activeClips) {
         // Calculate the relative time inside the media source
         // Example: If clip is placed at Timeline=5s, TrimIn=2s, and we want Timeline=6s -> localTime = 6-5+2 = 3s
-        int64_t localTimeUs = (timelineUs - clip->getTimelineIn()) * clip->getSpeed() + clip->getTrimIn();
+        int64_t localTimeNs = (timelineNs - clip->getTimelineIn()) * clip->getSpeed() + clip->getTrimIn();
 
         // Duration also needs speed adjustment
-        int64_t localDurationUs = static_cast<int64_t>(durationUs * clip->getSpeed());
+        int64_t localDurationNs = static_cast<int64_t>(durationNs * clip->getSpeed());
 
         // Fetch decoded PCM chunk from the DecoderPool
-        std::vector<int16_t> pcmData = m_decoderPool->getPcmData(clip->getId(), localTimeUs, localDurationUs);
+        std::vector<int16_t> pcmData = m_decoderPool->getPcmData(clip->getId(), localTimeNs, localDurationNs);
 
         if (!pcmData.empty()) {
             hasAudioData = true;
             // Get dynamically interpolated volume from keyframes
-            int64_t clipRelativeUs = timelineUs - clip->getTimelineIn();
-            float volume = clip->getVolume(clipRelativeUs);
+            int64_t clipRelativeNs = timelineNs - clip->getTimelineIn();
+            float volume = clip->getVolume(clipRelativeNs);
 
             // Limit loop to the smallest buffer size to prevent out-of-bounds
             size_t mixCount = std::min(accumulationBuffer.size(), pcmData.size());

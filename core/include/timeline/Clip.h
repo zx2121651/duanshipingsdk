@@ -33,16 +33,16 @@ public:
     MediaType getType() const { return m_type; }
 
     // 时间控制
-    void setSourceDuration(int64_t durationUs) { m_sourceDuration = durationUs; }
+    void setSourceDuration(int64_t durationNs) { m_sourceDuration = durationNs; }
     int64_t getSourceDuration() const { return m_sourceDuration; }
 
-    void setTrimIn(int64_t trimInUs) { m_trimIn = trimInUs; }
+    void setTrimIn(int64_t trimInNs) { m_trimIn = trimInNs; }
     int64_t getTrimIn() const { return m_trimIn; }
 
-    void setTrimOut(int64_t trimOutUs) { m_trimOut = trimOutUs; }
+    void setTrimOut(int64_t trimOutNs) { m_trimOut = trimOutNs; }
     int64_t getTrimOut() const { return m_trimOut; }
 
-    void setTimelineIn(int64_t timelineInUs) { m_timelineIn = timelineInUs; }
+    void setTimelineIn(int64_t timelineInNs) { m_timelineIn = timelineInNs; }
     int64_t getTimelineIn() const { return m_timelineIn; }
     int64_t getTimelineOut() const;
 
@@ -54,24 +54,24 @@ public:
     void setTransform(float scale, float rotation, float transX, float transY);
 
     // 转场属性 (此 Clip 出现时，与上一层画面的融合方式)
-    void setInTransition(TransitionType type, int64_t durationUs) {
+    void setInTransition(TransitionType type, int64_t durationNs) {
         m_inTransitionType = type;
-        m_inTransitionDurationUs = durationUs;
+        m_inTransitionDurationNs = durationNs;
     }
     TransitionType getInTransitionType() const { return m_inTransitionType; }
-    int64_t getInTransitionDurationUs() const { return m_inTransitionDurationUs; }
+    int64_t getInTransitionDurationNs() const { return m_inTransitionDurationNs; }
 
     // 关键帧控制
     // 注意: 时间戳是相对于 Clip 的 timelineIn 而言的相对时间 (0 开始)
-    void addKeyframe(const std::string& paramName, int64_t relativeTimeUs, float value);
+    void addKeyframe(const std::string& paramName, int64_t relativeTimeNs, float value);
 
     // 获取插值后的参数。如果没有关键帧，返回 defaultValue
-    float getInterpolatedParam(const std::string& paramName, int64_t relativeTimeUs, float defaultValue) const;
+    float getInterpolatedParam(const std::string& paramName, int64_t relativeTimeNs, float defaultValue) const;
 
     // 快捷方式获取特定属性
-    float getOpacity(int64_t relativeTimeUs) const { return getInterpolatedParam("opacity", relativeTimeUs, 1.0f); }
-    float getVolume(int64_t relativeTimeUs) const { return getInterpolatedParam("volume", relativeTimeUs, m_volume); }
-    float getScale(int64_t relativeTimeUs) const { return getInterpolatedParam("scale", relativeTimeUs, m_scale); }
+    float getOpacity(int64_t relativeTimeNs) const { return getInterpolatedParam("opacity", relativeTimeNs, 1.0f); }
+    float getVolume(int64_t relativeTimeNs) const { return getInterpolatedParam("volume", relativeTimeNs, m_volume); }
+    float getScale(int64_t relativeTimeNs) const { return getInterpolatedParam("scale", relativeTimeNs, m_scale); }
 
     void setVolume(float volume) { m_volume = volume; } // Fallback static volume
 
@@ -94,7 +94,7 @@ private:
     float m_transY = 0.0f;
 
     TransitionType m_inTransitionType = TransitionType::NONE;
-    int64_t m_inTransitionDurationUs = 0;
+    int64_t m_inTransitionDurationNs = 0;
 
     // 数据结构：属性名 -> (相对时间戳 -> 参数值)
     // std::map 自带按 Key (时间戳) 排序的特性，极大方便插值查找
