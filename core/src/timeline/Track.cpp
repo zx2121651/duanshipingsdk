@@ -69,9 +69,6 @@ int64_t Track::getMaxTimelineOut() const {
     return maxOut;
 }
 
-} // namespace timeline
-} // namespace video
-} // namespace sdk
 
 ClipPtr Track::getClip(const std::string& clipId) const {
     for (auto& c : m_clips) {
@@ -81,3 +78,7 @@ ClipPtr Track::getClip(const std::string& clipId) const {
     }
     return nullptr;
 }
+
+} // namespace timeline
+} // namespace video
+} // namespace sdk

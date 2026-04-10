@@ -14,3 +14,5 @@ dependencyResolutionManagement {
 }
 rootProject.name = "ShortVideoSDK"
 include ':android'
+
+include ':sample-android'

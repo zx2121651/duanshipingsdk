@@ -28,9 +28,5 @@ jobs:
       - name: Lint and Compile Check (Objective-C++ & Swift)
         run: |
           cd ios
-          # Compile check for objective-c++ files
-          for file in Classes/*.mm; do
-            clang++ -c "$file" -I../core/include -std=c++17 -F/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk/System/Library/Frameworks -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk -miphoneos-version-min=13.0 || echo "Manual compilation requires full Xcode project context"
-          done
-        # Ideally, we should use xcodebuild if a .xcodeproj exists
-        # xcodebuild clean build -project "VideoSDK.xcodeproj" -scheme "VideoSDK" -destination "platform=iOS Simulator,name=iPhone 15,OS=latest" CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO ONLY_ACTIVE_ARCH=NO
+          # We use xcodebuild with a minimal project now
+          xcodebuild clean build -project "VideoSDK.xcodeproj" -scheme "VideoSDK" -destination "platform=iOS Simulator,name=iPhone 15,OS=latest" CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO ONLY_ACTIVE_ARCH=NO

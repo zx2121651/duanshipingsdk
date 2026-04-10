@@ -18,9 +18,10 @@ public:
         // Convert ns to ms or internal timeline units
         int64_t timeUs = timestampNs / 1000;
 
-        // Ask compositor to render the frame at this specific time.
-        // Needs an FBO. Usually Timeline has its own or we supply one.
-        FrameBufferPtr fbo = nullptr; // Note: For a real implement, TimelineNode should have a FrameBufferPool
+        int width = m_timeline->getOutputWidth();
+        int height = m_timeline->getOutputHeight();
+
+        FrameBufferPtr fbo = m_frameBufferPool.getFrameBuffer(width, height);
         Result res = m_compositor->renderFrameAtTime(timeUs, fbo);
 
         VideoFrame frame;
@@ -38,6 +39,7 @@ public:
 private:
     std::shared_ptr<timeline::Timeline> m_timeline;
     std::shared_ptr<timeline::Compositor> m_compositor;
+    FrameBufferPool m_frameBufferPool;
 };
 
 } // namespace video

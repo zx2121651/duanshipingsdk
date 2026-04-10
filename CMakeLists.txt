@@ -15,6 +15,12 @@ set(CORE_SOURCES
     core/src/pipeline/PipelineGraph.cpp
     core/src/ThreadCheck.cpp
     core/src/GLContextManager.cpp
+    core/src/timeline/Timeline.cpp
+    core/src/timeline/Track.cpp
+    core/src/timeline/Clip.cpp
+    core/src/timeline/Compositor.cpp
+    core/src/timeline/DecoderPool.cpp
+    core/src/timeline/AudioMixer.cpp
 )
 
 # Core engine build
@@ -59,3 +65,6 @@ else()
         endif()
     endif()
 endif()
+
+add_executable(test_timeline tests/test_timeline.cpp)
+target_link_libraries(test_timeline video_sdk_core)

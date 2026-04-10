@@ -1,3 +1,4 @@
+#include "../../include/FilterEngine.h"
 #include "../../include/timeline/Compositor.h"
 #include <iostream>
 
@@ -278,7 +279,11 @@ Result Compositor::renderFrameAtTime(int64_t timelineUs, FrameBufferPtr outputFb
         }
     }
 
-    Texture finalTex = m_filterEngine->processFrame(accumulatedTexture, outputFb->width(), outputFb->height());
+    auto result = m_filterEngine->processFrame(accumulatedTexture, outputFb->width(), outputFb->height());
+    if (!result.isOk()) {
+        return Result::error(result.getErrorCode(), result.getMessage());
+    }
+    Texture finalTex = result.getValue();
 
     copyTexture(finalTex, outputFb);
 

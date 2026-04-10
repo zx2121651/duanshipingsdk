@@ -162,7 +162,11 @@ Java_com_sdk_video_RenderEngine_nativeInit(JNIEnv *env, jobject thiz, jobject as
 
     auto oesFilter = std::make_shared<OES2RGBFilter>();
     wrapper->filterEngine->addFilterRaw(oesFilter);
-    wrapper->filterEngine->initialize();
+    auto res = wrapper->filterEngine->initialize();
+    if (!res.isOk()) {
+        delete wrapper;
+        return -1001; // ERR_INIT_CONTEXT_FAILED
+    }
     return reinterpret_cast<jlong>(wrapper);
 }
 
@@ -280,7 +284,7 @@ Java_com_sdk_video_RenderEngine_nativeRemoveAllFilters(JNIEnv *env, jobject thiz
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
     if (wrapper) {
         wrapper->filterEngine->removeAllFilters();
-        wrapper->filterEngine->addFilter(std::make_shared<OES2RGBFilter>());
+        wrapper->filterEngine->addFilterRaw(std::make_shared<OES2RGBFilter>());
         return sdk::video::ErrorCode::SUCCESS;
     }
     return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
@@ -316,8 +320,6 @@ Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jl
 
     return bytesRead;
 }
-
-} // extern "C"
 
 JNIEXPORT jint JNICALL
 Java_com_sdk_video_RenderEngine_nativeUpdateShaderSource(JNIEnv *env, jobject thiz, jlong handle, jstring name, jstring source) {
@@ -362,3 +364,5 @@ Java_com_sdk_video_RenderEngine_nativeRecordDroppedFrame(JNIEnv *env, jobject th
         wrapper->filterEngine->recordDroppedFrame();
     }
 }
+
+} // extern "C"

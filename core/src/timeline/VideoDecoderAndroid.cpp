@@ -328,3 +328,8 @@ private:
 } // namespace sdk
 
 #endif // __ANDROID__
+
+// Platform Decoder Factory Implementation
+std::shared_ptr<VideoDecoder> createPlatformDecoder() {
+    return std::make_shared<VideoDecoderAndroid>();
+}

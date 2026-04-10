@@ -47,7 +47,10 @@ fun FilterCameraPreview(
                         glView = this
                         filterManager.glThreadDispatcher = { runnable -> queueEvent(runnable) }
                         setEGLContextClientVersion(3)
-                        setRenderer(object : GLSurfaceView.Renderer {
+
+                        val renderer = object : GLSurfaceView.Renderer {
+                            var renderJob: kotlinx.coroutines.Job? = null
+
                             var currentTextureId = -1
 
 
@@ -92,7 +95,8 @@ fun FilterCameraPreview(
                                 }
 
 
-                                scope.launch {
+                                renderJob?.cancel()
+                                renderJob = filterManager.scope.launch {
                                     filterManager.processedFrames.collect { result ->
                                         result.onSuccess { texId ->
                                             currentTextureId = texId
@@ -146,8 +150,17 @@ fun FilterCameraPreview(
                                 }
                             }
 
-                        })
+                        }
+                        setRenderer(renderer)
                         renderMode = GLSurfaceView.RENDERMODE_WHEN_DIRTY
+
+                        // Handle detaching to clean up the coroutine
+                        addOnAttachStateChangeListener(object : android.view.View.OnAttachStateChangeListener {
+                            override fun onViewAttachedToWindow(v: android.view.View) {}
+                            override fun onViewDetachedFromWindow(v: android.view.View) {
+                                renderer.renderJob?.cancel()
+                            }
+                        })
                     }
                 }
             )

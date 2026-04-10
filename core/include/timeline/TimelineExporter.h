@@ -14,6 +14,10 @@ namespace timeline {
  *
  * 用于在后台线程以非实时（尽可能快）的速度将 Timeline 渲染并编码为本地 MP4 文件。
  */
+/**
+ * @Experimental
+ * Note: Offline exporting is currently in an experimental phase and APIs may change.
+ */
 class TimelineExporter {
 public:
     virtual ~TimelineExporter() = default;

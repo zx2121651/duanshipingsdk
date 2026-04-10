@@ -1,4 +1,6 @@
-package com.sdk.video
+package com.sdk.video.sample
+
+import com.sdk.video.*
 
 import android.Manifest
 import android.content.pm.PackageManager

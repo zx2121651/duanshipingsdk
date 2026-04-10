@@ -73,8 +73,11 @@ std::vector<ClipPtr> Timeline::getActiveAudioClipsAtTime(int64_t timelineUs) con
         if (!track || track->getTrackVolume() <= 0.0f) continue;
 
         ClipPtr clip = track->getActiveClipAtTime(timelineUs);
-        if (clip && clip->getVolume() > 0.0f) {
-            activeAudio.push_back(clip);
+        if (clip) {
+            int64_t relativeUs = timelineUs - clip->getTimelineIn();
+            if (clip->getVolume(relativeUs) > 0.0f) {
+                activeAudio.push_back(clip);
+            }
         }
     }
 

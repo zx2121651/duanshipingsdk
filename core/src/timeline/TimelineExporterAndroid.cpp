@@ -17,6 +17,10 @@ namespace sdk {
 namespace video {
 namespace timeline {
 
+/**
+ * @Experimental
+ * This is an experimental implementation.
+ */
 class TimelineExporterAndroid : public TimelineExporter {
 public:
     TimelineExporterAndroid() : m_width(0), m_height(0), m_fps(30), m_bitrate(0), m_canceled(false) {}
