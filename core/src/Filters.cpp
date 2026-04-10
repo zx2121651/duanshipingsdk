@@ -1,3 +1,4 @@
+#include <array>
 #include "../include/Filters.h"
 #include <iostream>
 #include <vector>
@@ -127,7 +128,7 @@ static const float s_textureCoords[] = {
 
 OES2RGBFilter::OES2RGBFilter() {
     // Default to identity matrix
-    m_parameters["textureMatrix"] = std::vector<float>{
+    m_mat4Parameters["textureMatrix"] = std::array<float, 16>{
         1.0f, 0.0f, 0.0f, 0.0f,
         0.0f, 1.0f, 0.0f, 0.0f,
         0.0f, 0.0f, 1.0f, 0.0f,
@@ -168,11 +169,9 @@ void OES2RGBFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb)
     glBindTexture(GL_TEXTURE_EXTERNAL_OES, inputTexture.id); // Important: Use OES target
     glUniform1i(m_inputImageTextureHandle, 0);
 
-    if (m_parameters.count("textureMatrix") && m_parameters.at("textureMatrix").type() == typeid(std::vector<float>)) {
-        auto matrix = std::any_cast<std::vector<float>>(m_parameters.at("textureMatrix"));
-        if (matrix.size() == 16) {
-            glUniformMatrix4fv(m_textureMatrixHandle, 1, GL_FALSE, matrix.data());
-        }
+    if (m_mat4Parameters.count("textureMatrix")) {
+        auto& matrix = m_mat4Parameters.at("textureMatrix");
+        glUniformMatrix4fv(m_textureMatrixHandle, 1, GL_FALSE, matrix.data());
     }
 
     bool flipH = false;

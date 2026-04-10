@@ -73,13 +73,22 @@ ResultPayload<Texture> FilterEngine::processFrame(const Texture& textureIn, int 
 }
 
 void FilterEngine::updateParameter(const std::string& key, const std::any& value) {
-
-
     if (m_graph) {
         for (const auto& node : m_graph->getNodes()) {
             auto filterNode = std::dynamic_pointer_cast<FilterNode>(node);
             if (filterNode && filterNode->getFilter()) {
                 filterNode->getFilter()->setParameter(key, value);
+            }
+        }
+    }
+}
+
+void FilterEngine::updateParameterMat4(const std::string& key, const float* matrix) {
+    if (m_graph) {
+        for (const auto& node : m_graph->getNodes()) {
+            auto filterNode = std::dynamic_pointer_cast<FilterNode>(node);
+            if (filterNode && filterNode->getFilter()) {
+                filterNode->getFilter()->setParameterMat4(key, matrix);
             }
         }
     }

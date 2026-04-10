@@ -34,6 +34,7 @@ public:
 
     // Update filter parameters
     void updateParameter(const std::string& key, const std::any& value);
+    void updateParameterMat4(const std::string& key, const float* matrix);
 
     // Release resources
     void release();

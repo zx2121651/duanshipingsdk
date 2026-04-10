@@ -170,7 +170,7 @@ private:
                     glBindFramebuffer(GL_FRAMEBUFFER, 0);
                     glFinish(); // 确保渲染指令完成
 
-                    CMTime presentationTime = CMTimeMake(currentTimeNs, 1000000);
+                    CMTime presentationTime = CMTimeMake(currentTimeNs, 1000000000);
                     [adaptor appendPixelBuffer:pixelBuffer withPresentationTime:presentationTime];
 
                     CFRelease(cvTexture);

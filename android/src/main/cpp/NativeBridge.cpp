@@ -147,10 +147,17 @@ struct EngineWrapper {
 };
 
 
+static jfieldID g_lastFrameTimeMsId = nullptr;
+
 extern "C" {
 
 JNIEXPORT jlong JNICALL
 Java_com_sdk_video_RenderEngine_nativeInit(JNIEnv *env, jobject thiz, jobject assetManager) {
+    if (!g_lastFrameTimeMsId) {
+        jclass cls = env->GetObjectClass(thiz);
+        g_lastFrameTimeMsId = env->GetFieldID(cls, "lastFrameTimeMs", "J");
+    }
+
     EngineWrapper* wrapper = new EngineWrapper();
     wrapper->filterEngine = std::make_shared<FilterEngine>();
 
@@ -188,10 +195,9 @@ Java_com_sdk_video_RenderEngine_nativeProcessFrame(JNIEnv *env, jobject thiz, jl
 
     jsize len = env->GetArrayLength(matrix);
     if (len == 16) {
-        jfloat *elements = env->GetFloatArrayElements(matrix, 0);
-        std::vector<float> textureMatrix(elements, elements + 16);
-        env->ReleaseFloatArrayElements(matrix, elements, 0);
-        wrapper->filterEngine->updateParameter("textureMatrix", std::any(textureMatrix));
+        jfloat buffer[16];
+        env->GetFloatArrayRegion(matrix, 0, 16, buffer);
+        wrapper->filterEngine->updateParameterMat4("textureMatrix", buffer);
     }
 
     Texture inTex = {static_cast<uint32_t>(textureId), static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
@@ -210,10 +216,8 @@ Java_com_sdk_video_RenderEngine_nativeProcessFrame(JNIEnv *env, jobject thiz, jl
     auto end = std::chrono::high_resolution_clock::now();
     long long durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
-    jclass cls = env->GetObjectClass(thiz);
-    jfieldID lastFrameTimeMsId = env->GetFieldID(cls, "lastFrameTimeMs", "J");
-    if (lastFrameTimeMsId) {
-        env->SetLongField(thiz, lastFrameTimeMsId, static_cast<jlong>(durationMs));
+    if (g_lastFrameTimeMsId) {
+        env->SetLongField(thiz, g_lastFrameTimeMsId, static_cast<jlong>(durationMs));
     }
 
     return outTex.id;

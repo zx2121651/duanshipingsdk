@@ -1,3 +1,4 @@
+#include <array>
 #include "../include/Filter.h"
 #include <iostream>
 #include <cstdlib>
@@ -59,6 +60,14 @@ Texture Filter::processFrame(const Texture& inputTexture, FrameBufferPtr outputF
 
 void Filter::setParameter(const std::string& key, const std::any& value) {
     m_parameters[key] = value;
+}
+
+void Filter::setParameterMat4(const std::string& key, const float* matrix) {
+    if (matrix) {
+        std::array<float, 16> arr;
+        std::copy(matrix, matrix + 16, arr.begin());
+        m_mat4Parameters[key] = arr;
+    }
 }
 
 std::string Filter::getVertexShaderSource() const {
