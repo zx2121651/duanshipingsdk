@@ -31,6 +31,7 @@ public:
     virtual Texture processFrame(const Texture& inputTexture, FrameBufferPtr outputFb);
 
     virtual void setParameter(const std::string& key, const std::any& value);
+    virtual void setParameterMat4(const std::string& key, const float* matrix);
 
 protected:
     std::shared_ptr<ShaderManager> m_shaderManager;
@@ -47,6 +48,7 @@ protected:
 
     GLuint m_programId;
     std::map<std::string, std::any> m_parameters;
+    std::map<std::string, std::array<float, 16>> m_mat4Parameters;
 
     // Common attributes/uniforms
     GLuint m_positionHandle;

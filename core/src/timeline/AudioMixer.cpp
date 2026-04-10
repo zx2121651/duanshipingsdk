@@ -12,10 +12,10 @@ std::vector<int16_t> AudioMixer::mixAudioAtTime(int64_t timelineNs, int64_t dura
     if (!m_timeline || !m_decoderPool) return {};
 
     // Note: Assuming standard 44.1kHz, 2 channels (Stereo).
-    // Samples needed = (durationNs / 1,000,000) * 44100 * 2 channels.
+    // Samples needed = (durationNs / 1,000,000,000) * 44100 * 2 channels.
     const int SAMPLE_RATE = 44100;
     const int CHANNELS = 2;
-    size_t samplesNeeded = static_cast<size_t>((durationNs / 1000000.0) * SAMPLE_RATE * CHANNELS);
+    size_t samplesNeeded = static_cast<size_t>((durationNs / 1000000000.0) * SAMPLE_RATE * CHANNELS);
 
     // Safety check: Avoid huge allocations if duration is wrong
     if (samplesNeeded <= 0 || samplesNeeded > SAMPLE_RATE * CHANNELS * 5) {
