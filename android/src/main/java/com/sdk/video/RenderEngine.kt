@@ -63,7 +63,7 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
 
     fun init(assetManager: android.content.res.AssetManager): Int {
         nativeHandle = nativeInit(assetManager)
-        if (nativeHandle == 0L) return -1
+        if (nativeHandle == 0L) return -1001 // ERR_INIT_CONTEXT_FAILED
 
         val textures = IntArray(1)
         GLES20.glGenTextures(1, textures, 0)

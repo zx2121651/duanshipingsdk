@@ -53,8 +53,8 @@ public class VideoEncoder {
 
         let sourcePixelBufferAttributes: [String: Any] = [
             kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32BGRA),
-            kCVPixelBufferWidthKey as String: width,
-            kCVPixelBufferHeightKey as String: height
+            kCVPixelBufferWidthKey as String: config.width,
+            kCVPixelBufferHeightKey as String: config.height
         ]
 
         if let videoInput = videoInput {
@@ -115,16 +115,14 @@ public class VideoEncoder {
     public func appendAudioSampleBuffer(_ sampleBuffer: CMSampleBuffer) {
         guard isRecording, let audioInput = audioInput, !isFirstFrame else { return }
 
-        var safeTimestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-        if safeTimestamp <= lastAudioPts {
-            safeTimestamp = CMTimeAdd(lastAudioPts, CMTimeMake(value: 1, timescale: Int32(config.audioSampleRate)))
+        let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        if pts <= lastAudioPts {
+            // Drop abnormal sample buffer to enforce strict monotonic timeline safely
+            return
         }
-        lastAudioPts = safeTimestamp
+        lastAudioPts = pts
 
         if audioInput.isReadyForMoreMediaData {
-            // Note: We should actually adjust the CMSampleBuffer timestamp here if it was corrected,
-            // but for simplicity in this bridge we just log or drop if it's severely out of sync.
-            // A full implementation requires creating a new CMSampleBuffer with the updated timing info.
             audioInput.append(sampleBuffer)
         }
     }

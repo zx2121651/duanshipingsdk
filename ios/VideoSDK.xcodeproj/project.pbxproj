@@ -1,0 +1,198 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		1A00000000000001 /* FilterEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000001 /* FilterEngine.swift */; };
+		1A00000000000002 /* FilterCameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000002 /* FilterCameraView.swift */; };
+		1A00000000000003 /* VideoExportConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000003 /* VideoExportConfig.swift */; };
+		1A00000000000004 /* VideoFilterManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000004 /* VideoFilterManager.swift */; };
+		1A00000000000005 /* VideoEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000005 /* VideoEncoder.swift */; };
+		1A00000000000006 /* IOSAssetProvider.mm in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000006 /* IOSAssetProvider.mm */; };
+		1A00000000000007 /* FilterEngineWrapper.mm in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000007 /* FilterEngineWrapper.mm */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		1B00000000000001 /* FilterEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterEngine.swift; sourceTree = "<group>"; };
+		1B00000000000002 /* FilterCameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterCameraView.swift; sourceTree = "<group>"; };
+		1B00000000000003 /* VideoExportConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoExportConfig.swift; sourceTree = "<group>"; };
+		1B00000000000004 /* VideoFilterManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFilterManager.swift; sourceTree = "<group>"; };
+		1B00000000000005 /* VideoEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoEncoder.swift; sourceTree = "<group>"; };
+		1B00000000000006 /* IOSAssetProvider.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = IOSAssetProvider.mm; sourceTree = "<group>"; };
+		1B00000000000007 /* FilterEngineWrapper.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = FilterEngineWrapper.mm; sourceTree = "<group>"; };
+		1B00000000000008 /* IOSAssetProvider.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = IOSAssetProvider.h; sourceTree = "<group>"; };
+		1B00000000000009 /* FilterEngineWrapper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = FilterEngineWrapper.h; sourceTree = "<group>"; };
+		1B0000000000000A /* VideoSDK.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = VideoSDK.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		1C00000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		1D00000000000001 = {
+			isa = PBXGroup;
+			children = (
+				1D00000000000002 /* Classes */,
+				1B0000000000000A /* VideoSDK.framework */,
+			);
+			sourceTree = "<group>";
+		};
+		1D00000000000002 /* Classes */ = {
+			isa = PBXGroup;
+			children = (
+				1B00000000000001 /* FilterEngine.swift */,
+				1B00000000000002 /* FilterCameraView.swift */,
+				1B00000000000003 /* VideoExportConfig.swift */,
+				1B00000000000004 /* VideoFilterManager.swift */,
+				1B00000000000005 /* VideoEncoder.swift */,
+				1B00000000000006 /* IOSAssetProvider.mm */,
+				1B00000000000007 /* FilterEngineWrapper.mm */,
+				1B00000000000008 /* IOSAssetProvider.h */,
+				1B00000000000009 /* FilterEngineWrapper.h */,
+			);
+			path = Classes;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXHeadersBuildPhase section */
+		1E00000000000001 /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXHeadersBuildPhase section */
+
+/* Begin PBXNativeTarget section */
+		1F00000000000001 /* VideoSDK */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2000000000000001 /* Build configuration list for PBXNativeTarget "VideoSDK" */;
+			buildPhases = (
+				1E00000000000001 /* Headers */,
+				2100000000000001 /* Sources */,
+				1C00000000000001 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = VideoSDK;
+			productName = VideoSDK;
+			productReference = 1B0000000000000A /* VideoSDK.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		2200000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					1F00000000000001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = 2000000000000002 /* Build configuration list for PBXProject "VideoSDK" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 1D00000000000001;
+			productRefGroup = 1D00000000000001;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				1F00000000000001 /* VideoSDK */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		2100000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1A00000000000001 /* FilterEngine.swift in Sources */,
+				1A00000000000002 /* FilterCameraView.swift in Sources */,
+				1A00000000000003 /* VideoExportConfig.swift in Sources */,
+				1A00000000000004 /* VideoFilterManager.swift in Sources */,
+				1A00000000000005 /* VideoEncoder.swift in Sources */,
+				1A00000000000006 /* IOSAssetProvider.mm in Sources */,
+				1A00000000000007 /* FilterEngineWrapper.mm in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		2300000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++17";
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sdk.VideoSDK;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+                HEADER_SEARCH_PATHS = "$(SRCROOT)/../core/include";
+			};
+			name = Debug;
+		};
+		2300000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++17";
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sdk.VideoSDK;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+                HEADER_SEARCH_PATHS = "$(SRCROOT)/../core/include";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		2000000000000001 /* Build configuration list for PBXNativeTarget "VideoSDK" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2300000000000001 /* Debug */,
+				2300000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		2000000000000002 /* Build configuration list for PBXProject "VideoSDK" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2300000000000001 /* Debug */,
+				2300000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 2200000000000001 /* Project object */;
+}

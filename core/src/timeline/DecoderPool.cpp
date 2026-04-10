@@ -15,21 +15,9 @@ namespace timeline {
 // or ideally they are returned from a factory.
 // We will mock the instantiation for architecture validation.
 
-#ifdef __ANDROID__
-class VideoDecoderAndroid;
-#elif defined(__APPLE__)
-class VideoDecoderIOS;
-#endif
-
-// To keep the build simple without exposing the private headers of DecoderAndroid/IOS,
-// we just declare a weak linkage or mock it.
+// Factory function implemented in VideoDecoderAndroid.cpp or VideoDecoderIOS.mm
 extern std::shared_ptr<VideoDecoder> createPlatformDecoder();
 
-std::shared_ptr<VideoDecoder> createPlatformDecoder() {
-    // In a real build system, we would inject the concrete factory.
-    // For this architectural commit, we leave it as a hook.
-    return nullptr;
-}
 
 DecoderPool::DecoderPool() {}
 

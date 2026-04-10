@@ -95,6 +95,18 @@ class VideoFilterManager(private val context: android.content.Context,
             val res = renderEngine.init(context.assets)
             if (res != 0) return Result.failure(VideoSdkError.fromNativeCode(res))
 
+            // 监听底层渲染错误
+            renderEngine.onRenderErrorListener = { errorCode ->
+                _engineState.value = FilterEngineState.DEGRADED // or ERROR
+                _processedFrames.tryEmit(Result.failure(VideoSdkError.fromNativeCode(errorCode)))
+            }
+
+            // 监听性能数据
+            renderEngine.onPerformanceUpdateListener = { durationMs ->
+                // 每次性能回调时主动拉取一次 metrics 并推到流里
+                _performanceMetrics.value = renderEngine.getMetrics()
+            }
+
             // 设置底层每处理完一帧的回调监听
             renderEngine.onFrameProcessedListener = { outputTexId ->
                 if (outputTexId >= 0) {

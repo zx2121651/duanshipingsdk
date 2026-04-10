@@ -80,7 +80,7 @@ public actor VideoFilterManager {
      * 视频帧处理的核心入口。通常由 AVCaptureVideoDataOutput 的 delegate 回调。
      * - Parameter pixelBuffer: 相机硬件直出的原始视频帧
      */
-    public func processFrame(_ pixelBuffer: CVPixelBuffer) {
+    public func processFrame(_ pixelBuffer: CVPixelBuffer, timestamp: CMTime? = nil) {
         guard case .running = state else {
             // 降级策略：如果引擎未初始化或者崩溃，直接使用 yield 原样返回输入的 pixelBuffer，
             // 这确保了哪怕特效引擎坏了，用户的相机画面也不会黑屏 (Bypass 原图)。
@@ -94,9 +94,9 @@ public actor VideoFilterManager {
 
             // 如果正在录制，将处理后的帧写入编码器
             if let encoder = videoEncoder, encoder.isRecording {
-                // 真实场景下 timestamp 应该从参数传入，此处模拟一个自增时间或使用系统时间
-                let timestamp = CMClockGetTime(CMClockGetHostTimeClock())
-                encoder.appendVideoPixelBuffer(processedBuffer, timestamp: timestamp)
+                // 使用传入的真实时间戳，或回退到系统时钟
+                let finalTimestamp = timestamp ?? CMClockGetTime(CMClockGetHostTimeClock())
+                encoder.appendVideoPixelBuffer(processedBuffer, timestamp: finalTimestamp)
             }
         } else {
             // 处理失败 (例如内部 simulateCrash 被触发，或者 GPU 显存耗尽)。
