@@ -41,7 +41,10 @@ ResultPayload<Texture> FilterEngine::processFrame(const Texture& textureIn, int 
     auto start_time = std::chrono::high_resolution_clock::now();
 
     if (m_isGraphDirty) {
-        buildCameraPipeline();
+        Result res = buildCameraPipeline();
+        if (!res.isOk()) {
+            return ResultPayload<Texture>::error(res.getErrorCode(), "Pipeline build failed: " + res.getMessage());
+        }
         m_isGraphDirty = false;
     }
 
@@ -210,6 +213,11 @@ Result FilterEngine::buildCameraPipeline() {
     }
 
     newGraph->connect(lastNode, m_outputNode);
+
+    // Explicitly release old graph to prevent memory leak and properly free FBOs/OpenGL state
+    if (m_graph) {
+        m_graph->release();
+    }
     m_graph = newGraph;
 
 
@@ -259,6 +267,11 @@ Result FilterEngine::buildTimelinePipeline(std::shared_ptr<timeline::Timeline> t
     }
 
     newGraph->connect(lastNode, m_outputNode);
+
+    // Explicitly release old graph to prevent memory leak and properly free FBOs/OpenGL state
+    if (m_graph) {
+        m_graph->release();
+    }
     m_graph = newGraph;
 
 
