@@ -155,6 +155,7 @@
 				SWIFT_VERSION = 5.0;
                 HEADER_SEARCH_PATHS = "$(SRCROOT)/../core/include";
                 GENERATE_INFOPLIST_FILE = YES;
+                SWIFT_OBJC_BRIDGING_HEADER = Classes/VideoSDK-Bridging-Header.h;
 			};
 			name = Debug;
 		};
@@ -170,6 +171,7 @@
 				SWIFT_VERSION = 5.0;
                 HEADER_SEARCH_PATHS = "$(SRCROOT)/../core/include";
                 GENERATE_INFOPLIST_FILE = YES;
+                SWIFT_OBJC_BRIDGING_HEADER = Classes/VideoSDK-Bridging-Header.h;
 			};
 			name = Release;
 		};
