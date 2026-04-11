@@ -22,14 +22,14 @@ uniform bool flipVertical;
 out vec2 textureCoordinate;
 void main() {
     gl_Position = position;
-    // Apply SurfaceTexture transform matrix to fix orientation/cropping
-    vec2 coord = (textureMatrix * inputTextureCoordinate).xy;
 
-    // Apply manual flips if necessary
+    vec4 coord = inputTextureCoordinate;
+    // Apply manual flips if necessary BEFORE the matrix transform
     if (flipHorizontal) coord.x = 1.0 - coord.x;
     if (flipVertical) coord.y = 1.0 - coord.y;
 
-    textureCoordinate = coord;
+    // Apply SurfaceTexture transform matrix to fix orientation/cropping
+    textureCoordinate = (textureMatrix * coord).xy;
 }
 )";
 
