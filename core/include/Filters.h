@@ -128,6 +128,9 @@ private:
 // Compute Shader 滤镜 (仅 Android GLES 3.1)
 // ----------------------------------------------------------------------------
 #ifdef __ANDROID__
+namespace sdk {
+namespace video {
+
 class ComputeBlurFilter : public Filter {
 public:
     ComputeBlurFilter();
@@ -149,3 +152,7 @@ private:
     GLuint m_blurSizeHandle;
 };
 #endif
+
+
+} // namespace video
+} // namespace sdk

@@ -6,6 +6,7 @@ import com.sdk.video.InternalApi
  * 真实的非线性剪辑引擎门面类 (NLE Timeline Facade)
  * 这里管理的数据模型是剪辑业务层的来源，它将驱动底层的 Decoder 和 RenderEngine
  */
+@OptIn(InternalApi::class)
 class TimelineManager(val outputWidth: Int, val outputHeight: Int, val fps: Int) {
 
     // 原生 C++ Timeline 对象的指针

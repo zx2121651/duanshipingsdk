@@ -1,3 +1,4 @@
+#include "../../../../core/include/GLTypes.h"
 #include <jni.h>
 #include <string>
 #include <memory>
@@ -37,7 +38,7 @@ Java_com_sdk_video_timeline_TimelineManager_nativeAddTrack(JNIEnv *env, jobject 
         (*timelinePtr)->addTrack(zIndex, static_cast<Track::TrackType>(trackType));
         return 0; // Success
     }
-    return sdk::video::ErrorCode::ERR_TIMELINE_NULL;
+    return static_cast<int>(sdk::video::ErrorCode::ERR_TIMELINE_NULL);
 }
 
 // ========================================================================
@@ -52,7 +53,7 @@ Java_com_sdk_video_timeline_TimelineManager_nativeAddClip(
     jlong trimInUs, jlong trimOutUs, jlong timelineInUs)
 {
     auto timelinePtr = reinterpret_cast<std::shared_ptr<Timeline>*>(handle);
-    if (!timelinePtr || !(*timelinePtr)) return sdk::video::ErrorCode::ERR_TIMELINE_NULL;
+    if (!timelinePtr || !(*timelinePtr)) return static_cast<int>(sdk::video::ErrorCode::ERR_TIMELINE_NULL);
 
     TrackPtr track = (*timelinePtr)->getTrack(zIndex);
     if (track) {
@@ -70,7 +71,7 @@ Java_com_sdk_video_timeline_TimelineManager_nativeAddClip(
         env->ReleaseStringUTFChars(sourcePath, cPath);
         return 0; // Success
     }
-    return sdk::video::ErrorCode::ERR_TIMELINE_TRACK_NOT_FOUND;
+    return static_cast<int>(sdk::video::ErrorCode::ERR_TIMELINE_TRACK_NOT_FOUND);
 }
 
 

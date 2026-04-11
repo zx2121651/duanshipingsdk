@@ -330,6 +330,13 @@ private:
 #endif // __ANDROID__
 
 // Platform Decoder Factory Implementation
+namespace sdk {
+namespace video {
+namespace timeline {
 std::shared_ptr<VideoDecoder> createPlatformDecoder() {
     return std::make_shared<VideoDecoderAndroid>();
+}
+
+}
+}
 }
