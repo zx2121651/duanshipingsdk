@@ -96,9 +96,9 @@ class VideoFilterManager(private val context: android.content.Context,
             if (res != 0) return Result.failure(VideoSdkError.fromNativeCode(res))
 
             // 监听底层渲染错误
-            renderEngine.onRenderErrorListener = { errorCode ->
+            renderEngine.onRenderErrorListener = { errorCode, errorMessage ->
                 _engineState.value = FilterEngineState.DEGRADED // or ERROR
-                _processedFrames.tryEmit(Result.failure(VideoSdkError.fromNativeCode(errorCode)))
+                _processedFrames.tryEmit(Result.failure(VideoSdkError.NativeError(errorCode, errorMessage)))
             }
 
             // 监听性能数据

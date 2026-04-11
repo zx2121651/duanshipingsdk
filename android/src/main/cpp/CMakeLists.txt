@@ -18,11 +18,16 @@ set(CORE_SRC
         ../../../../core/src/FrameBuffer.cpp
         ../../../../core/src/FrameBufferPool.cpp
         ../../../../core/src/GLContextManager.cpp
+        ../../../../core/src/ShaderManager.cpp
+        ../../../../core/src/ThreadCheck.cpp
+        ../../../../core/src/pipeline/PipelineGraph.cpp
+        AndroidAssetProvider.cpp
         ../../../../core/src/timeline/Clip.cpp
         ../../../../core/src/timeline/Track.cpp
         ../../../../core/src/timeline/Timeline.cpp
         ../../../../core/src/timeline/Compositor.cpp
         ../../../../core/src/timeline/DecoderPool.cpp
+        ../../../../core/src/timeline/VideoDecoderAndroid.cpp
 )
 
 add_library(video-sdk SHARED
@@ -44,6 +49,7 @@ target_link_libraries(video-sdk
         log
         EGL
         GLESv3
-        oboe::oboe
+        oboe
         OpenSLES
+        mediandk
 )
