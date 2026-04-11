@@ -24,7 +24,7 @@ jobs:
 
       - name: Generate Gradle Wrapper
         working-directory: ./
-        run: gradle wrapper
+        run: gradle wrapper --gradle-version 8.8
 
       - name: Build with Gradle
         working-directory: ./

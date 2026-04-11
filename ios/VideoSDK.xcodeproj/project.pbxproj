@@ -154,6 +154,7 @@
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
                 HEADER_SEARCH_PATHS = "$(SRCROOT)/../core/include";
+                GENERATE_INFOPLIST_FILE = YES;
 			};
 			name = Debug;
 		};
@@ -168,6 +169,7 @@
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
                 HEADER_SEARCH_PATHS = "$(SRCROOT)/../core/include";
+                GENERATE_INFOPLIST_FILE = YES;
 			};
 			name = Release;
 		};
