@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <deque>
 #include <mutex>
 #include <chrono>
 #include <algorithm>
@@ -18,17 +19,13 @@ struct PerformanceMetrics {
 
 class MetricsCollector {
 public:
-    MetricsCollector(size_t windowSize = 100) : m_windowSize(windowSize) {
-        m_frameTimesMs.reserve(windowSize);
-    }
+    MetricsCollector(size_t windowSize = 100) : m_windowSize(windowSize) {}
 
     void recordFrameTime(float timeMs) {
+        if (m_windowSize == 0) return;
         std::lock_guard<std::mutex> lock(m_mutex);
         if (m_frameTimesMs.size() >= m_windowSize) {
-            // Very simple sliding window: remove oldest.
-            // For better performance on large windows, a circular buffer is better,
-            // but for small UI monitoring (e.g., 60-100 frames), vector erase is fine.
-            m_frameTimesMs.erase(m_frameTimesMs.begin());
+            m_frameTimesMs.pop_front();
         }
         m_frameTimesMs.push_back(timeMs);
     }
@@ -47,7 +44,7 @@ public:
             return metrics;
         }
 
-        std::vector<float> sorted(m_frameTimesMs);
+        std::vector<float> sorted(m_frameTimesMs.begin(), m_frameTimesMs.end());
         std::sort(sorted.begin(), sorted.end());
 
         float sum = 0;
@@ -65,7 +62,7 @@ public:
 
 private:
     size_t m_windowSize;
-    std::vector<float> m_frameTimesMs;
+    std::deque<float> m_frameTimesMs;
     int m_droppedFrames = 0;
     std::mutex m_mutex;
 };
