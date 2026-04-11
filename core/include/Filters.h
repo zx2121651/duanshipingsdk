@@ -151,8 +151,7 @@ private:
     GLuint m_computeProgramId;
     GLuint m_blurSizeHandle;
 };
-#endif
-
 
 } // namespace video
 } // namespace sdk
+#endif
