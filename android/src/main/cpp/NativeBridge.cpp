@@ -149,14 +149,53 @@ struct EngineWrapper {
 
 static jfieldID g_lastFrameTimeMsId = nullptr;
 
+
+void throwNativeException(JNIEnv* env, int errorCode, const std::string& message) {
+    jclass exClass = env->FindClass("com/sdk/video/NativeRenderException");
+    if (exClass != nullptr) {
+        // Find constructor NativeRenderException(int, String)
+        jmethodID constructor = env->GetMethodID(exClass, "<init>", "(ILjava/lang/String;)V");
+        if (constructor != nullptr) {
+            jstring jmsg = env->NewStringUTF(message.c_str());
+            jobject exObj = env->NewObject(exClass, constructor, errorCode, jmsg);
+            if (exObj != nullptr) {
+                env->Throw(reinterpret_cast<jthrowable>(exObj));
+            }
+            env->DeleteLocalRef(jmsg);
+            env->DeleteLocalRef(exObj);
+        }
+        env->DeleteLocalRef(exClass);
+    }
+}
+
+
 extern "C" {
 
-JNIEXPORT jlong JNICALL
-Java_com_sdk_video_RenderEngine_nativeInit(JNIEnv *env, jobject thiz, jobject assetManager) {
+JNIEXPORT jlong JNICALLnJava_com_sdk_video_RenderEngine_nativeInit(JNIEnv *env, jobject thiz, jobject assetManager) {
     if (!g_lastFrameTimeMsId) {
         jclass cls = env->GetObjectClass(thiz);
         g_lastFrameTimeMsId = env->GetFieldID(cls, "lastFrameTimeMs", "J");
     }
+
+    EngineWrapper* wrapper = new EngineWrapper();
+    wrapper->filterEngine = std::make_shared<FilterEngine>();
+
+    if (assetManager) {
+        AAssetManager* nativeAssetManager = AAssetManager_fromJava(env, assetManager);
+        auto assetProvider = std::make_shared<AndroidAssetProvider>(nativeAssetManager);
+        wrapper->filterEngine->setAssetProvider(assetProvider);
+    }
+
+    auto oesFilter = std::make_shared<OES2RGBFilter>();
+    wrapper->filterEngine->addFilterRaw(oesFilter);
+    auto res = wrapper->filterEngine->initialize();
+    if (!res.isOk()) {
+        delete wrapper;
+        throwNativeException(env, res.getErrorCode(), res.getMessage());
+        return 0;
+    }
+    return reinterpret_cast<jlong>(wrapper);
+}
 
     EngineWrapper* wrapper = new EngineWrapper();
     wrapper->filterEngine = std::make_shared<FilterEngine>();
@@ -186,10 +225,12 @@ Java_com_sdk_video_RenderEngine_nativeRelease(JNIEnv *env, jobject thiz, jlong h
     }
 }
 
-JNIEXPORT jint JNICALL
-Java_com_sdk_video_RenderEngine_nativeProcessFrame(JNIEnv *env, jobject thiz, jlong handle, jint textureId, jint width, jint height, jfloatArray matrix, jlong timestampNs) {
+JNIEXPORT jint JNICALLnJava_com_sdk_video_RenderEngine_nativeProcessFrame(JNIEnv *env, jobject thiz, jlong handle, jint textureId, jint width, jint height, jfloatArray matrix, jlong timestampNs) {
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
-    if (!wrapper || !wrapper->filterEngine) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
+    if (!wrapper || !wrapper->filterEngine) {
+        // Safe fallback if not initialized, return -1 and don't throw to avoid crashing GL thread
+        return -1;
+    }
 
     auto start = std::chrono::high_resolution_clock::now();
 
@@ -199,6 +240,38 @@ Java_com_sdk_video_RenderEngine_nativeProcessFrame(JNIEnv *env, jobject thiz, jl
         env->GetFloatArrayRegion(matrix, 0, 16, buffer);
         wrapper->filterEngine->updateParameterMat4("textureMatrix", buffer);
     }
+
+    Texture inTex = {static_cast<uint32_t>(textureId), static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
+    auto result = wrapper->filterEngine->processFrame(inTex, width, height);
+    if (!result.isOk()) {
+        __android_log_print(ANDROID_LOG_ERROR, "NativeBridge", "Frame rendering failed: [%d] %s", result.getErrorCode(), result.getMessage().c_str());
+
+        jclass cls = env->GetObjectClass(thiz);
+        jmethodID mid = env->GetMethodID(cls, "onNativeRenderError", "(ILjava/lang/String;)V");
+        if (mid != nullptr) {
+            jstring jmsg = env->NewStringUTF(result.getMessage().c_str());
+            env->CallVoidMethod(thiz, mid, result.getErrorCode(), jmsg);
+            env->DeleteLocalRef(jmsg);
+        }
+        env->DeleteLocalRef(cls);
+        return -1;
+    }
+
+    Texture outTex = result.getValue();
+
+#ifndef WIN32
+    wrapper->renderToRecordingSurface(outTex, width, height, timestampNs);
+#endif
+
+    auto end = std::chrono::high_resolution_clock::now();
+    long long durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+
+    if (g_lastFrameTimeMsId) {
+        env->SetLongField(thiz, g_lastFrameTimeMsId, static_cast<jlong>(durationMs));
+    }
+
+    return outTex.id;
+}
 
     Texture inTex = {static_cast<uint32_t>(textureId), static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
     auto result = wrapper->filterEngine->processFrame(inTex, width, height);
@@ -223,15 +296,23 @@ Java_com_sdk_video_RenderEngine_nativeProcessFrame(JNIEnv *env, jobject thiz, jl
     return outTex.id;
 }
 
-JNIEXPORT jint JNICALL
-Java_com_sdk_video_RenderEngine_nativeSetRecordingSurface(JNIEnv *env, jobject thiz, jlong handle, jobject surface) {
+JNIEXPORT void JNICALLnJava_com_sdk_video_RenderEngine_nativeSetRecordingSurface(JNIEnv *env, jobject thiz, jlong handle, jobject surface) {
 #ifndef WIN32
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
-    if (!wrapper) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
+    if (!wrapper) {
+        throwNativeException(env, sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED, "Context not initialized");
+        return;
+    }
 
     if (surface) {
         wrapper->setupRecordingSurface(env, surface);
     } else {
+        wrapper->releaseRecordingSurface();
+    }
+#else
+    throwNativeException(env, sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED, "Not supported on WIN32");
+#endif
+} else {
         wrapper->releaseRecordingSurface();
     }
     return sdk::video::ErrorCode::SUCCESS;
@@ -240,78 +321,97 @@ Java_com_sdk_video_RenderEngine_nativeSetRecordingSurface(JNIEnv *env, jobject t
 #endif
 }
 
-JNIEXPORT jint JNICALL
-Java_com_sdk_video_RenderEngine_nativeUpdateParameterFloat(JNIEnv *env, jobject thiz, jlong handle, jstring key, jfloat value) {
+JNIEXPORT void JNICALLnJava_com_sdk_video_RenderEngine_nativeUpdateParameterFloat(JNIEnv *env, jobject thiz, jlong handle, jstring key, jfloat value) {
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
-    if (!wrapper || !wrapper->filterEngine) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
+    if (!wrapper || !wrapper->filterEngine) {
+        throwNativeException(env, sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED, "Engine not initialized");
+        return;
+    }
 
     const char *keyStr = env->GetStringUTFChars(key, nullptr);
     wrapper->filterEngine->updateParameter(std::string(keyStr), std::any(value));
     env->ReleaseStringUTFChars(key, keyStr);
-    return sdk::video::ErrorCode::SUCCESS;
 }
 
-JNIEXPORT jint JNICALL
-Java_com_sdk_video_RenderEngine_nativeUpdateParameterInt(JNIEnv *env, jobject thiz, jlong handle, jstring key, jint value) {
+JNIEXPORT void JNICALLnJava_com_sdk_video_RenderEngine_nativeUpdateParameterInt(JNIEnv *env, jobject thiz, jlong handle, jstring key, jint value) {
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
-    if (!wrapper || !wrapper->filterEngine) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
+    if (!wrapper || !wrapper->filterEngine) {
+        throwNativeException(env, sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED, "Engine not initialized");
+        return;
+    }
 
     const char *keyStr = env->GetStringUTFChars(key, nullptr);
     wrapper->filterEngine->updateParameter(std::string(keyStr), std::any(value));
     env->ReleaseStringUTFChars(key, keyStr);
-    return sdk::video::ErrorCode::SUCCESS;
 }
 
-JNIEXPORT jint JNICALL
-Java_com_sdk_video_RenderEngine_nativeUpdateParameterBool(JNIEnv *env, jobject thiz, jlong handle, jstring key, jboolean value) {
+JNIEXPORT void JNICALLnJava_com_sdk_video_RenderEngine_nativeUpdateParameterBool(JNIEnv *env, jobject thiz, jlong handle, jstring key, jboolean value) {
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
-    if (!wrapper || !wrapper->filterEngine) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
+    if (!wrapper || !wrapper->filterEngine) {
+        throwNativeException(env, sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED, "Engine not initialized");
+        return;
+    }
 
     const char *keyStr = env->GetStringUTFChars(key, nullptr);
     bool val = (value == JNI_TRUE);
     wrapper->filterEngine->updateParameter(std::string(keyStr), std::any(val));
     env->ReleaseStringUTFChars(key, keyStr);
-    return sdk::video::ErrorCode::SUCCESS;
 }
 
-JNIEXPORT jint JNICALL
-Java_com_sdk_video_RenderEngine_nativeAddFilter(JNIEnv *env, jobject thiz, jlong handle, jint filterType) {
+JNIEXPORT void JNICALLnJava_com_sdk_video_RenderEngine_nativeAddFilter(JNIEnv *env, jobject thiz, jlong handle, jint filterType) {
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
-    if (!wrapper || !wrapper->filterEngine) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
+    if (!wrapper || !wrapper->filterEngine) {
+        throwNativeException(env, sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED, "Engine not initialized");
+        return;
+    }
 
     auto res = wrapper->filterEngine->addFilter(static_cast<sdk::video::FilterType>(filterType));
-    return res.isOk() ? sdk::video::ErrorCode::SUCCESS : res.getErrorCode();
+    if (!res.isOk()) {
+        throwNativeException(env, res.getErrorCode(), res.getMessage());
+    }
 }
 
-JNIEXPORT jint JNICALL
-Java_com_sdk_video_RenderEngine_nativeRemoveAllFilters(JNIEnv *env, jobject thiz, jlong handle) {
+JNIEXPORT void JNICALLnJava_com_sdk_video_RenderEngine_nativeRemoveAllFilters(JNIEnv *env, jobject thiz, jlong handle) {
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
-    if (wrapper) {
-        auto res1 = wrapper->filterEngine->removeAllFilters();
-        if (!res1.isOk()) return res1.getErrorCode();
-        auto res2 = wrapper->filterEngine->addFilterRaw(std::make_shared<OES2RGBFilter>());
-        return res2.isOk() ? sdk::video::ErrorCode::SUCCESS : res2.getErrorCode();
+    if (!wrapper || !wrapper->filterEngine) {
+        throwNativeException(env, sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED, "Engine not initialized");
+        return;
     }
+
+    auto res1 = wrapper->filterEngine->removeAllFilters();
+    if (!res1.isOk()) {
+        throwNativeException(env, res1.getErrorCode(), res1.getMessage());
+        return;
+    }
+    auto res2 = wrapper->filterEngine->addFilterRaw(std::make_shared<OES2RGBFilter>());
+    if (!res2.isOk()) {
+        throwNativeException(env, res2.getErrorCode(), res2.getMessage());
+    }
+}
     return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
 }
 
-JNIEXPORT jint JNICALL
-Java_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
+JNIEXPORT void JNICALLnJava_com_sdk_video_RenderEngine_nativeStartAudioRecord(JNIEnv *env, jobject thiz, jlong handle, jint sampleRate) {
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
-    if (wrapper && wrapper->audioEngine) {
-        bool ok = wrapper->audioEngine->start(sampleRate);
-        return ok ? 0 : sdk::video::ErrorCode::ERR_INIT_OBOE_FAILED;
+    if (!wrapper || !wrapper->audioEngine) {
+        throwNativeException(env, sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED, "Engine not initialized");
+        return;
     }
+    bool ok = wrapper->audioEngine->start(sampleRate);
+    if (!ok) {
+        throwNativeException(env, sdk::video::ErrorCode::ERR_INIT_OBOE_FAILED, "Failed to start audio record");
+    }
+}
     return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
 }
 
-JNIEXPORT jint JNICALL
-Java_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
+JNIEXPORT void JNICALLnJava_com_sdk_video_RenderEngine_nativeStopAudioRecord(JNIEnv *env, jobject thiz, jlong handle) {
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
-    if (!wrapper || !wrapper->audioEngine) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
-
+    if (!wrapper || !wrapper->audioEngine) {
+        throwNativeException(env, sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED, "Engine not initialized");
+        return;
+    }
     wrapper->audioEngine->stop();
-    return sdk::video::ErrorCode::SUCCESS;
 }
 
 JNIEXPORT jint JNICALL
@@ -326,10 +426,12 @@ Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jl
     return bytesRead;
 }
 
-JNIEXPORT jint JNICALL
-Java_com_sdk_video_RenderEngine_nativeUpdateShaderSource(JNIEnv *env, jobject thiz, jlong handle, jstring name, jstring source) {
+JNIEXPORT void JNICALLnJava_com_sdk_video_RenderEngine_nativeUpdateShaderSource(JNIEnv *env, jobject thiz, jlong handle, jstring name, jstring source) {
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
-    if (!wrapper || !wrapper->filterEngine) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
+    if (!wrapper || !wrapper->filterEngine) {
+        throwNativeException(env, sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED, "Engine not initialized");
+        return;
+    }
 
     const char* nameStr = env->GetStringUTFChars(name, nullptr);
     const char* sourceStr = env->GetStringUTFChars(source, nullptr);
@@ -338,8 +440,6 @@ Java_com_sdk_video_RenderEngine_nativeUpdateShaderSource(JNIEnv *env, jobject th
 
     env->ReleaseStringUTFChars(name, nameStr);
     env->ReleaseStringUTFChars(source, sourceStr);
-
-    return sdk::video::ErrorCode::SUCCESS;
 }
 
 JNIEXPORT jfloatArray JNICALL

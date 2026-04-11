@@ -23,6 +23,7 @@ sealed class VideoSdkError(message: String, val code: Int) : Exception("[$code] 
     // General or Unknown errors
     class UnknownNativeError(code: Int) : VideoSdkError("Unknown native error", code)
     class InvalidOperation(message: String) : VideoSdkError(message, -1)
+    class NativeError(code: Int, val nativeMessage: String) : VideoSdkError(nativeMessage, code)
 
     companion object {
         fun fromNativeCode(code: Int): VideoSdkError {

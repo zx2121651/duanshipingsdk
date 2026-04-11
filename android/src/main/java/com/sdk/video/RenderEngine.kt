@@ -29,13 +29,23 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
 
     var onFrameProcessedListener: ((outputTextureId: Int) -> Unit)? = null
     var onPerformanceUpdateListener: ((durationMs: Long) -> Unit)? = null
-    var onRenderErrorListener: ((errorCode: Int) -> Unit)? = null
+    var onRenderErrorListener: ((errorCode: Int, errorMessage: String) -> Unit)? = null
+
+    @androidx.annotation.Keep
+    private fun onNativeRenderError(errorCode: Int, errorMessage: String) {
+        onRenderErrorListener?.invoke(errorCode, errorMessage)
+    }
 
     // Call on GL thread to initialize
 
     fun updateShaderSource(name: String, source: String): Int {
         if (nativeHandle != 0L) {
-            return nativeUpdateShaderSource(nativeHandle, name, source)
+            try {
+                nativeUpdateShaderSource(nativeHandle, name, source)
+                return 0
+            } catch (e: NativeRenderException) {
+                return e.errorCode
+            }
         }
         return -1001 // ERR_INIT_CONTEXT_FAILED
     }
@@ -62,7 +72,11 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     }
 
     fun init(assetManager: android.content.res.AssetManager): Int {
-        nativeHandle = nativeInit(assetManager)
+        try {
+            nativeHandle = nativeInit(assetManager)
+        } catch (e: NativeRenderException) {
+            return e.errorCode
+        }
         if (nativeHandle == 0L) return -1001 // ERR_INIT_CONTEXT_FAILED
 
         val textures = IntArray(1)
@@ -96,10 +110,8 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
 
         val outputTexId = nativeProcessFrame(nativeHandle, oesTextureId, width, height, transformMatrix, timestampNs)
 
-        // 如果返回值是负数，表示产生了错误
-        if (outputTexId < 0) {
-            onRenderErrorListener?.invoke(outputTexId)
-        } else {
+        // 如果返回值是负数，表示产生了错误 (onNativeRenderError is called from C++)
+        if (outputTexId >= 0) {
             onFrameProcessedListener?.invoke(outputTexId)
             if (lastFrameTimeMs > 0) {
                 onPerformanceUpdateListener?.invoke(lastFrameTimeMs)
@@ -110,46 +122,73 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     // Recording API
     fun startRecording(surface: Surface): Result<Unit> {
         if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
-        val code = nativeSetRecordingSurface(nativeHandle, surface)
-        return if (code == 0) Result.success(Unit) else Result.failure(VideoSdkError.fromNativeCode(code))
+        return try {
+            nativeSetRecordingSurface(nativeHandle, surface)
+            Result.success(Unit)
+        } catch (e: NativeRenderException) {
+            Result.failure(VideoSdkError.NativeError(e.errorCode, e.message ?: "Unknown native error"))
+        }
     }
 
     fun stopRecording(): Result<Unit> {
         if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
-        val code = nativeSetRecordingSurface(nativeHandle, null)
-        return if (code == 0) Result.success(Unit) else Result.failure(VideoSdkError.fromNativeCode(code))
+        return try {
+            nativeSetRecordingSurface(nativeHandle, null)
+            Result.success(Unit)
+        } catch (e: NativeRenderException) {
+            Result.failure(VideoSdkError.NativeError(e.errorCode, e.message ?: "Unknown native error"))
+        }
     }
 
     // Parameters
     fun setFlip(horizontal: Boolean, vertical: Boolean): Result<Unit> {
         if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
-        var code = nativeUpdateParameterBool(nativeHandle, "flipHorizontal", horizontal)
-        if (code != 0) return Result.failure(VideoSdkError.fromNativeCode(code))
-        code = nativeUpdateParameterBool(nativeHandle, "flipVertical", vertical)
-        return if (code == 0) Result.success(Unit) else Result.failure(VideoSdkError.fromNativeCode(code))
+        return try {
+            nativeUpdateParameterBool(nativeHandle, "flipHorizontal", horizontal)
+            nativeUpdateParameterBool(nativeHandle, "flipVertical", vertical)
+            Result.success(Unit)
+        } catch (e: NativeRenderException) {
+            Result.failure(VideoSdkError.NativeError(e.errorCode, e.message ?: "Unknown native error"))
+        }
     }
 
     fun updateParameterFloat(key: String, value: Float): Result<Unit> {
         if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
-        val code = nativeUpdateParameterFloat(nativeHandle, key, value)
-        return if (code == 0) Result.success(Unit) else Result.failure(VideoSdkError.fromNativeCode(code))
+        return try {
+            nativeUpdateParameterFloat(nativeHandle, key, value)
+            Result.success(Unit)
+        } catch (e: NativeRenderException) {
+            Result.failure(VideoSdkError.NativeError(e.errorCode, e.message ?: "Unknown native error"))
+        }
     }
 
     fun updateParameterInt(key: String, value: Int): Result<Unit> {
         if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
-        val code = nativeUpdateParameterInt(nativeHandle, key, value)
-        return if (code == 0) Result.success(Unit) else Result.failure(VideoSdkError.fromNativeCode(code))
+        return try {
+            nativeUpdateParameterInt(nativeHandle, key, value)
+            Result.success(Unit)
+        } catch (e: NativeRenderException) {
+            Result.failure(VideoSdkError.NativeError(e.errorCode, e.message ?: "Unknown native error"))
+        }
     }
 
     // Pipeline
     fun addFilter(type: Int): Result<Unit> {
-        val code = nativeAddFilter(nativeHandle, type)
-        return if (code == 0) Result.success(Unit) else Result.failure(VideoSdkError.fromNativeCode(code))
+        return try {
+            nativeAddFilter(nativeHandle, type)
+            Result.success(Unit)
+        } catch (e: NativeRenderException) {
+            Result.failure(VideoSdkError.NativeError(e.errorCode, e.message ?: "Unknown native error"))
+        }
     }
 
     fun removeAllFilters(): Result<Unit> {
-        val code = nativeRemoveAllFilters(nativeHandle)
-        return if (code == 0) Result.success(Unit) else Result.failure(VideoSdkError.fromNativeCode(code))
+        return try {
+            nativeRemoveAllFilters(nativeHandle)
+            Result.success(Unit)
+        } catch (e: NativeRenderException) {
+            Result.failure(VideoSdkError.NativeError(e.errorCode, e.message ?: "Unknown native error"))
+        }
     }
 
     // Call on GL thread to release
@@ -170,14 +209,22 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
 
     fun startAudioRecord(sampleRate: Int): Result<Unit> {
         if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
-        val code = nativeStartAudioRecord(nativeHandle, sampleRate)
-        return if (code == 0) Result.success(Unit) else Result.failure(VideoSdkError.fromNativeCode(code))
+        return try {
+            nativeStartAudioRecord(nativeHandle, sampleRate)
+            Result.success(Unit)
+        } catch (e: NativeRenderException) {
+            Result.failure(VideoSdkError.NativeError(e.errorCode, e.message ?: "Unknown native error"))
+        }
     }
 
     fun stopAudioRecord(): Result<Unit> {
         if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
-        val code = nativeStopAudioRecord(nativeHandle)
-        return if (code == 0) Result.success(Unit) else Result.failure(VideoSdkError.fromNativeCode(code))
+        return try {
+            nativeStopAudioRecord(nativeHandle)
+            Result.success(Unit)
+        } catch (e: NativeRenderException) {
+            Result.failure(VideoSdkError.NativeError(e.errorCode, e.message ?: "Unknown native error"))
+        }
     }
 
     fun readAudioPCM(buffer: ByteArray, length: Int): Int {
@@ -185,19 +232,19 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     }
 
     // Native methods
-    private external fun nativeUpdateShaderSource(handle: Long, name: String, source: String): Int
+    private external fun nativeUpdateShaderSource(handle: Long, name: String, source: String)
     private external fun nativeGetMetrics(handle: Long): FloatArray?
     private external fun nativeRecordDroppedFrame(handle: Long)
     private external fun nativeInit(assetManager: android.content.res.AssetManager): Long
     private external fun nativeRelease(handle: Long)
     private external fun nativeProcessFrame(handle: Long, textureId: Int, width: Int, height: Int, matrix: FloatArray, timestampNs: Long): Int
-    private external fun nativeSetRecordingSurface(handle: Long, surface: Surface?): Int
-    private external fun nativeUpdateParameterFloat(handle: Long, key: String, value: Float): Int
-    private external fun nativeUpdateParameterInt(handle: Long, key: String, value: Int): Int
-    private external fun nativeUpdateParameterBool(handle: Long, key: String, value: Boolean): Int
-    private external fun nativeAddFilter(handle: Long, filterType: Int): Int
-    private external fun nativeRemoveAllFilters(handle: Long): Int
-    private external fun nativeStartAudioRecord(handle: Long, sampleRate: Int): Int
-    private external fun nativeStopAudioRecord(handle: Long): Int
+    private external fun nativeSetRecordingSurface(handle: Long, surface: Surface?)
+    private external fun nativeUpdateParameterFloat(handle: Long, key: String, value: Float)
+    private external fun nativeUpdateParameterInt(handle: Long, key: String, value: Int)
+    private external fun nativeUpdateParameterBool(handle: Long, key: String, value: Boolean)
+    private external fun nativeAddFilter(handle: Long, filterType: Int)
+    private external fun nativeRemoveAllFilters(handle: Long)
+    private external fun nativeStartAudioRecord(handle: Long, sampleRate: Int)
+    private external fun nativeStopAudioRecord(handle: Long)
     private external fun nativeReadAudioPCM(handle: Long, buffer: ByteArray, length: Int): Int
 }
