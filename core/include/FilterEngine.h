@@ -76,6 +76,8 @@ private:
 
     // 【三级防线】特征级嗅探器
     GLContextManager m_contextManager;
+
+    Result rebuildGraph(std::shared_ptr<PipelineNode> inputNode);
 };
 
 using FilterEnginePtr = std::shared_ptr<FilterEngine>;
