@@ -29,4 +29,4 @@ jobs:
         run: |
           cd ios
           # We use xcodebuild with a minimal project now
-          xcodebuild clean build -project "VideoSDK.xcodeproj" -scheme "VideoSDK" -destination "generic/platform=iOS Simulator" CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO ONLY_ACTIVE_ARCH=NO
+          xcodebuild clean build -project "VideoSDK.xcodeproj" -scheme "VideoSDK" -destination "generic/platform=iOS Simulator" CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO ONLY_ACTIVE_ARCH=NO GENERATE_INFOPLIST_FILE=YES
