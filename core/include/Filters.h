@@ -14,6 +14,8 @@ namespace video {
 
 class OES2RGBFilter : public Filter {
 public:
+    std::string getVertexShaderName() const override { return "oes_to_rgb.vert"; }
+    std::string getFragmentShaderName() const override { return "oes_to_rgb.frag"; }
     OES2RGBFilter();
     ~OES2RGBFilter() override = default;
     void initialize() override;
@@ -30,6 +32,8 @@ private:
 
 class BrightnessFilter : public Filter {
 public:
+    std::string getVertexShaderName() const override { return "default.vert"; }
+    std::string getFragmentShaderName() const override { return "brightness.frag"; }
     BrightnessFilter();
     ~BrightnessFilter() override = default;
     void initialize() override;
@@ -46,6 +50,8 @@ private:
 // ----------------------------------------------------------------------------
 class GaussianBlurFilter : public Filter {
 public:
+    std::string getVertexShaderName() const override { return "gaussian_blur.vert"; }
+    std::string getFragmentShaderName() const override { return "gaussian_blur.frag"; }
     // 注入 FrameBufferPool 用于在 Two-Pass 之间借用临时 FBO
     GaussianBlurFilter(FrameBufferPool* pool);
     ~GaussianBlurFilter() override;
@@ -70,6 +76,8 @@ private:
 
 class LookupFilter : public Filter {
 public:
+    std::string getVertexShaderName() const override { return "default.vert"; }
+    std::string getFragmentShaderName() const override { return "lookup.frag"; }
     LookupFilter();
     ~LookupFilter() override;
     void initialize() override;
@@ -89,6 +97,8 @@ private:
 
 class BilateralFilter : public Filter {
 public:
+    std::string getVertexShaderName() const override { return "default.vert"; }
+    std::string getFragmentShaderName() const override { return "bilateral.frag"; }
     BilateralFilter();
     ~BilateralFilter() override = default;
     void initialize() override;
@@ -104,6 +114,8 @@ private:
 
 class CinematicLookupFilter : public Filter {
 public:
+    std::string getVertexShaderName() const override { return "default.vert"; }
+    std::string getFragmentShaderName() const override { return "cinematic_lookup.frag"; }
     CinematicLookupFilter();
     ~CinematicLookupFilter() override;
     void initialize() override;
@@ -133,6 +145,9 @@ namespace video {
 
 class ComputeBlurFilter : public Filter {
 public:
+    std::string getVertexShaderName() const override { return ""; }
+    std::string getFragmentShaderName() const override { return ""; }
+    std::string getComputeShaderName() const { return "compute_blur.comp"; }
     ComputeBlurFilter();
     ~ComputeBlurFilter() override;
     void initialize() override;
