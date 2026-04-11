@@ -29,7 +29,7 @@ import OpenGLES
 
     // Call on GL thread to process frames from AVFoundation/Camera
     @objc public func processFrame(_ pixelBuffer: CVPixelBuffer) -> CVPixelBuffer? {
-        return wrapper.processFrame(pixelBuffer)
+        return wrapper.processFrame(pixelBuffer)?.takeUnretainedValue()
     }
 
     // Update float parameter on the fly
@@ -45,7 +45,7 @@ import OpenGLES
     // Add filter to the pipeline
     @objc public func addFilter(_ type: SwiftFilterType) -> Int32 {
         // Assume mapping matches FilterType
-        return wrapper.addFilter(FilterType(rawValue: type.rawValue)!)
+        return wrapper.add(FilterType(rawValue: type.rawValue)!)
     }
 
     // Clear pipeline

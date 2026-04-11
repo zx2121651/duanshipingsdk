@@ -25,9 +25,10 @@ public struct FilterCameraView: View {
             // 底部视频渲染区域
             CameraPreviewRepresentable(filterManager: filterManager)
                 .edgesIgnoringSafeArea(.all)
-                .task {
-                    // 视图挂载时，默认加载电影级 LUT 滤镜
-                    try? await filterManager.addFilter(.cinematicLookup)
+                .onAppear {
+                    Task {
+                        try? await filterManager.addFilter(.cinematicLookup)
+                    }
                 }
 
             // 顶层 UI 控制浮层
@@ -180,7 +181,8 @@ struct CameraPreviewRepresentable: UIViewRepresentable {
         glView.setupGL()
 
         let task = Task {
-            for await result in filterManager.processedFrames {
+            let stream = await filterManager.processedFrames
+            for await result in stream {
                 switch result {
                 case .success(let pixelBuffer):
                     DispatchQueue.main.async {
