@@ -1,6 +1,7 @@
 import Foundation
 import CoreVideo
 import OpenGLES
+import AVFoundation
 
 // 定义支持的视频滤镜类型枚举
 public enum VideoFilterType: Int {
