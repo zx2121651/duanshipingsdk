@@ -170,67 +170,22 @@ void FilterEngine::updateShaderSource(const std::string& name, const std::string
 
 Result FilterEngine::buildCameraPipeline() {
     m_cameraNode = std::make_shared<CameraInputNode>("Camera");
-    m_outputNode = std::make_shared<OutputNode>("Display");
-
-    std::shared_ptr<PipelineNode> lastNode = m_cameraNode;
-
-    // Create new graph
-    auto newGraph = std::make_shared<PipelineGraph>();
-    newGraph->addNode(m_cameraNode);
-    newGraph->addNode(m_outputNode);
-
-    // Keep existing filters
-    if (m_graph) {
-        std::vector<std::shared_ptr<Filter>> rawFilters;
-        for (const auto& node : m_graph->getNodes()) {
-            if (auto filterNode = std::dynamic_pointer_cast<FilterNode>(node)) {
-                rawFilters.push_back(filterNode->getFilter());
-            }
-        }
-
-        // Properly release the old graph as instructed
-        m_graph->release();
-
-        for (size_t i = 0; i < rawFilters.size(); ++i) {
-            auto filterNode = std::make_shared<FilterNode>("Filter_" + std::to_string(i), rawFilters[i]);
-
-            FBOPrecision targetPrecision = FBOPrecision::RGBA8888;
-            bool isIntermediate = (i < rawFilters.size() - 1);
-            if (isIntermediate) {
-                if (m_contextManager.isFP16RenderTargetSupported()) {
-                    targetPrecision = FBOPrecision::FP16;
-                } else {
-                    targetPrecision = FBOPrecision::RGB565;
-                }
-            }
-            filterNode->setFrameBufferPool(&m_frameBufferPool);
-            filterNode->setTargetPrecision(targetPrecision);
-
-            newGraph->addNode(filterNode);
-            newGraph->connect(lastNode, filterNode);
-            lastNode = filterNode;
-        }
-    }
-
-    newGraph->connect(lastNode, m_outputNode);
-
-    m_graph = newGraph;
-
-
-    Result res = m_graph->compile();
-    if (!res.isOk()) { std::cerr << "Pipeline Compile Failed: " << res.getMessage() << std::endl; return res; }
-    return Result::ok();
+    return rebuildGraph(m_cameraNode);
 }
 
 Result FilterEngine::buildTimelinePipeline(std::shared_ptr<timeline::Timeline> timeline, std::shared_ptr<timeline::Compositor> compositor) {
     auto timelineNode = std::make_shared<TimelineNode>("Timeline", timeline, compositor);
+    return rebuildGraph(timelineNode);
+}
+
+Result FilterEngine::rebuildGraph(std::shared_ptr<PipelineNode> inputNode) {
     m_outputNode = std::make_shared<OutputNode>("Display");
 
-    std::shared_ptr<PipelineNode> lastNode = timelineNode;
+    std::shared_ptr<PipelineNode> lastNode = inputNode;
 
     // Create new graph
     auto newGraph = std::make_shared<PipelineGraph>();
-    newGraph->addNode(timelineNode);
+    newGraph->addNode(inputNode);
     newGraph->addNode(m_outputNode);
 
     // Keep existing filters
@@ -270,9 +225,11 @@ Result FilterEngine::buildTimelinePipeline(std::shared_ptr<timeline::Timeline> t
 
     m_graph = newGraph;
 
-
     Result res = m_graph->compile();
-    if (!res.isOk()) { std::cerr << "Pipeline Compile Failed: " << res.getMessage() << std::endl; return res; }
+    if (!res.isOk()) {
+        std::cerr << "Pipeline Compile Failed: " << res.getMessage() << std::endl;
+        return res;
+    }
     return Result::ok();
 }
 
