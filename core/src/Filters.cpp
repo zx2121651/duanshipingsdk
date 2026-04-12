@@ -592,7 +592,11 @@ ComputeBlurFilter::~ComputeBlurFilter() {
 
 void ComputeBlurFilter::initialize() {
     // 1. 编译 Compute Shader
-    const char* csSrc = getComputeShaderSource();
+    std::string csStr = getComputeShaderSource();
+    if (m_shaderManager) {
+        csStr = m_shaderManager->getShaderSource(getComputeShaderName(), csStr);
+    }
+    const char* csSrc = csStr.c_str();
     GLuint computeShader = glCreateShader(GL_COMPUTE_SHADER);
     glShaderSource(computeShader, 1, &csSrc, NULL);
     glCompileShader(computeShader);

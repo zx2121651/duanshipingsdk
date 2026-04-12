@@ -1,42 +1,41 @@
-#version 300 es
-precision highp float;
-in vec2 textureCoordinate;
-uniform sampler2D inputImageTexture;
-uniform sampler2D lookupTexture;
-uniform float intensity;
+#version 310 es
+        // 声明每个工作组内有 16x16 个计算线程 (Invocation)
+        layout(local_size_x = 16, local_size_y = 16) in;
 
-out vec4 fragColor;
+        // 绑定输入输出的 Image (无需经过 sampler 纹理过滤，直接读取裸数据)
+        layout(binding = 0, rgba8) uniform readonly highp image2D inputImage;
+        layout(binding = 1, rgba8) uniform writeonly highp image2D outputImage;
 
-void main() {
-    vec4 textureColor = texture(inputImageTexture, textureCoordinate);
+        uniform float blurSize;
 
-    // 计算 3D LUT (Look-Up Table) 的坐标映射
-    float blueColor = textureColor.b * 63.0;
+        void main() {
+            // 获取当前计算线程对应的像素坐标
+            ivec2 texelPos = ivec2(gl_GlobalInvocationID.xy);
+            ivec2 size = imageSize(inputImage);
 
-    vec2 quad1;
-    quad1.y = floor(floor(blueColor) / 8.0);
-    quad1.x = floor(blueColor) - (quad1.y * 8.0);
+            // 越界保护
+            if (texelPos.x >= size.x || texelPos.y >= size.y) {
+                return;
+            }
 
-    vec2 quad2;
-    quad2.y = floor(ceil(blueColor) / 8.0);
-    quad2.x = ceil(blueColor) - (quad2.y * 8.0);
+            vec4 sum = vec4(0.0);
+            int count = 0;
+            int radius = int(blurSize);
 
-    vec2 texPos1;
-    texPos1.x = (quad1.x * 0.125) + 0.5/512.0 + ((0.125 - 1.0/512.0) * textureColor.r);
-    texPos1.y = (quad1.y * 0.125) + 0.5/512.0 + ((0.125 - 1.0/512.0) * textureColor.g);
+            // 粗暴的盒式模糊 (Box Blur) 演示并行算力
+            for(int y = -radius; y <= radius; y++) {
+                for(int x = -radius; x <= radius; x++) {
+                    ivec2 offsetPos = texelPos + ivec2(x, y);
+                    // 处理边界 clamp
+                    offsetPos.x = clamp(offsetPos.x, 0, size.x - 1);
+                    offsetPos.y = clamp(offsetPos.y, 0, size.y - 1);
 
-    vec2 texPos2;
-    texPos2.x = (quad2.x * 0.125) + 0.5/512.0 + ((0.125 - 1.0/512.0) * textureColor.r);
-    texPos2.y = (quad2.y * 0.125) + 0.5/512.0 + ((0.125 - 1.0/512.0) * textureColor.g);
+                    sum += imageLoad(inputImage, offsetPos);
+                    count++;
+                }
+            }
 
-    vec4 newColor1 = texture(lookupTexture, texPos1);
-    vec4 newColor2 = texture(lookupTexture, texPos2);
-
-    vec4 newColor = mix(newColor1, newColor2, fract(blueColor));
-
-    // 增加一定的胶片颗粒噪点感 (Film Grain) 或者 Vignette (暗角)，作为"电影感"的体现
-    float dist = distance(textureCoordinate, vec2(0.5, 0.5));
-    newColor.rgb *= smoothstep(0.8, 0.3, dist); // Vignette
-
-    fragColor = mix(textureColor, vec4(newColor.rgb, textureColor.w), intensity);
-}
+            vec4 result = sum / float(count);
+            // 将计算结果直接写入显存的输出纹理中
+            imageStore(outputImage, texelPos, result);
+        }

@@ -19,7 +19,7 @@ public:
 
     // Retrieve the shader source for a given name/path.
     // Uses the cached hot-updated version if available, otherwise falls back to asset loading.
-    std::string getShaderSource(const std::string& name);
+    std::string getShaderSource(const std::string& name, const std::string& fallbackSource = "");
 
     // Update the shader source directly (Hot Update API)
     void updateShaderSource(const std::string& name, const std::string& source);

@@ -13,7 +13,7 @@ void ShaderManager::setAssetProvider(std::shared_ptr<IAssetProvider> provider) {
     m_assetProvider = provider;
 }
 
-std::string ShaderManager::getShaderSource(const std::string& name) {
+std::string ShaderManager::getShaderSource(const std::string& name, const std::string& fallbackSource) {
     std::lock_guard<std::mutex> lock(m_mutex);
 
     // Check if we have a hot-updated or cached version
@@ -24,11 +24,18 @@ std::string ShaderManager::getShaderSource(const std::string& name) {
 
     // Otherwise load from asset
     if (m_assetProvider) {
-        std::string source = m_assetProvider->readAsset(name);
+        std::string path = "shaders/" + name;
+        std::string source = m_assetProvider->readAsset(path);
         if (!source.empty()) {
             m_shaderCache[name] = source;
             return source;
         }
+    }
+
+    if (!fallbackSource.empty()) {
+        std::cerr << "ShaderManager: Falling back to built-in source for " << name << std::endl;
+        m_shaderCache[name] = fallbackSource;
+        return fallbackSource;
     }
 
     std::cerr << "ShaderManager: Failed to find shader source for " << name << std::endl;

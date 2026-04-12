@@ -70,6 +70,11 @@ void Filter::setParameterMat4(const std::string& key, const float* matrix) {
     }
 }
 
+
+std::string Filter::getVertexShaderName() const {
+    return "default.vert";
+}
+
 std::string Filter::getVertexShaderSource() const {
     return kDefaultVertexShader;
 }
@@ -136,6 +141,11 @@ GLuint Filter::createProgram(const char* pVertexSource, const char* pFragmentSou
 void Filter::recompileProgram() {
     std::string vertexShaderSource = getVertexShaderSource();
     std::string fragmentShaderSource = getFragmentShaderSource();
+
+    if (m_shaderManager) {
+        vertexShaderSource = m_shaderManager->getShaderSource(getVertexShaderName(), vertexShaderSource);
+        fragmentShaderSource = m_shaderManager->getShaderSource(getFragmentShaderName(), fragmentShaderSource);
+    }
 
     // Create new program
     GLuint newProgramId = createProgram(vertexShaderSource.c_str(), fragmentShaderSource.c_str());

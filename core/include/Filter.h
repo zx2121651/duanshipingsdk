@@ -45,6 +45,8 @@ protected:
     // Virtual methods for specific shader sources
     virtual std::string getVertexShaderSource() const;
     virtual std::string getFragmentShaderSource() const = 0; // Pure virtual
+    virtual std::string getVertexShaderName() const;
+    virtual std::string getFragmentShaderName() const = 0;
 
     GLuint m_programId;
     std::map<std::string, std::any> m_parameters;
