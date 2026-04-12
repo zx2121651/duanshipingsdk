@@ -30,6 +30,11 @@ set(CORE_SRC
         ../../../../core/src/timeline/VideoDecoderAndroid.cpp
 )
 
+
+# Generate Shaders Header
+execute_process(
+    COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../../../../tools/shader_compiler.py ${CMAKE_CURRENT_SOURCE_DIR}/../../../../assets/shaders ${CMAKE_CURRENT_SOURCE_DIR}/../../../../core/include/GeneratedShaders.h
+)
 add_library(video-sdk SHARED
     NativeBridge.cpp
     OboeAudioEngine.cpp

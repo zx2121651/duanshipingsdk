@@ -27,6 +27,11 @@ set(CORE_SOURCES
 add_library(video_sdk_core STATIC ${CORE_SOURCES})
 
 # Basic API logic test (no GL windowing dependencies)
+
+# Generate Shaders Header
+execute_process(
+    COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/tools/shader_compiler.py ${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders ${CMAKE_CURRENT_SOURCE_DIR}/core/include/GeneratedShaders.h
+)
 add_executable(test_filter_graph tests/test_filter_graph.cpp tests/mocks/MockCompositor.cpp)
 target_link_libraries(test_filter_graph video_sdk_core)
 

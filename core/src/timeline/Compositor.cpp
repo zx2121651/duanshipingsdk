@@ -1,6 +1,7 @@
 #include "../../include/FilterEngine.h"
 #include "../../include/timeline/Compositor.h"
 #include <iostream>
+#include "../../include/GeneratedShaders.h"
 
 namespace sdk {
 namespace video {
@@ -17,28 +18,15 @@ void Compositor::initPrograms() {
 
 void Compositor::initCopyProgram() {
     if (m_copyProgram != 0) return;
-    const char* vsrc = R"(#version 300 es
-        layout(location = 0) in vec4 position;
-        layout(location = 1) in vec2 texCoord;
-        out vec2 v_texCoord;
-        void main() {
-            gl_Position = position;
-            v_texCoord = texCoord;
-        }
-    )";
-    const char* fsrc = R"(#version 300 es
-        precision highp float;
-        in vec2 v_texCoord;
-        uniform sampler2D texForeground;
-        uniform float opacity;
-        out vec4 fragColor;
-        void main() {
-            vec4 fg = texture(texForeground, v_texCoord);
-            fragColor = vec4(fg.rgb, fg.a * opacity);
-        }
-    )";
-    auto compile = [](GLenum type, const char* s) {
-        GLuint sh = glCreateShader(type); glShaderSource(sh, 1, &s, NULL); glCompileShader(sh); return sh;
+    auto shaders = GeneratedShaders::get();
+    const char* vsrc = shaders.at("compositor_copy.vert").c_str();
+    const char* fsrc = shaders.at("compositor_copy.frag").c_str();
+
+    auto compile = [](GLenum type, const char* src) {
+        GLuint s = glCreateShader(type);
+        glShaderSource(s, 1, &src, nullptr);
+        glCompileShader(s);
+        return s;
     };
     GLuint vs = compile(GL_VERTEX_SHADER, vsrc);
     GLuint fs = compile(GL_FRAGMENT_SHADER, fsrc);
@@ -69,35 +57,15 @@ void Compositor::copyTexture(const Texture& src, FrameBufferPtr target) {
 
 void Compositor::initBlendProgram() {
     if (m_blendProgram != 0) return;
+    auto shaders = GeneratedShaders::get();
+    const char* vsrc = shaders.at("compositor_blend.vert").c_str();
+    const char* fsrc = shaders.at("compositor_blend.frag").c_str();
 
-    const char* vsrc = R"(#version 300 es
-        layout(location = 0) in vec4 position;
-        layout(location = 1) in vec2 texCoord;
-        out vec2 v_texCoord;
-        void main() {
-            gl_Position = position;
-            v_texCoord = texCoord;
-        }
-    )";
-
-    const char* fsrc = R"(#version 300 es
-        precision highp float;
-        in vec2 v_texCoord;
-        uniform sampler2D texBackground;
-        uniform sampler2D texForeground;
-        uniform float opacity;
-        out vec4 fragColor;
-
-        void main() {
-            vec4 bg = texture(texBackground, v_texCoord);
-            vec4 fg = texture(texForeground, v_texCoord);
-            vec4 blended = fg * fg.a * opacity + bg * (1.0 - fg.a * opacity);
-            fragColor = vec4(blended.rgb, max(bg.a, fg.a * opacity));
-        }
-    )";
-
-    auto compile = [](GLenum type, const char* s) {
-        GLuint sh = glCreateShader(type); glShaderSource(sh, 1, &s, NULL); glCompileShader(sh); return sh;
+    auto compile = [](GLenum type, const char* src) {
+        GLuint s = glCreateShader(type);
+        glShaderSource(s, 1, &src, nullptr);
+        glCompileShader(s);
+        return s;
     };
     GLuint vs = compile(GL_VERTEX_SHADER, vsrc);
     GLuint fs = compile(GL_FRAGMENT_SHADER, fsrc);
@@ -109,40 +77,15 @@ void Compositor::initBlendProgram() {
 
 void Compositor::initWipeTransitionProgram() {
     if (m_wipeTransitionProgram != 0) return;
+    auto shaders = GeneratedShaders::get();
+    const char* vsrc = shaders.at("compositor_wipe.vert").c_str();
+    const char* fsrc = shaders.at("compositor_wipe.frag").c_str();
 
-    const char* vsrc = R"(#version 300 es
-        layout(location = 0) in vec4 position;
-        layout(location = 1) in vec2 texCoord;
-        out vec2 v_texCoord;
-        void main() {
-            gl_Position = position;
-            v_texCoord = texCoord;
-        }
-    )";
-
-    const char* fsrc = R"(#version 300 es
-        precision highp float;
-        in vec2 v_texCoord;
-        uniform sampler2D texBackground;
-        uniform sampler2D texForeground;
-        uniform float progress; // 0.0 to 1.0
-        out vec4 fragColor;
-
-        void main() {
-            vec4 bg = texture(texBackground, v_texCoord);
-            vec4 fg = texture(texForeground, v_texCoord);
-
-            // Wipe left transition
-            if (v_texCoord.x > (1.0 - progress)) {
-                fragColor = fg;
-            } else {
-                fragColor = bg;
-            }
-        }
-    )";
-
-    auto compile = [](GLenum type, const char* s) {
-        GLuint sh = glCreateShader(type); glShaderSource(sh, 1, &s, NULL); glCompileShader(sh); return sh;
+    auto compile = [](GLenum type, const char* src) {
+        GLuint s = glCreateShader(type);
+        glShaderSource(s, 1, &src, nullptr);
+        glCompileShader(s);
+        return s;
     };
     GLuint vs = compile(GL_VERTEX_SHADER, vsrc);
     GLuint fs = compile(GL_FRAGMENT_SHADER, fsrc);

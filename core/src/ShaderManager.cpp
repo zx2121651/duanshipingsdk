@@ -24,7 +24,7 @@ std::string ShaderManager::getShaderSource(const std::string& name) {
 
     // Otherwise load from asset
     if (m_assetProvider) {
-        std::string source = m_assetProvider->readAsset(name);
+        std::string source = m_assetProvider->loadShader(name);
         if (!source.empty()) {
             m_shaderCache[name] = source;
             return source;

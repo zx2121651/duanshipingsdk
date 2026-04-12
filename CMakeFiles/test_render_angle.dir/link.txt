@@ -1,1 +1,1 @@
-/usr/bin/c++ CMakeFiles/test_render_angle.dir/tests/test_render_angle.cpp.o CMakeFiles/test_render_angle.dir/tests/mocks/MockCompositor.cpp.o -o test_render_angle  libvideo_sdk_core.a /usr/lib/x86_64-linux-gnu/libGLESv2.so /usr/lib/x86_64-linux-gnu/libEGL.so
+/usr/bin/c++ CMakeFiles/test_render_angle.dir/tests/test_render_angle.cpp.o CMakeFiles/test_render_angle.dir/tests/mocks/MockCompositor.cpp.o -o test_render_angle  libvideo_sdk_core.a -lGLESv2 -lEGL
