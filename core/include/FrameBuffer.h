@@ -41,6 +41,15 @@ public:
     GLuint getFboId() const { return m_fboId; }
     FBOPrecision precision() const { return m_precision; }
 
+    // 获取当前 FBO 占用的 VRAM 字节数
+    size_t getMemorySize() const {
+        if (!m_ownsFbo) return 0; // 外部 FBO 不计入内部池显存
+        size_t bpp = 4; // RGBA8888 默认 4 bytes
+        if (m_precision == FBOPrecision::FP16) bpp = 8;
+        else if (m_precision == FBOPrecision::RGB565) bpp = 2;
+        return static_cast<size_t>(m_width) * static_cast<size_t>(m_height) * bpp;
+    }
+
     // 允许在外部循环使用同一个 FrameBuffer 实例时只更新 FBO ID
     void setExternalFboId(GLuint externalFboId) {
         if (!m_ownsFbo) {

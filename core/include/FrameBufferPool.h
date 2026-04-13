@@ -26,14 +26,22 @@ public:
 
     void clear();
 
+    // 设置全局显存熔断上限（默认 256MB）
+    void setVramBudget(size_t bytes) { m_maxVramBytes = bytes; }
+
     FrameBufferPool(const FrameBufferPool&) = delete;
     FrameBufferPool& operator=(const FrameBufferPool&) = delete;
 
 private:
     std::string getKey(int width, int height, FBOPrecision precision) const;
+    void evictToBudget(size_t requiredBytes);
 
     std::mutex m_mutex;
+    // 使用 std::list 保留最近使用的顺序，方便做 LRU 驱逐
     std::map<std::string, std::vector<std::unique_ptr<FrameBuffer>>> m_pool;
+
+    size_t m_currentVramBytes = 0;
+    size_t m_maxVramBytes = 256 * 1024 * 1024; // 256MB 默认阈值
 };
 
 } // namespace video
