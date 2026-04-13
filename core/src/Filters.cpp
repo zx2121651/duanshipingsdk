@@ -1,5 +1,6 @@
 #include <array>
 #include "../include/Filters.h"
+#include "../include/GLStateManager.h"
 #include <iostream>
 #include <vector>
 
@@ -160,13 +161,13 @@ std::string OES2RGBFilter::getFragmentShaderSource() const {
 
 void OES2RGBFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {
     outputFb->bind();
-    glUseProgram(m_programId);
+    GLStateManager::getInstance().useProgram(m_programId);
 
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_EXTERNAL_OES, inputTexture.id); // Important: Use OES target
+    GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
+    GLStateManager::getInstance().bindTexture(GL_TEXTURE_EXTERNAL_OES, inputTexture.id); // Important: Use OES target
     glUniform1i(m_inputImageTextureHandle, 0);
 
     if (m_mat4Parameters.count("textureMatrix")) {
@@ -186,17 +187,17 @@ void OES2RGBFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb)
     }
     glUniform1i(m_flipVerticalHandle, flipV ? 1 : 0);
 
-    glEnableVertexAttribArray(m_positionHandle);
+    GLStateManager::getInstance().enableVertexAttribArray(m_positionHandle);
     glVertexAttribPointer(m_positionHandle, 2, GL_FLOAT, GL_FALSE, 0, s_vertexCoords);
 
-    glEnableVertexAttribArray(m_texCoordHandle);
+    GLStateManager::getInstance().enableVertexAttribArray(m_texCoordHandle);
     glVertexAttribPointer(m_texCoordHandle, 2, GL_FLOAT, GL_FALSE, 0, s_textureCoords);
 
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
-    glDisableVertexAttribArray(m_positionHandle);
-    glDisableVertexAttribArray(m_texCoordHandle);
-    glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
+    GLStateManager::getInstance().disableVertexAttribArray(m_positionHandle);
+    GLStateManager::getInstance().disableVertexAttribArray(m_texCoordHandle);
+    GLStateManager::getInstance().bindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
 
     outputFb->unbind();
 }
@@ -221,13 +222,13 @@ std::string BrightnessFilter::getFragmentShaderSource() const {
 
 void BrightnessFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {
     outputFb->bind();
-    glUseProgram(m_programId);
+    GLStateManager::getInstance().useProgram(m_programId);
 
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, inputTexture.id);
+    GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
+    GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, inputTexture.id);
     glUniform1i(m_inputImageTextureHandle, 0);
 
     float brightness = 0.0f;
@@ -236,17 +237,17 @@ void BrightnessFilter::onDraw(const Texture& inputTexture, FrameBufferPtr output
     }
     glUniform1f(m_brightnessHandle, brightness);
 
-    glEnableVertexAttribArray(m_positionHandle);
+    GLStateManager::getInstance().enableVertexAttribArray(m_positionHandle);
     glVertexAttribPointer(m_positionHandle, 2, GL_FLOAT, GL_FALSE, 0, s_vertexCoords);
 
-    glEnableVertexAttribArray(m_texCoordHandle);
+    GLStateManager::getInstance().enableVertexAttribArray(m_texCoordHandle);
     glVertexAttribPointer(m_texCoordHandle, 2, GL_FLOAT, GL_FALSE, 0, s_textureCoords);
 
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
-    glDisableVertexAttribArray(m_positionHandle);
-    glDisableVertexAttribArray(m_texCoordHandle);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    GLStateManager::getInstance().disableVertexAttribArray(m_positionHandle);
+    GLStateManager::getInstance().disableVertexAttribArray(m_texCoordHandle);
+    GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, 0);
 
     outputFb->unbind();
 }
@@ -284,13 +285,13 @@ Texture GaussianBlurFilter::processFrame(const Texture& inputTexture, FrameBuffe
     // Pass 1: 水平模糊 (Horizontal Blur)
     // ---------------------------------------------------------
     intermediateFb->bind();
-    glUseProgram(m_programId);
+    GLStateManager::getInstance().useProgram(m_programId);
 
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, inputTexture.id);
+    GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
+    GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, inputTexture.id);
     glUniform1i(m_inputImageTextureHandle, 0);
 
     // 设置水平方向的偏移量，垂直方向为 0
@@ -307,10 +308,10 @@ Texture GaussianBlurFilter::processFrame(const Texture& inputTexture, FrameBuffe
     static const float s_vertexCoords[] = { -1.0f, -1.0f,  1.0f, -1.0f,  -1.0f, 1.0f,  1.0f, 1.0f };
     static const float s_textureCoords[] = { 0.0f, 0.0f,  1.0f, 0.0f,  0.0f, 1.0f,  1.0f, 1.0f };
 
-    glEnableVertexAttribArray(m_positionHandle);
+    GLStateManager::getInstance().enableVertexAttribArray(m_positionHandle);
     glVertexAttribPointer(m_positionHandle, 2, GL_FLOAT, GL_FALSE, 0, s_vertexCoords);
 
-    glEnableVertexAttribArray(m_texCoordHandle);
+    GLStateManager::getInstance().enableVertexAttribArray(m_texCoordHandle);
     glVertexAttribPointer(m_texCoordHandle, 2, GL_FLOAT, GL_FALSE, 0, s_textureCoords);
 
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
@@ -322,8 +323,8 @@ Texture GaussianBlurFilter::processFrame(const Texture& inputTexture, FrameBuffe
     glClear(GL_COLOR_BUFFER_BIT);
 
     // 绑定第一趟生成的临时纹理作为输入
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, intermediateFb->getTexture().id);
+    GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
+    GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, intermediateFb->getTexture().id);
     glUniform1i(m_inputImageTextureHandle, 0);
 
     // 设置垂直方向的偏移量，水平方向为 0
@@ -334,8 +335,8 @@ Texture GaussianBlurFilter::processFrame(const Texture& inputTexture, FrameBuffe
 
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
-    glDisableVertexAttribArray(m_positionHandle);
-    glDisableVertexAttribArray(m_texCoordHandle);
+    GLStateManager::getInstance().disableVertexAttribArray(m_positionHandle);
+    GLStateManager::getInstance().disableVertexAttribArray(m_texCoordHandle);
 
     // 释放临时 FBO，归还到池中
     m_pool->release(intermediateFb);
@@ -410,13 +411,13 @@ std::string LookupFilter::getFragmentShaderSource() const {
 
 void LookupFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {
     outputFb->bind();
-    glUseProgram(m_programId);
+    GLStateManager::getInstance().useProgram(m_programId);
 
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, inputTexture.id);
+    GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
+    GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, inputTexture.id);
     glUniform1i(m_inputImageTextureHandle, 0);
 
     if (m_parameters.count("lookupTextureId") && m_parameters.at("lookupTextureId").type() == typeid(int)) {
@@ -424,8 +425,8 @@ void LookupFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) 
     }
 
     if (m_lookupTextureId) {
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, m_lookupTextureId);
+        GLStateManager::getInstance().activeTexture(GL_TEXTURE1);
+        GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, m_lookupTextureId);
         glUniform1i(m_lookupTextureHandle, 1);
     }
 
@@ -435,20 +436,20 @@ void LookupFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) 
     }
     glUniform1f(m_intensityHandle, intensity);
 
-    glEnableVertexAttribArray(m_positionHandle);
+    GLStateManager::getInstance().enableVertexAttribArray(m_positionHandle);
     glVertexAttribPointer(m_positionHandle, 2, GL_FLOAT, GL_FALSE, 0, s_vertexCoords);
 
-    glEnableVertexAttribArray(m_texCoordHandle);
+    GLStateManager::getInstance().enableVertexAttribArray(m_texCoordHandle);
     glVertexAttribPointer(m_texCoordHandle, 2, GL_FLOAT, GL_FALSE, 0, s_textureCoords);
 
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
-    glDisableVertexAttribArray(m_positionHandle);
-    glDisableVertexAttribArray(m_texCoordHandle);
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    GLStateManager::getInstance().disableVertexAttribArray(m_positionHandle);
+    GLStateManager::getInstance().disableVertexAttribArray(m_texCoordHandle);
+    GLStateManager::getInstance().activeTexture(GL_TEXTURE1);
+    GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, 0);
+    GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
+    GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, 0);
 
     outputFb->unbind();
 }
@@ -477,13 +478,13 @@ std::string BilateralFilter::getFragmentShaderSource() const {
 
 void BilateralFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {
     outputFb->bind();
-    glUseProgram(m_programId);
+    GLStateManager::getInstance().useProgram(m_programId);
 
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, inputTexture.id);
+    GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
+    GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, inputTexture.id);
     glUniform1i(m_inputImageTextureHandle, 0);
 
     // Provide offsets for neighborhood sampling based on texture resolution
@@ -500,17 +501,17 @@ void BilateralFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputF
     }
     glUniform1f(m_distanceNormalizationFactorHandle, factor);
 
-    glEnableVertexAttribArray(m_positionHandle);
+    GLStateManager::getInstance().enableVertexAttribArray(m_positionHandle);
     glVertexAttribPointer(m_positionHandle, 2, GL_FLOAT, GL_FALSE, 0, s_vertexCoords);
 
-    glEnableVertexAttribArray(m_texCoordHandle);
+    GLStateManager::getInstance().enableVertexAttribArray(m_texCoordHandle);
     glVertexAttribPointer(m_texCoordHandle, 2, GL_FLOAT, GL_FALSE, 0, s_textureCoords);
 
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
-    glDisableVertexAttribArray(m_positionHandle);
-    glDisableVertexAttribArray(m_texCoordHandle);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    GLStateManager::getInstance().disableVertexAttribArray(m_positionHandle);
+    GLStateManager::getInstance().disableVertexAttribArray(m_texCoordHandle);
+    GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, 0);
 
     outputFb->unbind();
 }
@@ -549,8 +550,8 @@ void CinematicLookupFilter::initialize() {
 
 void CinematicLookupFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {
     if (m_lookupTextureId != 0) {
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, m_lookupTextureId);
+        GLStateManager::getInstance().activeTexture(GL_TEXTURE1);
+        GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, m_lookupTextureId);
         glUniform1i(m_lookupTextureHandle, 1);
     }
 
@@ -561,12 +562,12 @@ void CinematicLookupFilter::onDraw(const Texture& inputTexture, FrameBufferPtr o
     }
     glUniform1f(m_intensityHandle, intensity);
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, inputTexture.id);
+    GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
+    GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, inputTexture.id);
 
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
-    glBindTexture(GL_TEXTURE_2D, 0);
+    GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, 0);
 }
 
 void CinematicLookupFilter::onProgramRecompiled() {
@@ -639,7 +640,7 @@ Texture ComputeBlurFilter::processFrame(const Texture& inputTexture, FrameBuffer
 
     // 我们不需要调用 FBO 的 bind() 来画三角形。
     // Compute Shader 直接对着内存中的 Texture 进行读写（Image Store）。
-    glUseProgram(m_computeProgramId);
+    GLStateManager::getInstance().useProgram(m_computeProgramId);
 
     // 绑定输入纹理作为只读的 image2D (绑定在单元 0)
     glBindImageTexture(0, inputTexture.id, 0, GL_FALSE, 0, GL_READ_ONLY, GL_RGBA8);

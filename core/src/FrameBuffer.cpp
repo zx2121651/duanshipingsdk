@@ -1,4 +1,5 @@
 #include "../include/FrameBuffer.h"
+#include "../include/GLStateManager.h"
 #include <iostream>
 
 namespace sdk {
@@ -8,10 +9,10 @@ FrameBuffer::FrameBuffer(int width, int height, FBOPrecision precision)
     : m_width(width), m_height(height), m_precision(precision), m_ownsFbo(true) {
 
     glGenFramebuffers(1, &m_fboId);
-    glBindFramebuffer(GL_FRAMEBUFFER, m_fboId);
+    GLStateManager::getInstance().bindFramebuffer(GL_FRAMEBUFFER, m_fboId);
 
     glGenTextures(1, &m_textureId);
-    glBindTexture(GL_TEXTURE_2D, m_textureId);
+    GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, m_textureId);
 
     GLint internalFormat = GL_RGBA8;
     GLenum format = GL_RGBA;
@@ -43,8 +44,8 @@ FrameBuffer::FrameBuffer(int width, int height, FBOPrecision precision)
         std::cerr << "FrameBuffer incomplete: " << status << std::endl;
     }
 
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, 0);
+    GLStateManager::getInstance().bindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 FrameBuffer::FrameBuffer(int width, int height, GLuint externalFboId)
@@ -61,12 +62,12 @@ FrameBuffer::~FrameBuffer() {
 }
 
 void FrameBuffer::bind() {
-    glBindFramebuffer(GL_FRAMEBUFFER, m_fboId);
+    GLStateManager::getInstance().bindFramebuffer(GL_FRAMEBUFFER, m_fboId);
     glViewport(0, 0, m_width, m_height);
 }
 
 void FrameBuffer::unbind() {
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    GLStateManager::getInstance().bindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 } // namespace video

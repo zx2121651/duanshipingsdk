@@ -27,6 +27,9 @@ public:
     // 回调函数：返回导出结果 (ErrorCode)
     using CompletionCallback = std::function<void(Result)>;
 
+    // 分片导出回调：每生成一个分片文件触发一次，返回该分片的本地路径和分片索引
+    using ChunkCallback = std::function<void(const std::string&, int)>;
+
     /**
      * @brief 配置导出参数
      * @param outputPath 输出的本地绝对路径
@@ -36,6 +39,15 @@ public:
      * @param bitrate 码率 (bps)
      */
     virtual Result configure(const std::string& outputPath, int width, int height, int fps, int bitrate) = 0;
+
+    /**
+     * @brief 配置分片导出（Pipeline Upload 的核心：边导边传）
+     * @param chunkDurationNs 每个分片的预期时长（纳秒），通常为 1~2 秒
+     * @param onChunkReady 分片生成后的回调，可直接交由上层上传
+     */
+    virtual void configureChunking(int64_t chunkDurationNs, ChunkCallback onChunkReady) {
+        // Default empty implementation for subclasses that might not implement it yet
+    }
 
     /**
      * @brief 启动异步导出

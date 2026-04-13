@@ -41,6 +41,11 @@ public:
         return Result::ok();
     }
 
+    void configureChunking(int64_t chunkDurationNs, ChunkCallback onChunkReady) override {
+        m_chunkDurationNs = chunkDurationNs;
+        m_onChunkReady = onChunkReady;
+    }
+
     void exportAsync(std::shared_ptr<Timeline> timeline,
                      std::shared_ptr<Compositor> compositor,
                      ProgressCallback onProgress,
@@ -123,19 +128,30 @@ private:
         auto eglPresentationTimeANDROID = (PFNEGLPRESENTATIONTIMEANDROIDPROC)eglGetProcAddress("eglPresentationTimeANDROID");
 
         // 3. Setup Muxer
-        FILE* fp = fopen(m_outputPath.c_str(), "wb");
+        std::string currentChunkPath = m_outputPath;
+        int chunkIndex = 0;
+        if (m_chunkDurationNs > 0) {
+            currentChunkPath = m_outputPath + "_chunk_" + std::to_string(chunkIndex) + ".mp4";
+        }
+
+        FILE* fp = fopen(currentChunkPath.c_str(), "wb");
         if (!fp) return Result::error(-5006, "Failed to open output file");
         int fd = fileno(fp);
 
         AMediaMuxer* muxer = AMediaMuxer_new(fd, AMEDIAMUXER_OUTPUT_FORMAT_MPEG_4);
         ssize_t videoTrackIndex = -1;
         bool muxerStarted = false;
+        AMediaFormat* cachedVideoFormat = nullptr;
 
         // 4. Render Loop
         int64_t totalDurationNs = timeline->getTotalDuration();
         int64_t frameDurationNs = 1000000000 / m_fps;
         int64_t currentTimeNs = 0;
+        int64_t lastChunkStartNs = 0;
         bool encoderEOS = false;
+
+        // Create a dummy wrapper for ID 0 once, outside the loop
+        FrameBufferPtr screenFb = std::make_shared<FrameBuffer>(m_width, m_height, 0);
 
         while (!encoderEOS && !m_canceled) {
             // Push frame
@@ -145,8 +161,6 @@ private:
                 glClear(GL_COLOR_BUFFER_BIT);
 
                 // Compositor draws directly to the default framebuffer (EGLSurface -> MediaCodec)
-                // We create a dummy wrapper for ID 0
-                FrameBufferPtr screenFb = std::make_shared<FrameBuffer>(m_width, m_height, 0);
                 compositor->renderFrameAtTime(currentTimeNs, screenFb);
 
                 if (eglPresentationTimeANDROID) {
@@ -177,6 +191,32 @@ private:
                 if (info.size > 0 && muxerStarted) {
                     size_t bufSize = 0;
                     uint8_t* buf = AMediaCodec_getOutputBuffer(encoder, outBufIdx, &bufSize);
+
+                    // Chunking logic
+                    if (m_chunkDurationNs > 0 && (info.flags & AMEDIACODEC_BUFFER_FLAG_KEY_FRAME) != 0) {
+                        int64_t ptsNs = info.presentationTimeUs * 1000LL;
+                        if (ptsNs - lastChunkStartNs >= m_chunkDurationNs) {
+                            // Close current chunk
+                            AMediaMuxer_stop(muxer);
+                            AMediaMuxer_delete(muxer);
+                            fclose(fp);
+
+                            if (m_onChunkReady) {
+                                m_onChunkReady(currentChunkPath, chunkIndex);
+                            }
+
+                            // Start new chunk
+                            chunkIndex++;
+                            currentChunkPath = m_outputPath + "_chunk_" + std::to_string(chunkIndex) + ".mp4";
+                            fp = fopen(currentChunkPath.c_str(), "wb");
+                            fd = fileno(fp);
+                            muxer = AMediaMuxer_new(fd, AMEDIAMUXER_OUTPUT_FORMAT_MPEG_4);
+                            videoTrackIndex = AMediaMuxer_addTrack(muxer, cachedVideoFormat);
+                            AMediaMuxer_start(muxer);
+                            lastChunkStartNs = ptsNs;
+                        }
+                    }
+
                     AMediaMuxer_writeSampleData(muxer, videoTrackIndex, buf, &info);
                 }
 
@@ -187,10 +227,13 @@ private:
                 AMediaCodec_releaseOutputBuffer(encoder, outBufIdx, false);
             } else if (outBufIdx == AMEDIACODEC_INFO_OUTPUT_FORMAT_CHANGED) {
                 AMediaFormat* newFormat = AMediaCodec_getOutputFormat(encoder);
-                videoTrackIndex = AMediaMuxer_addTrack(muxer, newFormat);
+                if (cachedVideoFormat) {
+                    AMediaFormat_delete(cachedVideoFormat);
+                }
+                cachedVideoFormat = newFormat; // keep ownership for chunk rolling
+                videoTrackIndex = AMediaMuxer_addTrack(muxer, cachedVideoFormat);
                 AMediaMuxer_start(muxer);
                 muxerStarted = true;
-                AMediaFormat_delete(newFormat);
             }
         }
 
@@ -199,7 +242,15 @@ private:
             AMediaMuxer_stop(muxer);
         }
         AMediaMuxer_delete(muxer);
+        if (cachedVideoFormat) {
+            AMediaFormat_delete(cachedVideoFormat);
+        }
         fclose(fp);
+
+        if (m_chunkDurationNs > 0 && !m_canceled && m_onChunkReady) {
+            // Callback for the final chunk
+            m_onChunkReady(currentChunkPath, chunkIndex);
+        }
 
         AMediaCodec_stop(encoder);
         AMediaCodec_delete(encoder);
@@ -222,6 +273,9 @@ private:
     int m_height;
     int m_fps;
     int m_bitrate;
+
+    int64_t m_chunkDurationNs = 0;
+    ChunkCallback m_onChunkReady = nullptr;
 
     std::atomic<bool> m_canceled;
     std::thread m_exportThread;

@@ -1,5 +1,6 @@
 #include "../../include/FilterEngine.h"
 #include "../../include/timeline/Compositor.h"
+#include "../../include/GLStateManager.h"
 #include <iostream>
 
 namespace sdk {
@@ -51,17 +52,17 @@ void Compositor::initCopyProgram() {
 void Compositor::copyTexture(const Texture& src, FrameBufferPtr target) {
     if (!target || src.id == 0) return;
     target->bind();
-    glUseProgram(m_copyProgram);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, src.id);
+    GLStateManager::getInstance().useProgram(m_copyProgram);
+    GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
+    GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, src.id);
     glUniform1i(glGetUniformLocation(m_copyProgram, "texForeground"), 0);
     glUniform1f(glGetUniformLocation(m_copyProgram, "opacity"), 1.0f);
 
     static const float squareCoords[] = {-1, -1, 1, -1, -1, 1, 1, 1};
     static const float textureCoords[] = {0, 0, 1, 0, 0, 1, 1, 1};
-    glEnableVertexAttribArray(0);
+    GLStateManager::getInstance().enableVertexAttribArray(0);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, squareCoords);
-    glEnableVertexAttribArray(1);
+    GLStateManager::getInstance().enableVertexAttribArray(1);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, textureCoords);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
     target->unbind();
@@ -156,14 +157,14 @@ Texture Compositor::blendTextures(const Texture& bg, const Texture& fg, float op
     if (!target) return bg;
 
     target->bind();
-    glUseProgram(m_blendProgram);
+    GLStateManager::getInstance().useProgram(m_blendProgram);
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, bg.id);
+    GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
+    GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, bg.id);
     glUniform1i(glGetUniformLocation(m_blendProgram, "texBackground"), 0);
 
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, fg.id);
+    GLStateManager::getInstance().activeTexture(GL_TEXTURE1);
+    GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, fg.id);
     glUniform1i(glGetUniformLocation(m_blendProgram, "texForeground"), 1);
 
     glUniform1f(glGetUniformLocation(m_blendProgram, "opacity"), opacity);
@@ -171,9 +172,9 @@ Texture Compositor::blendTextures(const Texture& bg, const Texture& fg, float op
     static const float squareCoords[] = {-1, -1, 1, -1, -1, 1, 1, 1};
     static const float textureCoords[] = {0, 0, 1, 0, 0, 1, 1, 1};
 
-    glEnableVertexAttribArray(0);
+    GLStateManager::getInstance().enableVertexAttribArray(0);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, squareCoords);
-    glEnableVertexAttribArray(1);
+    GLStateManager::getInstance().enableVertexAttribArray(1);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, textureCoords);
 
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
@@ -194,14 +195,14 @@ Texture Compositor::transitionTextures(const Texture& bg, const Texture& fg, Tra
         program = m_wipeTransitionProgram;
     }
 
-    glUseProgram(program);
+    GLStateManager::getInstance().useProgram(program);
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, bg.id);
+    GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
+    GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, bg.id);
     glUniform1i(glGetUniformLocation(program, "texBackground"), 0);
 
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, fg.id);
+    GLStateManager::getInstance().activeTexture(GL_TEXTURE1);
+    GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, fg.id);
     glUniform1i(glGetUniformLocation(program, "texForeground"), 1);
 
     if (type == TransitionType::CROSSFADE) {
@@ -213,9 +214,9 @@ Texture Compositor::transitionTextures(const Texture& bg, const Texture& fg, Tra
     static const float squareCoords[] = {-1, -1, 1, -1, -1, 1, 1, 1};
     static const float textureCoords[] = {0, 0, 1, 0, 0, 1, 1, 1};
 
-    glEnableVertexAttribArray(0);
+    GLStateManager::getInstance().enableVertexAttribArray(0);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, squareCoords);
-    glEnableVertexAttribArray(1);
+    GLStateManager::getInstance().enableVertexAttribArray(1);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, textureCoords);
 
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);

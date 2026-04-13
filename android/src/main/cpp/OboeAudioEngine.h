@@ -71,6 +71,9 @@ public:
     // Read PCM data (returns number of bytes read)
     int32_t readPCM(uint8_t* buffer, int32_t numBytes);
 
+    // 获取当前基于底层硬件回调累计的纳秒级主时钟
+    int64_t getAudioTimeNs() const;
+
     // AudioStreamCallback implementation
     oboe::DataCallbackResult onAudioReady(oboe::AudioStream *audioStream, void *audioData, int32_t numFrames) override;
     void onErrorBeforeClose(oboe::AudioStream *audioStream, oboe::Result error) override;
@@ -80,4 +83,7 @@ private:
     std::shared_ptr<oboe::AudioStream> m_stream;
     std::unique_ptr<LockFreeRingBuffer> m_ringBuffer;
     bool m_isRecording = false;
+
+    int m_sampleRate = 44100;
+    std::atomic<int64_t> m_totalFramesRead{0};
 };

@@ -50,7 +50,6 @@ public actor VideoFilterManager {
 
     /**
      * 核心输出流：接收者可以通过 `for await result in processedFrames` 不断获取处理后的帧。
-     * 使用 nonisolated 修饰，这样外部订阅这个流时不需要等待 Actor 的锁。
      */
     public let processedFrames: AsyncStream<Result<CVPixelBuffer, Error>>
 

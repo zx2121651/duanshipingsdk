@@ -18,6 +18,9 @@ namespace timeline {
 // Factory function implemented in VideoDecoderAndroid.cpp or VideoDecoderIOS.mm
 extern std::shared_ptr<VideoDecoder> createPlatformDecoder();
 
+std::shared_ptr<VideoDecoder> createSoftwareDecoder() {
+    return std::make_shared<SoftwareVideoDecoder>();
+}
 
 DecoderPool::DecoderPool() {}
 
@@ -30,24 +33,53 @@ void DecoderPool::registerMedia(const std::string& clipId, const std::string& so
     std::lock_guard<std::mutex> lock(m_mutex);
     auto ctx = std::make_shared<DecoderContext>();
     ctx->sourcePath = sourcePath;
-    ctx->decoder = createPlatformDecoder();
-
-    if (ctx->decoder) {
-        ctx->decoder->open(sourcePath);
-    }
+    ctx->decoder = nullptr; // 懒加载，防止瞬间启动过多 decoder
+    ctx->lastAccessCounter = ++m_accessCounter;
 
     m_decoders[clipId] = ctx;
-    std::cout << "[DecoderPool] Registered media " << clipId << " from " << sourcePath << std::endl;
+    std::cout << "[DecoderPool] Registered media " << clipId << " from " << sourcePath << " (deferred open)" << std::endl;
 }
 
 void DecoderPool::releaseMedia(const std::string& clipId) {
     std::lock_guard<std::mutex> lock(m_mutex);
-    m_decoders.erase(clipId);
-    std::cout << "[DecoderPool] Released media " << clipId << std::endl;
+    auto it = m_decoders.find(clipId);
+    if (it != m_decoders.end()) {
+        if (it->second->decoder) {
+            it->second->decoder->close();
+            m_activeDecoderCount--;
+        }
+        m_decoders.erase(it);
+        std::cout << "[DecoderPool] Released media " << clipId << std::endl;
+    }
 }
 
-Texture DecoderPool::getFrame(const std::string& clipId, int64_t localTimeNs) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+void DecoderPool::evictDecodersIfNeeded() {
+    while (m_activeDecoderCount >= MAX_CONCURRENT_DECODERS) {
+        std::shared_ptr<DecoderContext> oldestCtx = nullptr;
+        uint64_t oldestTime = ~(0ULL);
+        std::string oldestId;
+
+        for (const auto& pair : m_decoders) {
+            if (pair.second->decoder && pair.second->lastAccessCounter < oldestTime) {
+                oldestTime = pair.second->lastAccessCounter;
+                oldestCtx = pair.second;
+                oldestId = pair.first;
+            }
+        }
+
+        if (oldestCtx) {
+            std::cout << "[DecoderPool] Evicting active decoder for clip " << oldestId << " due to concurrency limits." << std::endl;
+            oldestCtx->decoder->close();
+            oldestCtx->decoder = nullptr;
+            m_activeDecoderCount--;
+        } else {
+            break; // 理论上不可能
+        }
+    }
+}
+
+Texture DecoderPool::getFrame(const std::string& clipId, int64_t localTimeNs, bool requiresExactSeek) {
+    std::unique_lock<std::mutex> lock(m_mutex);
 
     auto it = m_decoders.find(clipId);
     if (it == m_decoders.end()) {
@@ -56,17 +88,72 @@ Texture DecoderPool::getFrame(const std::string& clipId, int64_t localTimeNs) {
     }
 
     auto ctx = it->second;
+    ctx->lastAccessCounter = ++m_accessCounter;
 
-    if (ctx->decoder) {
+    // 如果要求精确 Seek 或者硬件解码已经失败过了，走软解降级路线
+    bool useSoftwareDecoder = requiresExactSeek || ctx->hwFailed;
+
+    if (useSoftwareDecoder) {
+        if (!ctx->softDecoder) {
+            ctx->softDecoder = createSoftwareDecoder();
+            ctx->softDecoder->open(ctx->sourcePath);
+            std::cout << "[DecoderPool] Falling back to Software Decoder for clip " << clipId << std::endl;
+        }
+        Result seekRes = ctx->softDecoder->seekExact(localTimeNs);
+        if (seekRes.isOk()) {
+            Texture tex = ctx->softDecoder->getFrameAt(localTimeNs);
+            if (tex.id != 0) {
+                ctx->lastDecodedFrame = tex;
+                ctx->lastDecodedTimeNs = localTimeNs;
+                ctx->isInitialized = true;
+            }
+            return ctx->lastDecodedFrame;
+        }
+    }
+
+    if (!ctx->decoder && !ctx->hwFailed) {
+        // Activate/Re-activate Decoder
+        evictDecodersIfNeeded();
+        ctx->decoder = createPlatformDecoder();
+        if (ctx->decoder) {
+            auto res = ctx->decoder->open(ctx->sourcePath);
+            if (res.isOk()) {
+                m_activeDecoderCount++;
+                std::cout << "[DecoderPool] Activated decoder for clip " << clipId << std::endl;
+            } else {
+                std::cerr << "[DecoderPool] Failed to activate decoder for clip " << clipId << std::endl;
+                ctx->decoder = nullptr;
+                ctx->hwFailed = true; // 硬件解码器直接报废，未来全走软解
+            }
+        }
+    }
+
+    if (ctx->decoder && !ctx->hwFailed) {
+        // 先尝试精准 Seek，检查硬件解码器是否支持该跳变
+        Result seekRes = ctx->decoder->seekExact(localTimeNs);
+        if (!seekRes.isOk()) {
+            std::cerr << "[DecoderPool] Hardware seek failed: " << seekRes.getMessage() << std::endl;
+            // 硬件解码器寻址失败（如 B-Frame 导致花屏），触发当前上下文的硬件降级
+            ctx->hwFailed = true;
+            ctx->decoder->close();
+            ctx->decoder = nullptr;
+            m_activeDecoderCount--;
+
+            // 解锁，然后递归转交软解处理
+            lock.unlock();
+            return getFrame(clipId, localTimeNs, true);
+        }
+
         // Platform hardware decoding
         Texture tex = ctx->decoder->getFrameAt(localTimeNs);
         if (tex.id != 0) {
             ctx->lastDecodedFrame = tex;
             ctx->lastDecodedTimeNs = localTimeNs;
+            ctx->isInitialized = true;
         }
         return ctx->lastDecodedFrame;
     } else {
-        // Fallback dummy logic
+        // Fallback dummy logic if both fail
         if (!ctx->isInitialized) {
             ctx->lastDecodedFrame = {1, 1920, 1080}; // Dummy ID
             ctx->isInitialized = true;

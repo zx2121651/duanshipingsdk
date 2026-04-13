@@ -5,6 +5,7 @@
 #import <CoreVideo/CoreVideo.h>
 #import <OpenGLES/EAGL.h>
 #import <OpenGLES/ES3/gl.h>
+#include "../../include/GLStateManager.h"
 #include <thread>
 #include <atomic>
 
@@ -36,6 +37,11 @@ public:
         return Result::ok();
     }
 
+    void configureChunking(int64_t chunkDurationNs, ChunkCallback onChunkReady) override {
+        m_chunkDurationNs = chunkDurationNs;
+        m_onChunkReady = onChunkReady;
+    }
+
     void exportAsync(std::shared_ptr<Timeline> timeline,
                      std::shared_ptr<Compositor> compositor,
                      ProgressCallback onProgress,
@@ -61,7 +67,13 @@ private:
 
         if (!timeline || !compositor) return Result::error(-5001, "Invalid timeline or compositor");
 
-        NSString* path = [NSString stringWithUTF8String:m_outputPath.c_str()];
+        std::string currentChunkPath = m_outputPath;
+        int chunkIndex = 0;
+        if (m_chunkDurationNs > 0) {
+            currentChunkPath = m_outputPath + "_chunk_" + std::to_string(chunkIndex) + ".mp4";
+        }
+
+        NSString* path = [NSString stringWithUTF8String:currentChunkPath.c_str()];
         NSURL* url = [NSURL fileURLWithPath:path];
 
         if ([[NSFileManager defaultManager] fileExistsAtPath:path]) {
@@ -79,7 +91,8 @@ private:
             AVVideoWidthKey: @(m_width),
             AVVideoHeightKey: @(m_height),
             AVVideoCompressionPropertiesKey: @{
-                AVVideoAverageBitRateKey: @(m_bitrate > 0 ? m_bitrate : 4000000)
+                AVVideoAverageBitRateKey: @(m_bitrate > 0 ? m_bitrate : 4000000),
+                AVVideoMaxKeyFrameIntervalKey: @(m_fps) // 强制 1 秒一个关键帧，方便分片
             }
         };
 
@@ -124,12 +137,15 @@ private:
         int64_t totalDurationNs = timeline->getTotalDuration();
         int64_t frameDurationNs = 1000000000 / m_fps;
         int64_t currentTimeNs = 0;
+        int64_t lastChunkStartNs = 0;
 
         CVPixelBufferPoolRef pool = adaptor.pixelBufferPool;
 
         // FBO setup for offscreen rendering
         GLuint fbo;
         glGenFramebuffers(1, &fbo);
+
+        FrameBufferPtr cvExternalFbWrapper = std::make_shared<FrameBuffer>(m_width, m_height, fbo);
 
         while (currentTimeNs <= totalDurationNs && !m_canceled) {
             @autoreleasepool {
@@ -155,19 +171,18 @@ private:
                     GLuint textureId = CVOpenGLESTextureGetName(cvTexture);
 
                     // Render using compositor directly to the CVPixelBuffer-backed FBO
-                    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+                    GLStateManager::getInstance().bindFramebuffer(GL_FRAMEBUFFER, fbo);
                     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textureId, 0);
                     glViewport(0, 0, m_width, m_height);
 
                     // [P1 修复] 统一 Compositor 输出接口，去掉 iOS 的二次拷贝 hack
                     // 使用扩展的 FrameBuffer 构造函数直接包装 CVPixelBuffer 挂载的外部 FBO。
                     // Compositor 最后一层的 Explicit Copy Pass 会直接画到这个 FBO 里，完成真正的零拷贝编码。
-
-                    FrameBufferPtr cvExternalFbWrapper = std::make_shared<FrameBuffer>(m_width, m_height, fbo);
+                    cvExternalFbWrapper->setExternalFboId(fbo); // Since fbo id is constant, this is optional, but keeps wrapper in sync if fbo ever changes
 
                     compositor->renderFrameAtTime(currentTimeNs, cvExternalFbWrapper);
 
-                    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                    GLStateManager::getInstance().bindFramebuffer(GL_FRAMEBUFFER, 0);
                     glFinish(); // 确保渲染指令完成
 
                     CMTime presentationTime = CMTimeMake(currentTimeNs, 1000000000);
@@ -175,6 +190,43 @@ private:
 
                     CFRelease(cvTexture);
                     CVOpenGLESTextureCacheFlush(textureCache, 0);
+
+                    // Chunking logic
+                    if (m_chunkDurationNs > 0 && (currentTimeNs - lastChunkStartNs >= m_chunkDurationNs)) {
+                        [videoInput markAsFinished];
+
+                        dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+                        [assetWriter finishWritingWithCompletionHandler:^{
+                            dispatch_semaphore_signal(semaphore);
+                        }];
+                        dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
+
+                        if (m_onChunkReady) {
+                            m_onChunkReady(currentChunkPath, chunkIndex);
+                        }
+
+                        // Open next chunk
+                        chunkIndex++;
+                        currentChunkPath = m_outputPath + "_chunk_" + std::to_string(chunkIndex) + ".mp4";
+
+                        NSString* nextPath = [NSString stringWithUTF8String:currentChunkPath.c_str()];
+                        NSURL* nextUrl = [NSURL fileURLWithPath:nextPath];
+                        if ([[NSFileManager defaultManager] fileExistsAtPath:nextPath]) {
+                            [[NSFileManager defaultManager] removeItemAtPath:nextPath error:nil];
+                        }
+
+                        assetWriter = [[AVAssetWriter alloc] initWithURL:nextUrl fileType:AVFileTypeMPEG4 error:&error];
+                        videoInput = [AVAssetWriterInput assetWriterInputWithMediaType:AVMediaTypeVideo outputSettings:videoSettings];
+                        videoInput.expectsMediaDataInRealTime = NO;
+                        adaptor = [AVAssetWriterInputPixelBufferAdaptor assetWriterInputPixelBufferAdaptorWithAssetWriterInput:videoInput
+                                                                             sourcePixelBufferAttributes:pixelBufferAttributes];
+                        [assetWriter addInput:videoInput];
+                        [assetWriter startWriting];
+                        [assetWriter startSessionAtSourceTime:presentationTime];
+                        pool = adaptor.pixelBufferPool;
+
+                        lastChunkStartNs = currentTimeNs;
+                    }
                 }
 
                 CVPixelBufferRelease(pixelBuffer);
@@ -195,6 +247,10 @@ private:
         }];
         dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
 
+        if (m_chunkDurationNs > 0 && !m_canceled && m_onChunkReady) {
+            m_onChunkReady(currentChunkPath, chunkIndex);
+        }
+
         glDeleteFramebuffers(1, &fbo);
         if (textureCache) CFRelease(textureCache);
         [EAGLContext setCurrentContext:nil];
@@ -211,6 +267,9 @@ private:
     int m_height;
     int m_fps;
     int m_bitrate;
+
+    int64_t m_chunkDurationNs = 0;
+    ChunkCallback m_onChunkReady = nullptr;
 
     std::atomic<bool> m_canceled;
     std::thread m_exportThread;

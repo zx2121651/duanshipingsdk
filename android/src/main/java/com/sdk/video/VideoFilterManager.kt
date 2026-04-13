@@ -185,6 +185,7 @@ class VideoFilterManager(private val context: android.content.Context,
             val surface = encoder.startRecording()
             if (surface != null) {
                 videoEncoder = encoder
+                renderEngine.setRecordingAnchor(encoder.getStartTimeNs())
                 renderEngine.startRecording(surface)
             } else {
                 Result.failure(VideoSdkError.InvalidOperation("Failed to start MediaCodec encoder"))
@@ -211,6 +212,10 @@ class VideoFilterManager(private val context: android.content.Context,
 
     fun readAudioPCM(buffer: ByteArray, length: Int): Int {
         return renderEngine.readAudioPCM(buffer, length)
+    }
+
+    fun getAudioTimeNs(): Long {
+        return renderEngine.getAudioTimeNs()
     }
 
     // 暴露性能监控监听器供外部（或者修改为 StateFlow 抛出）

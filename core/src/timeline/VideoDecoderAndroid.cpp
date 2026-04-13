@@ -11,6 +11,7 @@
 #include <condition_variable>
 #include <queue>
 #include <atomic>
+#include "../../include/GLStateManager.h"
 
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "VideoDecoderAndroid", __VA_ARGS__)
 
@@ -184,25 +185,41 @@ public:
         glDeleteShader(vs); glDeleteShader(fs);
 
         glGenTextures(1, &m_yTexture);
-        glBindTexture(GL_TEXTURE_2D, m_yTexture);
+        GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, m_yTexture);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
         glGenTextures(1, &m_uvTexture);
-        glBindTexture(GL_TEXTURE_2D, m_uvTexture);
+        GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, m_uvTexture);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
         glGenTextures(1, &m_textureId);
-        glBindTexture(GL_TEXTURE_2D, m_textureId);
+        GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, m_textureId);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_width, m_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 
         glGenFramebuffers(1, &m_fbo);
-        glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
+        GLStateManager::getInstance().bindFramebuffer(GL_FRAMEBUFFER, m_fbo);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_textureId, 0);
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        GLStateManager::getInstance().bindFramebuffer(GL_FRAMEBUFFER, 0);
+    }
+
+    Result seekExact(int64_t timeNs) override {
+        if (!m_extractor) return Result::error(-4007, "Extractor not initialized");
+        // AMediaExtractor_seekTo 在遇到带有 B 帧的复杂 H.264/H.265 时，常常无法停在准确位置
+        // 会导致随后解出的画面出现马赛克（参考帧丢失）。我们在框架层抛出特定错误触发降级。
+
+        // 模拟：如果是需要倒放或跨越度太大的 Seek，硬件解码器宣布失败，交给软解。
+        // （在真正的实现里，判断 timeNs 是否导致解码器丢帧或花屏）
+        if (timeNs < m_lastSeekTimeNs) {
+            return Result::error(-4008, "Hardware Decoder failed to seek backward accurately (B-Frame Nightmare). Trigger Software Decoder fallback.");
+        }
+
+        AMediaExtractor_seekTo(m_extractor, timeNs / 1000, AMEDIAEXTRACTOR_SEEK_PREVIOUS_SYNC);
+        m_lastSeekTimeNs = timeNs;
+        return Result::ok();
     }
 
     Texture getFrameAt(int64_t timeNs) override {
@@ -228,35 +245,35 @@ public:
             int uvSize = m_width * m_height / 2;
 
             if (targetPacket->data.size() >= ySize + uvSize) {
-                glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, m_yTexture);
+                GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
+                GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, m_yTexture);
                 glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, m_width, m_height, 0, GL_RED, GL_UNSIGNED_BYTE, targetPacket->data.data());
 
-                glActiveTexture(GL_TEXTURE1);
-                glBindTexture(GL_TEXTURE_2D, m_uvTexture);
+                GLStateManager::getInstance().activeTexture(GL_TEXTURE1);
+                GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, m_uvTexture);
                 glTexImage2D(GL_TEXTURE_2D, 0, GL_RG8, m_width / 2, m_height / 2, 0, GL_RG, GL_UNSIGNED_BYTE, targetPacket->data.data() + ySize);
 
                 GLint oldFBO;
                 glGetIntegerv(GL_FRAMEBUFFER_BINDING, &oldFBO);
 
-                glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
+                GLStateManager::getInstance().bindFramebuffer(GL_FRAMEBUFFER, m_fbo);
                 glViewport(0, 0, m_width, m_height);
 
-                glUseProgram(m_yuvProgram);
+                GLStateManager::getInstance().useProgram(m_yuvProgram);
                 glUniform1i(glGetUniformLocation(m_yuvProgram, "texY"), 0);
                 glUniform1i(glGetUniformLocation(m_yuvProgram, "texUV"), 1);
 
                 static const float squareCoords[] = {-1, -1, 1, -1, -1, 1, 1, 1};
                 static const float textureCoords[] = {0, 0, 1, 0, 0, 1, 1, 1};
 
-                glEnableVertexAttribArray(0);
+                GLStateManager::getInstance().enableVertexAttribArray(0);
                 glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, squareCoords);
-                glEnableVertexAttribArray(1);
+                GLStateManager::getInstance().enableVertexAttribArray(1);
                 glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, textureCoords);
 
                 glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
-                glBindFramebuffer(GL_FRAMEBUFFER, oldFBO);
+                GLStateManager::getInstance().bindFramebuffer(GL_FRAMEBUFFER, oldFBO);
             }
             return {m_textureId, (uint32_t)m_width, (uint32_t)m_height};
         }
@@ -317,6 +334,7 @@ private:
     GLuint m_yuvProgram;
 
     std::atomic<bool> m_running;
+    int64_t m_lastSeekTimeNs = 0;
     std::thread m_decodeThread;
     std::mutex m_queueMutex;
     std::condition_variable m_queueCv;

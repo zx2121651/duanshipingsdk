@@ -1,6 +1,7 @@
 package com.sdk.video.sample
 
 import com.sdk.video.*
+import com.sdk.video.InternalApi
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -37,6 +38,7 @@ import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
+@OptIn(InternalApi::class)
 class MainActivity : ComponentActivity() {
 
     private var filterManager: VideoFilterManager? = null
