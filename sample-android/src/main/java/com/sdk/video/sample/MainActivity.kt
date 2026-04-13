@@ -37,6 +37,7 @@ import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
+@OptIn(InternalApi::class)
 class MainActivity : ComponentActivity() {
 
     private var filterManager: VideoFilterManager? = null

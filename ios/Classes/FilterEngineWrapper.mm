@@ -1,7 +1,7 @@
 #import "FilterEngineWrapper.h"
-#import "../../../core/include/FilterEngine.h"
+#import "../../core/include/FilterEngine.h"
 #import "IOSAssetProvider.h"
-#import "../../../core/include/Filters.h"
+#import "../../core/include/Filters.h"
 
 using namespace sdk::video;
 
