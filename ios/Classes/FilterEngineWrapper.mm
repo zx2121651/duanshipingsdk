@@ -36,13 +36,13 @@ using namespace sdk::video;
 }
 
 - (int)initializeWithContext:(EAGLContext *)context {
-    if (!context || !engine) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
+    if (!context || !engine) return static_cast<int>(sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED);
 
     [EAGLContext setCurrentContext:context];
 
     CVReturn err = CVOpenGLESTextureCacheCreate(kCFAllocatorDefault, NULL, context, NULL, &textureCache);
     if (err != kCVReturnSuccess) {
-        return sdk::video::ErrorCode::ERR_RENDER_FBO_ALLOC_FAILED; // Texture cache creation failed
+        return static_cast<int>(sdk::video::ErrorCode::ERR_RENDER_FBO_ALLOC_FAILED); // Texture cache creation failed
     }
 
     Result res = engine->initialize();
@@ -170,25 +170,25 @@ using namespace sdk::video;
 }
 
 - (int)addFilter:(IOSFilterType)type {
-    if (!engine) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
+    if (!engine) return static_cast<int>(sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED);
     auto res = engine->addFilter(static_cast<sdk::video::FilterType>(type));
-    return res.isOk() ? sdk::video::ErrorCode::SUCCESS : res.getErrorCode();
+    return res.isOk() ? static_cast<int>(sdk::video::ErrorCode::SUCCESS) : res.getErrorCode();
 }
 
 - (int)removeAllFilters {
-    if (!engine) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
+    if (!engine) return static_cast<int>(sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED);
     auto res = engine->removeAllFilters();
-    return res.isOk() ? sdk::video::ErrorCode::SUCCESS : res.getErrorCode();
+    return res.isOk() ? static_cast<int>(sdk::video::ErrorCode::SUCCESS) : res.getErrorCode();
 }
 
 - (int)updateParameterFloat:(NSString *)key value:(float)value {
-    if (!engine || !key) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
+    if (!engine || !key) return static_cast<int>(sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED);
     engine->updateParameter([key UTF8String], std::any(value));
     return 0;
 }
 
 - (int)updateParameterInt:(NSString *)key value:(int32_t)value {
-    if (!engine || !key) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
+    if (!engine || !key) return static_cast<int>(sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED);
     engine->updateParameter([key UTF8String], std::any(value));
     return 0;
 }
