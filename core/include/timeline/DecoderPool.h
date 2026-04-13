@@ -33,15 +33,23 @@ public:
 private:
     std::mutex m_mutex;
 
+    // 核心限制：防止多轨画中画导致 OOM/Jetsam
+    static constexpr int MAX_CONCURRENT_DECODERS = 4;
+
     struct DecoderContext {
         std::string sourcePath;
-        std::shared_ptr<VideoDecoder> decoder;
+        std::shared_ptr<VideoDecoder> decoder; // 如果被换出，这里可能为 null
         bool isInitialized = false;
         Texture lastDecodedFrame = {0, 0, 0};
         int64_t lastDecodedTimeNs = -1;
+        uint64_t lastAccessCounter = 0;
     };
 
     std::map<std::string, std::shared_ptr<DecoderContext>> m_decoders;
+    uint64_t m_accessCounter = 0;
+    int m_activeDecoderCount = 0;
+
+    void evictDecodersIfNeeded();
 };
 
 } // namespace timeline
