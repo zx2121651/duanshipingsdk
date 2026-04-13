@@ -206,6 +206,22 @@ public:
         GLStateManager::getInstance().bindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 
+    Result seekExact(int64_t timeNs) override {
+        if (!m_extractor) return Result::error(-4007, "Extractor not initialized");
+        // AMediaExtractor_seekTo 在遇到带有 B 帧的复杂 H.264/H.265 时，常常无法停在准确位置
+        // 会导致随后解出的画面出现马赛克（参考帧丢失）。我们在框架层抛出特定错误触发降级。
+
+        // 模拟：如果是需要倒放或跨越度太大的 Seek，硬件解码器宣布失败，交给软解。
+        // （在真正的实现里，判断 timeNs 是否导致解码器丢帧或花屏）
+        if (timeNs < m_lastSeekTimeNs) {
+            return Result::error(-4008, "Hardware Decoder failed to seek backward accurately (B-Frame Nightmare). Trigger Software Decoder fallback.");
+        }
+
+        AMediaExtractor_seekTo(m_extractor, timeNs / 1000, AMEDIAEXTRACTOR_SEEK_PREVIOUS_SYNC);
+        m_lastSeekTimeNs = timeNs;
+        return Result::ok();
+    }
+
     Texture getFrameAt(int64_t timeNs) override {
         initYUVProgram();
 
@@ -318,6 +334,7 @@ private:
     GLuint m_yuvProgram;
 
     std::atomic<bool> m_running;
+    int64_t m_lastSeekTimeNs = 0;
     std::thread m_decodeThread;
     std::mutex m_queueMutex;
     std::condition_variable m_queueCv;

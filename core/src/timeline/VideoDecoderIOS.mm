@@ -105,6 +105,19 @@ public:
         }
     }
 
+    Result seekExact(int64_t timeNs) override {
+        if (!m_assetReader) return Result::error(-4007, "AssetReader not initialized");
+
+        // 模拟: iOS AVAssetReader 不能随意 Seek，只能重新实例化并指定 timeRange
+        // 因此如果需要精准回退，通常非常昂贵，触发软解降级
+        if (timeNs < m_lastSeekTimeNs) {
+            return Result::error(-4008, "Hardware Decoder failed to seek backward accurately (B-Frame Nightmare). Trigger Software Decoder fallback.");
+        }
+
+        m_lastSeekTimeNs = timeNs;
+        return Result::ok();
+    }
+
     Texture getFrameAt(int64_t timeNs) override {
         std::shared_ptr<FrameBufferPacket> targetPacket = nullptr;
 
@@ -195,6 +208,7 @@ private:
     std::mutex m_queueMutex;
     std::condition_variable m_queueCv;
     std::queue<std::shared_ptr<FrameBufferPacket>> m_frameQueue;
+    int64_t m_lastSeekTimeNs = 0;
 };
 
 } // namespace timeline
