@@ -55,6 +55,8 @@ class VideoEncoder(
     private val pendingFrames = ConcurrentLinkedQueue<FrameData>()
     private var startTimeNs: Long = 0
 
+    fun getStartTimeNs(): Long = startTimeNs
+
     // 独立协程作用域，专门用于从底层 RingBuffer 拉取音频 PCM
     private val encoderScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -73,6 +75,7 @@ class VideoEncoder(
             setupVideoCodec()
             setupAudioCodec()
 
+            // Align the anchor time to what SurfaceTexture uses (System.nanoTime() typically matches CLOCK_MONOTONIC on Android)
             startTimeNs = System.nanoTime()
             isRecording = true
 
@@ -197,7 +200,17 @@ class VideoEncoder(
                         inputBuffer?.clear()
                         inputBuffer?.put(buffer, 0, readBytes)
 
-                        var pts = (System.nanoTime() - startTimeNs) / 1000
+                        // [PTS Drift Fix]: Base everything on an absolute system uptime anchor
+                        // to perfectly match the EGL presentation time `st.timestamp`.
+                        // Add the Oboe engine's true processed duration to this anchor.
+                        val audioDurationNs = filterManager.getAudioTimeNs()
+                        var pts: Long = 0
+                        if (audioDurationNs > 0) {
+                            pts = (startTimeNs + audioDurationNs) / 1000
+                        } else {
+                            pts = (System.nanoTime()) / 1000
+                        }
+
                         synchronized(syncLock) {
                             if (pts <= lastAudioPtsUs) {
                                 pts = lastAudioPtsUs + 10 // enforce monotonic strictness

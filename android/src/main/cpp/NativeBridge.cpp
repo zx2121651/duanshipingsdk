@@ -391,6 +391,14 @@ Java_com_sdk_video_RenderEngine_nativeReadAudioPCM(JNIEnv *env, jobject thiz, jl
     return bytesRead;
 }
 
+JNIEXPORT jlong JNICALL
+Java_com_sdk_video_RenderEngine_nativeGetAudioTimeNs(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->audioEngine) return 0;
+
+    return static_cast<jlong>(wrapper->audioEngine->getAudioTimeNs());
+}
+
 JNIEXPORT void JNICALL
 Java_com_sdk_video_RenderEngine_nativeUpdateShaderSource(JNIEnv *env, jobject thiz, jlong handle, jstring name, jstring source) {
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);

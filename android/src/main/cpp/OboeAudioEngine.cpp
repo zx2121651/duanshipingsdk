@@ -17,6 +17,9 @@ OboeAudioEngine::~OboeAudioEngine() {
 bool OboeAudioEngine::start(int sampleRate) {
     if (m_isRecording) return true;
 
+    m_sampleRate = sampleRate;
+    m_totalFramesRead.store(0);
+
     oboe::AudioStreamBuilder builder;
     builder.setDirection(oboe::Direction::Input)
            ->setPerformanceMode(oboe::PerformanceMode::LowLatency)
@@ -69,6 +72,13 @@ int32_t OboeAudioEngine::readPCM(uint8_t* buffer, int32_t numBytes) {
     return framesRead * sizeof(int16_t); // Return bytes read
 }
 
+int64_t OboeAudioEngine::getAudioTimeNs() const {
+    if (m_sampleRate == 0) return 0;
+    // ns = (frames / sampleRate) * 10^9
+    // To prevent overflow before division:
+    return (m_totalFramesRead.load(std::memory_order_relaxed) * 1000000000LL) / m_sampleRate;
+}
+
 // ---------------------------------------------------------
 // 高优先级音频回调线程 (绝对禁止锁或内存分配)
 // ---------------------------------------------------------
@@ -82,6 +92,9 @@ oboe::DataCallbackResult OboeAudioEngine::onAudioReady(oboe::AudioStream *audioS
 
     // 无锁推入缓冲区
     m_ringBuffer->write(pcmData, numFrames);
+
+    // 更新主时钟的帧计数（以此作为全链路的绝对时间参考）
+    m_totalFramesRead.fetch_add(numFrames, std::memory_order_relaxed);
 
     return oboe::DataCallbackResult::Continue;
 }

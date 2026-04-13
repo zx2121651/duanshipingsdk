@@ -27,6 +27,10 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     @JvmField
     var lastFrameTimeMs: Long = 0L
 
+    private var recordingStartTimeNs: Long = 0L
+    private var lastVideoPtsNs: Long = 0L
+    private var isRecording: Boolean = false
+
     var onFrameProcessedListener: ((outputTextureId: Int) -> Unit)? = null
     var onPerformanceUpdateListener: ((durationMs: Long) -> Unit)? = null
     var onRenderErrorListener: ((errorCode: Int, errorMessage: String) -> Unit)? = null
@@ -106,7 +110,19 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
         st.getTransformMatrix(transformMatrix)
 
         // Pass timestamp to native layer for MediaCodec EGL presentation time
-        val timestampNs = st.timestamp
+        // [PTS Drift Fix]: Use audio master clock to forcefully align video PTS to the
+        // audio crystal if recording is active.
+        var timestampNs = st.timestamp
+        if (isRecording && recordingStartTimeNs > 0) {
+            val audioTimeNs = getAudioTimeNs()
+            if (audioTimeNs > 0) {
+                timestampNs = recordingStartTimeNs + audioTimeNs
+                if (timestampNs <= lastVideoPtsNs) {
+                    timestampNs = lastVideoPtsNs + 10000 // Ensure strict monotonicity (10us)
+                }
+                lastVideoPtsNs = timestampNs
+            }
+        }
 
         val outputTexId = nativeProcessFrame(nativeHandle, oesTextureId, width, height, transformMatrix, timestampNs)
 
@@ -120,10 +136,16 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     }
 
     // Recording API
+    fun setRecordingAnchor(anchorTimeNs: Long) {
+        recordingStartTimeNs = anchorTimeNs
+        lastVideoPtsNs = anchorTimeNs
+    }
+
     fun startRecording(surface: Surface): Result<Unit> {
         if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
         return try {
             nativeSetRecordingSurface(nativeHandle, surface)
+            isRecording = true
             Result.success(Unit)
         } catch (e: NativeRenderException) {
             Result.failure(VideoSdkError.NativeError(e.errorCode, e.message ?: "Unknown native error"))
@@ -134,6 +156,8 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
         if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
         return try {
             nativeSetRecordingSurface(nativeHandle, null)
+            isRecording = false
+            recordingStartTimeNs = 0L
             Result.success(Unit)
         } catch (e: NativeRenderException) {
             Result.failure(VideoSdkError.NativeError(e.errorCode, e.message ?: "Unknown native error"))
@@ -231,6 +255,10 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
         return if (nativeHandle != 0L) nativeReadAudioPCM(nativeHandle, buffer, length) else 0
     }
 
+    fun getAudioTimeNs(): Long {
+        return if (nativeHandle != 0L) nativeGetAudioTimeNs(nativeHandle) else 0L
+    }
+
     // Native methods
     private external fun nativeUpdateShaderSource(handle: Long, name: String, source: String)
     private external fun nativeGetMetrics(handle: Long): FloatArray?
@@ -247,4 +275,5 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     private external fun nativeStartAudioRecord(handle: Long, sampleRate: Int)
     private external fun nativeStopAudioRecord(handle: Long)
     private external fun nativeReadAudioPCM(handle: Long, buffer: ByteArray, length: Int): Int
+    private external fun nativeGetAudioTimeNs(handle: Long): Long
 }
