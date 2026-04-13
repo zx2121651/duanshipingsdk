@@ -68,7 +68,7 @@ using namespace sdk::video;
                                                                 GL_RGBA,
                                                                 (GLsizei)width,
                                                                 (GLsizei)height,
-                                                                GL_BGRA,
+                                                                GL_BGRA_EXT,
                                                                 GL_UNSIGNED_BYTE,
                                                                 0,
                                                                 &cvTexture);
@@ -123,7 +123,7 @@ using namespace sdk::video;
                                                        GL_RGBA,
                                                        (GLsizei)width,
                                                        (GLsizei)height,
-                                                       GL_BGRA,
+                                                       GL_BGRA_EXT,
                                                        GL_UNSIGNED_BYTE,
                                                        0,
                                                        &outCvTexture);
@@ -169,7 +169,7 @@ using namespace sdk::video;
     return outPixelBuffer;
 }
 
-- (int)addFilter:(FilterType)type {
+- (int)addFilter:(IOSFilterType)type {
     if (!engine) return sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED;
     auto res = engine->addFilter(static_cast<sdk::video::FilterType>(type));
     return res.isOk() ? sdk::video::ErrorCode::SUCCESS : res.getErrorCode();

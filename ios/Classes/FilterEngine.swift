@@ -44,8 +44,8 @@ import OpenGLES
 
     // Add filter to the pipeline
     @objc public func addFilter(_ type: SwiftFilterType) -> Int32 {
-        // Assume mapping matches FilterType
-        return wrapper.add(FilterType(rawValue: type.rawValue)!)
+        // Assume mapping matches IOSFilterType
+        return wrapper.addFilter(IOSFilterType(rawValue: type.rawValue)!)
     }
 
     // Clear pipeline
