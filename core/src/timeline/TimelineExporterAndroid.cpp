@@ -137,6 +137,9 @@ private:
         int64_t currentTimeNs = 0;
         bool encoderEOS = false;
 
+        // Create a dummy wrapper for ID 0 once, outside the loop
+        FrameBufferPtr screenFb = std::make_shared<FrameBuffer>(m_width, m_height, 0);
+
         while (!encoderEOS && !m_canceled) {
             // Push frame
             if (currentTimeNs <= totalDurationNs) {
@@ -145,8 +148,6 @@ private:
                 glClear(GL_COLOR_BUFFER_BIT);
 
                 // Compositor draws directly to the default framebuffer (EGLSurface -> MediaCodec)
-                // We create a dummy wrapper for ID 0
-                FrameBufferPtr screenFb = std::make_shared<FrameBuffer>(m_width, m_height, 0);
                 compositor->renderFrameAtTime(currentTimeNs, screenFb);
 
                 if (eglPresentationTimeANDROID) {

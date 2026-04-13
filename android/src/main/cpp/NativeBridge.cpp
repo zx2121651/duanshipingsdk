@@ -219,8 +219,8 @@ JNIEXPORT jint JNICALL
 Java_com_sdk_video_RenderEngine_nativeProcessFrame(JNIEnv *env, jobject thiz, jlong handle, jint textureId, jint width, jint height, jfloatArray matrix, jlong timestampNs) {
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
     if (!wrapper || !wrapper->filterEngine) {
-        // Safe fallback if not initialized, return -1 and don't throw to avoid crashing GL thread
-        return -1;
+        // Safe fallback if not initialized, return error code and don't throw to avoid crashing GL thread
+        return static_cast<int>(sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED);
     }
 
     auto start = std::chrono::high_resolution_clock::now();
@@ -245,7 +245,7 @@ Java_com_sdk_video_RenderEngine_nativeProcessFrame(JNIEnv *env, jobject thiz, jl
             env->DeleteLocalRef(jmsg);
         }
         env->DeleteLocalRef(cls);
-        return -1;
+        return result.getErrorCode();
     }
 
     Texture outTex = result.getValue();

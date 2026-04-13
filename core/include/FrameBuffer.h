@@ -41,6 +41,13 @@ public:
     GLuint getFboId() const { return m_fboId; }
     FBOPrecision precision() const { return m_precision; }
 
+    // 允许在外部循环使用同一个 FrameBuffer 实例时只更新 FBO ID
+    void setExternalFboId(GLuint externalFboId) {
+        if (!m_ownsFbo) {
+            m_fboId = externalFboId;
+        }
+    }
+
 private:
     GLuint m_fboId;
     GLuint m_textureId;

@@ -131,6 +131,8 @@ private:
         GLuint fbo;
         glGenFramebuffers(1, &fbo);
 
+        FrameBufferPtr cvExternalFbWrapper = std::make_shared<FrameBuffer>(m_width, m_height, fbo);
+
         while (currentTimeNs <= totalDurationNs && !m_canceled) {
             @autoreleasepool {
                 while (!videoInput.readyForMoreMediaData && !m_canceled) {
@@ -162,8 +164,7 @@ private:
                     // [P1 修复] 统一 Compositor 输出接口，去掉 iOS 的二次拷贝 hack
                     // 使用扩展的 FrameBuffer 构造函数直接包装 CVPixelBuffer 挂载的外部 FBO。
                     // Compositor 最后一层的 Explicit Copy Pass 会直接画到这个 FBO 里，完成真正的零拷贝编码。
-
-                    FrameBufferPtr cvExternalFbWrapper = std::make_shared<FrameBuffer>(m_width, m_height, fbo);
+                    cvExternalFbWrapper->setExternalFboId(fbo); // Since fbo id is constant, this is optional, but keeps wrapper in sync if fbo ever changes
 
                     compositor->renderFrameAtTime(currentTimeNs, cvExternalFbWrapper);
 
