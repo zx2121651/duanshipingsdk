@@ -5,6 +5,7 @@
 #import <CoreVideo/CoreVideo.h>
 #import <OpenGLES/EAGL.h>
 #import <OpenGLES/ES3/gl.h>
+#include "../../include/GLStateManager.h"
 #include <thread>
 #include <atomic>
 
@@ -170,7 +171,7 @@ private:
                     GLuint textureId = CVOpenGLESTextureGetName(cvTexture);
 
                     // Render using compositor directly to the CVPixelBuffer-backed FBO
-                    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+                    GLStateManager::getInstance().bindFramebuffer(GL_FRAMEBUFFER, fbo);
                     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textureId, 0);
                     glViewport(0, 0, m_width, m_height);
 
@@ -181,7 +182,7 @@ private:
 
                     compositor->renderFrameAtTime(currentTimeNs, cvExternalFbWrapper);
 
-                    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                    GLStateManager::getInstance().bindFramebuffer(GL_FRAMEBUFFER, 0);
                     glFinish(); // 确保渲染指令完成
 
                     CMTime presentationTime = CMTimeMake(currentTimeNs, 1000000000);

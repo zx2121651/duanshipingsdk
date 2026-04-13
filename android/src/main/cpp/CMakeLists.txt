@@ -18,6 +18,7 @@ set(CORE_SRC
         ../../../../core/src/FrameBuffer.cpp
         ../../../../core/src/FrameBufferPool.cpp
         ../../../../core/src/GLContextManager.cpp
+        ../../../../core/src/GLStateManager.cpp
         ../../../../core/src/ShaderManager.cpp
         ../../../../core/src/ThreadCheck.cpp
         ../../../../core/src/pipeline/PipelineGraph.cpp

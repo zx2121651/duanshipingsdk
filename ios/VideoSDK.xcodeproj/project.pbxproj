@@ -14,6 +14,7 @@
 		1A00000000000005 /* VideoEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000005 /* VideoEncoder.swift */; };
 		1A00000000000006 /* IOSAssetProvider.mm in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000006 /* IOSAssetProvider.mm */; };
 		1A00000000000007 /* FilterEngineWrapper.mm in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000007 /* FilterEngineWrapper.mm */; };
+		1A00000000000008 /* GLStateManager.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B0000000000000B /* GLStateManager.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -27,6 +28,7 @@
 		1B00000000000008 /* IOSAssetProvider.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = IOSAssetProvider.h; sourceTree = "<group>"; };
 		1B00000000000009 /* FilterEngineWrapper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = FilterEngineWrapper.h; sourceTree = "<group>"; };
 		1B0000000000000A /* VideoSDK.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = VideoSDK.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		1B0000000000000B /* GLStateManager.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLStateManager.cpp; path = ../core/src/GLStateManager.cpp; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -60,6 +62,7 @@
 				1B00000000000007 /* FilterEngineWrapper.mm */,
 				1B00000000000008 /* IOSAssetProvider.h */,
 				1B00000000000009 /* FilterEngineWrapper.h */,
+				1B0000000000000B /* GLStateManager.cpp */,
 			);
 			path = Classes;
 			sourceTree = "<group>";
@@ -137,6 +140,7 @@
 				1A00000000000005 /* VideoEncoder.swift in Sources */,
 				1A00000000000006 /* IOSAssetProvider.mm in Sources */,
 				1A00000000000007 /* FilterEngineWrapper.mm in Sources */,
+				1A00000000000008 /* GLStateManager.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

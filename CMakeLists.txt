@@ -15,6 +15,7 @@ set(CORE_SOURCES
     core/src/pipeline/PipelineGraph.cpp
     core/src/ThreadCheck.cpp
     core/src/GLContextManager.cpp
+    core/src/GLStateManager.cpp
     core/src/timeline/Timeline.cpp
     core/src/timeline/Track.cpp
     core/src/timeline/Clip.cpp

@@ -138,7 +138,7 @@ public:
                 GL_RGBA,
                 (GLsizei)m_width,
                 (GLsizei)m_height,
-                GL_BGRA,
+                GL_BGRA_EXT,
                 GL_UNSIGNED_BYTE,
                 0,
                 &m_cvTexture
