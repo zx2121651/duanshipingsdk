@@ -17,6 +17,7 @@
 		1A00000000000008 /* GLStateManager.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B0000000000000B /* GLStateManager.cpp */; };
 		1A00000000000009 /* FilterEngine.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B0000000000000C /* FilterEngine.cpp */; };
 		1A0000000000000A /* Filters.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B0000000000000D /* Filters.cpp */; };
+		1A00000000000019 /* Filter.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B0000000000001C /* Filter.cpp */; };
 		1A0000000000000B /* FrameBuffer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B0000000000000E /* FrameBuffer.cpp */; };
 		1A0000000000000C /* FrameBufferPool.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B0000000000000F /* FrameBufferPool.cpp */; };
 		1A0000000000000D /* GLContextManager.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000010 /* GLContextManager.cpp */; };
@@ -47,6 +48,7 @@
 		1B0000000000000B /* GLStateManager.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLStateManager.cpp; path = ../../core/src/GLStateManager.cpp; sourceTree = "<group>"; };
 		1B0000000000000C /* FilterEngine.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = FilterEngine.cpp; path = ../../core/src/FilterEngine.cpp; sourceTree = "<group>"; };
 		1B0000000000000D /* Filters.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = Filters.cpp; path = ../../core/src/Filters.cpp; sourceTree = "<group>"; };
+		1B0000000000001C /* Filter.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = Filter.cpp; path = ../../core/src/Filter.cpp; sourceTree = "<group>"; };
 		1B0000000000000E /* FrameBuffer.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = FrameBuffer.cpp; path = ../../core/src/FrameBuffer.cpp; sourceTree = "<group>"; };
 		1B0000000000000F /* FrameBufferPool.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = FrameBufferPool.cpp; path = ../../core/src/FrameBufferPool.cpp; sourceTree = "<group>"; };
 		1B00000000000010 /* GLContextManager.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLContextManager.cpp; path = ../../core/src/GLContextManager.cpp; sourceTree = "<group>"; };
@@ -97,6 +99,7 @@
 				1B0000000000000B /* GLStateManager.cpp */,
 				1B0000000000000C /* FilterEngine.cpp */,
 				1B0000000000000D /* Filters.cpp */,
+				1B0000000000001C /* Filter.cpp */,
 				1B0000000000000E /* FrameBuffer.cpp */,
 				1B0000000000000F /* FrameBufferPool.cpp */,
 				1B00000000000010 /* GLContextManager.cpp */,
@@ -191,6 +194,7 @@
 				1A00000000000008 /* GLStateManager.cpp in Sources */,
 				1A00000000000009 /* FilterEngine.cpp in Sources */,
 				1A0000000000000A /* Filters.cpp in Sources */,
+				1A00000000000019 /* Filter.cpp in Sources */,
 				1A0000000000000B /* FrameBuffer.cpp in Sources */,
 				1A0000000000000C /* FrameBufferPool.cpp in Sources */,
 				1A0000000000000D /* GLContextManager.cpp in Sources */,
