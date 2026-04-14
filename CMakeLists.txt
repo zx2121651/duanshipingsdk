@@ -35,9 +35,9 @@ target_link_libraries(test_filter_graph video_sdk_core)
 if(WIN32 AND DEFINED CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES "vcpkg.cmake")
     find_package(unofficial-angle CONFIG REQUIRED)
 
-    # Real rendering test that relies on EGL/GLES context
-    add_executable(test_render_angle tests/test_render_angle.cpp tests/mocks/MockCompositor.cpp)
-    target_link_libraries(test_render_angle
+    # Real rendering test that relies on EGL/GLES context (Replaced by SSIM assertion)
+    add_executable(test_headless_ssim tests/test_headless_ssim.cpp tests/mocks/MockCompositor.cpp)
+    target_link_libraries(test_headless_ssim
         video_sdk_core
         unofficial::angle::libGLESv2
         unofficial::angle::libEGL
@@ -46,7 +46,7 @@ if(WIN32 AND DEFINED CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES "vcpk
     # Since video_sdk_core uses gl* functions internally, it needs linking to GLES
     target_link_libraries(video_sdk_core unofficial::angle::libGLESv2)
 
-    message(STATUS "Configured test_render_angle with ANGLE for Windows testing.")
+    message(STATUS "Configured test_headless_ssim with ANGLE for Windows testing.")
 else()
     # On Android NDK, linking is handled by Android Studio / ndk-build
     # On iOS/macOS, it's typically handled by Xcode frameworks.
@@ -58,9 +58,6 @@ else()
             # Also build a mock render test if on linux and GLES/EGL are found
             find_library(EGL_LIBRARY EGL)
             if(EGL_LIBRARY)
-                add_executable(test_render_angle tests/test_render_angle.cpp tests/mocks/MockCompositor.cpp)
-                target_link_libraries(test_render_angle video_sdk_core ${GLES2_LIBRARY} ${EGL_LIBRARY})
-
                 add_executable(test_headless_ssim tests/test_headless_ssim.cpp tests/mocks/MockCompositor.cpp)
                 target_link_libraries(test_headless_ssim video_sdk_core ${GLES2_LIBRARY} ${EGL_LIBRARY})
             endif()
