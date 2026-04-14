@@ -24,7 +24,8 @@ std::string ShaderManager::getShaderSource(const std::string& name, const std::s
 
     // Otherwise load from asset
     if (m_assetProvider) {
-        std::string path = "shaders/" + name;
+        // name might already contain 'shaders/' if called directly from filters
+        std::string path = name.find("shaders/") == 0 ? name : "shaders/" + name;
         std::string source = m_assetProvider->readAsset(path);
         if (!source.empty()) {
             m_shaderCache[name] = source;
