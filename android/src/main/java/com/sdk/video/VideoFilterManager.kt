@@ -242,11 +242,21 @@ class VideoFilterManager(private val context: android.content.Context,
         // 毒药屏障：将释放动作排入 GL 队列末尾！确保之前的渲染任务跑完
         val dispatcher = glThreadDispatcher
         if (dispatcher != null) {
-            dispatcher.invoke { try { renderEngine.release() } catch (e: Exception) {} }
+            // 将释放命令丢至 GL 线程队列的绝对末尾
+            dispatcher.invoke {
+                try {
+                    renderEngine.release()
+                    Log.i("VideoFilterManager", "RenderEngine safely deleted via Poison Pill.")
+                } catch (e: Exception) {
+                    Log.e("VideoFilterManager", "Error in delayed release", e)
+                }
+            }
         } else {
+            // 调度器未绑定的情况下，安全进行同步释放
             try { renderEngine.release() } catch (e: Exception) {}
         }
 
+        // 安全中止外层监听器
         scope.cancel() // 取消协程域中的所有任务
     }
 }

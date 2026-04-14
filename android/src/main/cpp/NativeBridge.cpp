@@ -220,9 +220,11 @@ Java_com_sdk_video_RenderEngine_nativeProcessFrame(JNIEnv *env, jobject thiz, jl
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
     if (!wrapper || !wrapper->filterEngine) {
         jclass cls = env->GetObjectClass(thiz);
+        // 寻找 Kotlin 层特别标注了 @Keep 的警戒方法
         jmethodID mid = env->GetMethodID(cls, "onNativeRenderError", "(ILjava/lang/String;)V");
         if (mid != nullptr) {
-            jstring jmsg = env->NewStringUTF("FilterEngine is null or destroyed. Render pipeline halted.");
+            jstring jmsg = env->NewStringUTF("Engine Critical Failure: FilterEngine is null or destroyed. Halted.");
+            // 主动上报错误码 -1001
             env->CallVoidMethod(thiz, mid, -1001, jmsg);
             env->DeleteLocalRef(jmsg);
         }
