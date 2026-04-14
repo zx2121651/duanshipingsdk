@@ -309,8 +309,8 @@ class VideoEncoder(
 
         Thread.sleep(100)
 
-        try { videoCodec?.stop(); videoCodec?.release() } catch (e: Exception) { Log.e(TAG, "Error releasing video codec", e) }
-        try { audioCodec?.stop(); audioCodec?.release() } catch (e: Exception) { Log.e(TAG, "Error releasing audio codec", e) }
+        try { videoCodec?.stop() } catch (e: IllegalStateException) { Log.w(TAG, "VideoCodec stop exception", e) } catch (e: Exception) { Log.e(TAG, "VideoCodec stop err", e) } finally { try { videoCodec?.release() } catch (e: Exception) {} videoCodec = null }
+        try { audioCodec?.stop() } catch (e: IllegalStateException) { Log.w(TAG, "AudioCodec stop exception", e) } catch (e: Exception) { Log.e(TAG, "AudioCodec stop err", e) } finally { try { audioCodec?.release() } catch (e: Exception) {} audioCodec = null }
 
         synchronized(this) {
             if (muxerStarted) {

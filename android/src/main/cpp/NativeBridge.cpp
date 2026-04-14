@@ -219,8 +219,15 @@ JNIEXPORT jint JNICALL
 Java_com_sdk_video_RenderEngine_nativeProcessFrame(JNIEnv *env, jobject thiz, jlong handle, jint textureId, jint width, jint height, jfloatArray matrix, jlong timestampNs) {
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
     if (!wrapper || !wrapper->filterEngine) {
-        // Safe fallback if not initialized, return error code and don't throw to avoid crashing GL thread
-        return static_cast<int>(sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED);
+        jclass cls = env->GetObjectClass(thiz);
+        jmethodID mid = env->GetMethodID(cls, "onNativeRenderError", "(ILjava/lang/String;)V");
+        if (mid != nullptr) {
+            jstring jmsg = env->NewStringUTF("FilterEngine is null or destroyed. Render pipeline halted.");
+            env->CallVoidMethod(thiz, mid, -1001, jmsg);
+            env->DeleteLocalRef(jmsg);
+        }
+        env->DeleteLocalRef(cls);
+        return -1;
     }
 
     auto start = std::chrono::high_resolution_clock::now();

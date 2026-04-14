@@ -237,8 +237,16 @@ class VideoFilterManager(private val context: android.content.Context,
     fun release() {
         inputSurface?.release()
         inputSurface = null
-        try { renderEngine.release() } catch (e: Exception) { Log.e("VideoFilterManager", "Error releasing RenderEngine", e) }
         _engineState.value = FilterEngineState.STOPPED
+
+        // 毒药屏障：将释放动作排入 GL 队列末尾！确保之前的渲染任务跑完
+        val dispatcher = glThreadDispatcher
+        if (dispatcher != null) {
+            dispatcher.invoke { try { renderEngine.release() } catch (e: Exception) {} }
+        } else {
+            try { renderEngine.release() } catch (e: Exception) {}
+        }
+
         scope.cancel() // 取消协程域中的所有任务
     }
 }
