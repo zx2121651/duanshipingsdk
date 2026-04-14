@@ -45,24 +45,24 @@
 		1B00000000000008 /* IOSAssetProvider.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = IOSAssetProvider.h; sourceTree = "<group>"; };
 		1B00000000000009 /* FilterEngineWrapper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = FilterEngineWrapper.h; sourceTree = "<group>"; };
 		1B0000000000000A /* VideoSDK.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = VideoSDK.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		1B0000000000000B /* GLStateManager.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLStateManager.cpp; path = ../core/src/GLStateManager.cpp; sourceTree = "<group>"; };
-		1B0000000000000C /* FilterEngine.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = FilterEngine.cpp; path = ../core/src/FilterEngine.cpp; sourceTree = "<group>"; };
-		1B0000000000000D /* Filters.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = Filters.cpp; path = ../core/src/Filters.cpp; sourceTree = "<group>"; };
-		1B0000000000001C /* Filter.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = Filter.cpp; path = ../core/src/Filter.cpp; sourceTree = "<group>"; };
-		1B0000000000000E /* FrameBuffer.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = FrameBuffer.cpp; path = ../core/src/FrameBuffer.cpp; sourceTree = "<group>"; };
-		1B0000000000000F /* FrameBufferPool.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = FrameBufferPool.cpp; path = ../core/src/FrameBufferPool.cpp; sourceTree = "<group>"; };
-		1B00000000000010 /* GLContextManager.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLContextManager.cpp; path = ../core/src/GLContextManager.cpp; sourceTree = "<group>"; };
-		1B00000000000011 /* ShaderManager.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = ShaderManager.cpp; path = ../core/src/ShaderManager.cpp; sourceTree = "<group>"; };
-		1B00000000000012 /* ThreadCheck.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = ThreadCheck.cpp; path = ../core/src/ThreadCheck.cpp; sourceTree = "<group>"; };
-		1B00000000000013 /* PipelineGraph.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = PipelineGraph.cpp; path = ../core/src/pipeline/PipelineGraph.cpp; sourceTree = "<group>"; };
-		1B00000000000014 /* AudioMixer.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = AudioMixer.cpp; path = ../core/src/timeline/AudioMixer.cpp; sourceTree = "<group>"; };
-		1B00000000000015 /* Clip.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = Clip.cpp; path = ../core/src/timeline/Clip.cpp; sourceTree = "<group>"; };
-		1B00000000000016 /* Compositor.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = Compositor.cpp; path = ../core/src/timeline/Compositor.cpp; sourceTree = "<group>"; };
-		1B00000000000017 /* DecoderPool.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = DecoderPool.cpp; path = ../core/src/timeline/DecoderPool.cpp; sourceTree = "<group>"; };
-		1B00000000000018 /* Timeline.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = Timeline.cpp; path = ../core/src/timeline/Timeline.cpp; sourceTree = "<group>"; };
-		1B00000000000019 /* Track.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = Track.cpp; path = ../core/src/timeline/Track.cpp; sourceTree = "<group>"; };
-		1B0000000000001A /* TimelineExporterIOS.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = TimelineExporterIOS.mm; path = ../core/src/timeline/TimelineExporterIOS.mm; sourceTree = "<group>"; };
-		1B0000000000001B /* VideoDecoderIOS.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = VideoDecoderIOS.mm; path = ../core/src/timeline/VideoDecoderIOS.mm; sourceTree = "<group>"; };
+		1B0000000000000B /* GLStateManager.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLStateManager.cpp; path = ../core/src/GLStateManager.cpp; sourceTree = SOURCE_ROOT; };
+		1B0000000000000C /* FilterEngine.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = FilterEngine.cpp; path = ../core/src/FilterEngine.cpp; sourceTree = SOURCE_ROOT; };
+		1B0000000000000D /* Filters.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = Filters.cpp; path = ../core/src/Filters.cpp; sourceTree = SOURCE_ROOT; };
+		1B0000000000001C /* Filter.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = Filter.cpp; path = ../core/src/Filter.cpp; sourceTree = SOURCE_ROOT; };
+		1B0000000000000E /* FrameBuffer.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = FrameBuffer.cpp; path = ../core/src/FrameBuffer.cpp; sourceTree = SOURCE_ROOT; };
+		1B0000000000000F /* FrameBufferPool.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = FrameBufferPool.cpp; path = ../core/src/FrameBufferPool.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000010 /* GLContextManager.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLContextManager.cpp; path = ../core/src/GLContextManager.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000011 /* ShaderManager.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = ShaderManager.cpp; path = ../core/src/ShaderManager.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000012 /* ThreadCheck.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = ThreadCheck.cpp; path = ../core/src/ThreadCheck.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000013 /* PipelineGraph.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = PipelineGraph.cpp; path = ../core/src/pipeline/PipelineGraph.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000014 /* AudioMixer.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = AudioMixer.cpp; path = ../core/src/timeline/AudioMixer.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000015 /* Clip.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = Clip.cpp; path = ../core/src/timeline/Clip.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000016 /* Compositor.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = Compositor.cpp; path = ../core/src/timeline/Compositor.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000017 /* DecoderPool.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = DecoderPool.cpp; path = ../core/src/timeline/DecoderPool.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000018 /* Timeline.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = Timeline.cpp; path = ../core/src/timeline/Timeline.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000019 /* Track.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = Track.cpp; path = ../core/src/timeline/Track.cpp; sourceTree = SOURCE_ROOT; };
+		1B0000000000001A /* TimelineExporterIOS.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = TimelineExporterIOS.mm; path = ../core/src/timeline/TimelineExporterIOS.mm; sourceTree = SOURCE_ROOT; };
+		1B0000000000001B /* VideoDecoderIOS.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = VideoDecoderIOS.mm; path = ../core/src/timeline/VideoDecoderIOS.mm; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -228,6 +228,11 @@
                 HEADER_SEARCH_PATHS = "$(SRCROOT)/../core/include";
                 GENERATE_INFOPLIST_FILE = YES;
                 SWIFT_OBJC_BRIDGING_HEADER = Classes/VideoSDK-Bridging-Header.h;
+                GCC_PREPROCESSOR_DEFINITIONS = (
+                    "$(inherited)",
+                    "GLES_SILENCE_DEPRECATION=1",
+                    "COREVIDEO_SILENCE_GL_DEPRECATION=1",
+                );
 			};
 			name = Debug;
 		};
@@ -244,6 +249,11 @@
                 HEADER_SEARCH_PATHS = "$(SRCROOT)/../core/include";
                 GENERATE_INFOPLIST_FILE = YES;
                 SWIFT_OBJC_BRIDGING_HEADER = Classes/VideoSDK-Bridging-Header.h;
+                GCC_PREPROCESSOR_DEFINITIONS = (
+                    "$(inherited)",
+                    "GLES_SILENCE_DEPRECATION=1",
+                    "COREVIDEO_SILENCE_GL_DEPRECATION=1",
+                );
 			};
 			name = Release;
 		};
