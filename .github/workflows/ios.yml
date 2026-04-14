@@ -15,18 +15,19 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # Note: This assumes there's an Xcode project or workspace inside `ios/`
-      # that pulls in the `Classes` and `core` code. If there isn't one yet,
-      # we can simply verify the syntax using swift build or a dummy project in the future.
-      # For now, we will try to compile the Obj-C++ wrapper using a basic compile script
-      # or rely on xcodebuild if a project exists.
       - name: Setup Xcode version
         uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: latest-stable
 
-      - name: Lint and Compile Check (Objective-C++ & Swift)
+      - name: Build Framework (xcodebuild)
         run: |
-          cd ios
-          # We use xcodebuild with a minimal project now
-          xcodebuild clean build -project "VideoSDK.xcodeproj" -scheme "VideoSDK" -destination "generic/platform=iOS Simulator" CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO ONLY_ACTIVE_ARCH=NO GENERATE_INFOPLIST_FILE=YES
+          xcodebuild clean build \
+            -project "ios/VideoSDK.xcodeproj" \
+            -scheme "VideoSDK" \
+            -destination "generic/platform=iOS Simulator" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            ONLY_ACTIVE_ARCH=NO \
+            GENERATE_INFOPLIST_FILE=YES
