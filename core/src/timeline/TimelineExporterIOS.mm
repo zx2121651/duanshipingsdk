@@ -165,7 +165,7 @@ private:
                 err = CVOpenGLESTextureCacheCreateTextureFromImage(
                     kCFAllocatorDefault, textureCache, pixelBuffer, NULL,
                     GL_TEXTURE_2D, GL_RGBA, (GLsizei)m_width, (GLsizei)m_height,
-                    GL_BGRA, GL_UNSIGNED_BYTE, 0, &cvTexture);
+                    GL_BGRA_EXT, GL_UNSIGNED_BYTE, 0, &cvTexture);
 
                 if (err == kCVReturnSuccess && cvTexture) {
                     GLuint textureId = CVOpenGLESTextureGetName(cvTexture);

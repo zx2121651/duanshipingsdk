@@ -211,13 +211,13 @@ private:
     int64_t m_lastSeekTimeNs = 0;
 };
 
+// Platform Decoder Factory Implementation
+std::shared_ptr<VideoDecoder> createPlatformDecoder() {
+    return std::make_shared<VideoDecoderIOS>();
+}
+
 } // namespace timeline
 } // namespace video
 } // namespace sdk
 
 #endif // __APPLE__
-
-// Platform Decoder Factory Implementation
-std::shared_ptr<VideoDecoder> createPlatformDecoder() {
-    return std::make_shared<VideoDecoderIOS>();
-}

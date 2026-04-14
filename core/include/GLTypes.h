@@ -4,6 +4,8 @@
 #include <string>
 #ifdef __APPLE__
     #include <OpenGLES/ES3/gl.h>
+    #include <OpenGLES/ES2/glext.h>
+    #include <OpenGLES/ES3/glext.h>
 #else
     #include <GLES3/gl3.h>
     // 引入 OpenGL ES 3.1 的扩展，以支持 Compute Shader 和 Image Store
