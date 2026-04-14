@@ -2,6 +2,8 @@
 #import "../../core/include/FilterEngine.h"
 #import "IOSAssetProvider.h"
 #import "../../core/include/Filters.h"
+#import <OpenGLES/ES3/glext.h>
+#import <OpenGLES/ES2/glext.h>
 
 using namespace sdk::video;
 
