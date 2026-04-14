@@ -35,8 +35,11 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     var onPerformanceUpdateListener: ((durationMs: Long) -> Unit)? = null
     var onRenderErrorListener: ((errorCode: Int, errorMessage: String) -> Unit)? = null
 
+    // 确保被 R8 混淆器保留，供 C++ 回调
     @androidx.annotation.Keep
     private fun onNativeRenderError(errorCode: Int, errorMessage: String) {
+        android.util.Log.e("RenderEngine", "FATAL NATIVE ERROR [$errorCode]: $errorMessage")
+        // 将故障讯号向外转发给负责业务逻辑的 Facade
         onRenderErrorListener?.invoke(errorCode, errorMessage)
     }
 

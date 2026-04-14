@@ -309,8 +309,30 @@ class VideoEncoder(
 
         Thread.sleep(100)
 
-        try { videoCodec?.stop() } catch (e: IllegalStateException) { Log.w(TAG, "VideoCodec stop exception", e) } catch (e: Exception) { Log.e(TAG, "VideoCodec stop err", e) } finally { try { videoCodec?.release() } catch (e: Exception) {}; videoCodec = null }
-        try { audioCodec?.stop() } catch (e: IllegalStateException) { Log.w(TAG, "AudioCodec stop exception", e) } catch (e: Exception) { Log.e(TAG, "AudioCodec stop err", e) } finally { try { audioCodec?.release() } catch (e: Exception) {}; audioCodec = null }
+        // 独立且严格释放视频编码器
+        try {
+            videoCodec?.stop()
+        } catch (e: IllegalStateException) {
+            Log.w(TAG, "VideoCodec stop() threw exception due to abrupt state transition", e)
+        } catch (e: Exception) {
+            Log.e(TAG, "VideoCodec stop() unexpected failure", e)
+        } finally {
+            // 强制执行，释放硬件资源
+            try { videoCodec?.release() } catch (e: Exception) {}
+            videoCodec = null
+        }
+
+        // 同样的独立释放逻辑应用于音频编码器
+        try {
+            audioCodec?.stop()
+        } catch (e: IllegalStateException) {
+            Log.w(TAG, "AudioCodec stop() threw exception", e)
+        } catch (e: Exception) {
+            Log.e(TAG, "AudioCodec stop() unexpected failure", e)
+        } finally {
+            try { audioCodec?.release() } catch (e: Exception) {}
+            audioCodec = null
+        }
 
         synchronized(this) {
             if (muxerStarted) {
