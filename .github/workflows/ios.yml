@@ -22,8 +22,7 @@ jobs:
 
       - name: Build Framework (xcodebuild)
         run: |
-          xcodebuild clean build \
-            -project "ios/VideoSDK.xcodeproj" \
+          xcodebuild clean build -project ios/VideoSDK.xcodeproj \
             -scheme "VideoSDK" \
             -destination "generic/platform=iOS Simulator" \
             CODE_SIGN_IDENTITY="" \
