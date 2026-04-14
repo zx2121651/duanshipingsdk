@@ -28,7 +28,7 @@
 		1B00000000000008 /* IOSAssetProvider.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = IOSAssetProvider.h; sourceTree = "<group>"; };
 		1B00000000000009 /* FilterEngineWrapper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = FilterEngineWrapper.h; sourceTree = "<group>"; };
 		1B0000000000000A /* VideoSDK.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = VideoSDK.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		1B0000000000000B /* GLStateManager.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLStateManager.cpp; path = ../core/src/GLStateManager.cpp; sourceTree = "<group>"; };
+		1B0000000000000B /* GLStateManager.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLStateManager.cpp; path = ../../core/src/GLStateManager.cpp; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
