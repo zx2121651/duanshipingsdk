@@ -235,6 +235,10 @@ class VideoFilterManager(private val context: android.content.Context,
         }
     }
     fun release() {
+        // 1. 先停掉录制和音频，防止异步任务还在调用 renderEngine
+        stopVideoRecording()
+        stopAudioRecord()
+
         inputSurface?.release()
         inputSurface = null
         _engineState.value = FilterEngineState.STOPPED

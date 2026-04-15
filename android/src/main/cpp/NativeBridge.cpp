@@ -53,12 +53,21 @@ struct EngineWrapper {
     void setupRecordingSurface(JNIEnv* env, jobject surface) {
         if (!surface) return;
 
+        // Cleanup existing surface before overwriting
+        releaseRecordingSurface();
+
         recordingWindow = ANativeWindow_fromSurface(env, surface);
         if (!recordingWindow) return;
 
         // Current context from GLSurfaceView or TextureView
         eglDisplay = eglGetCurrentDisplay();
         sharedContext = eglGetCurrentContext();
+
+        if (eglDisplay == EGL_NO_DISPLAY || sharedContext == EGL_NO_CONTEXT) {
+            ANativeWindow_release(recordingWindow);
+            recordingWindow = nullptr;
+            return;
+        }
 
         // Create EGL window surface for MediaCodec input
         EGLint configAttribs[] = {

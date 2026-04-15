@@ -312,25 +312,29 @@ class VideoEncoder(
         // 独立且严格释放视频编码器
         try {
             videoCodec?.stop()
-        } catch (e: IllegalStateException) {
-            Log.w(TAG, "VideoCodec stop() threw exception due to abrupt state transition", e)
         } catch (e: Exception) {
-            Log.e(TAG, "VideoCodec stop() unexpected failure", e)
+            Log.w(TAG, "VideoCodec stop() failed: ${e.message}")
         } finally {
             // 强制执行，释放硬件资源
-            try { videoCodec?.release() } catch (e: Exception) {}
+            try {
+                videoCodec?.release()
+            } catch (e: Exception) {
+                Log.e(TAG, "VideoCodec release() failed", e)
+            }
             videoCodec = null
         }
 
         // 同样的独立释放逻辑应用于音频编码器
         try {
             audioCodec?.stop()
-        } catch (e: IllegalStateException) {
-            Log.w(TAG, "AudioCodec stop() threw exception", e)
         } catch (e: Exception) {
-            Log.e(TAG, "AudioCodec stop() unexpected failure", e)
+            Log.w(TAG, "AudioCodec stop() failed: ${e.message}")
         } finally {
-            try { audioCodec?.release() } catch (e: Exception) {}
+            try {
+                audioCodec?.release()
+            } catch (e: Exception) {
+                Log.e(TAG, "AudioCodec release() failed", e)
+            }
             audioCodec = null
         }
 

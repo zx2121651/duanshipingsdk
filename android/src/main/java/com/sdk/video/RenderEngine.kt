@@ -3,6 +3,9 @@ package com.sdk.video
 import android.graphics.SurfaceTexture
 import android.opengl.GLES20
 import android.view.Surface
+import java.util.concurrent.locks.ReentrantReadWriteLock
+import kotlin.concurrent.read
+import kotlin.concurrent.write
 
 @InternalApi
 class RenderEngine(private val width: Int, private val height: Int) : SurfaceTexture.OnFrameAvailableListener {
@@ -19,6 +22,7 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     }
 
     private var nativeHandle: Long = 0
+    private val handleLock = ReentrantReadWriteLock()
     private var surfaceTexture: SurfaceTexture? = null
     private var oesTextureId: Int = -1
     private val transformMatrix = FloatArray(16)
@@ -46,12 +50,14 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     // Call on GL thread to initialize
 
     fun updateShaderSource(name: String, source: String): Int {
-        if (nativeHandle != 0L) {
-            try {
-                nativeUpdateShaderSource(nativeHandle, name, source)
-                return 0
-            } catch (e: NativeRenderException) {
-                return e.errorCode
+        handleLock.read {
+            if (nativeHandle != 0L) {
+                try {
+                    nativeUpdateShaderSource(nativeHandle, name, source)
+                    return 0
+                } catch (e: NativeRenderException) {
+                    return e.errorCode
+                }
             }
         }
         return -1001 // ERR_INIT_CONTEXT_FAILED
@@ -67,24 +73,31 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
 
 
     fun getMetrics(): PerformanceMetrics? {
-        if (nativeHandle == 0L) return null
-        val arr = nativeGetMetrics(nativeHandle) ?: return null
-        return PerformanceMetrics(arr[0], arr[1], arr[2], arr[3], arr[4].toInt())
+        handleLock.read {
+            if (nativeHandle == 0L) return null
+            val arr = nativeGetMetrics(nativeHandle) ?: return null
+            return PerformanceMetrics(arr[0], arr[1], arr[2], arr[3], arr[4].toInt())
+        }
     }
 
     fun recordDroppedFrame() {
-        if (nativeHandle != 0L) {
-            nativeRecordDroppedFrame(nativeHandle)
+        handleLock.read {
+            if (nativeHandle != 0L) {
+                nativeRecordDroppedFrame(nativeHandle)
+            }
         }
     }
 
     fun init(assetManager: android.content.res.AssetManager): Int {
-        try {
-            nativeHandle = nativeInit(assetManager)
-        } catch (e: NativeRenderException) {
-            return e.errorCode
+        handleLock.write {
+            if (nativeHandle != 0L) return 0
+            try {
+                nativeHandle = nativeInit(assetManager)
+            } catch (e: NativeRenderException) {
+                return e.errorCode
+            }
+            if (nativeHandle == 0L) return -1001 // ERR_INIT_CONTEXT_FAILED
         }
-        if (nativeHandle == 0L) return -1001 // ERR_INIT_CONTEXT_FAILED
 
         val textures = IntArray(1)
         GLES20.glGenTextures(1, textures, 0)
@@ -107,33 +120,37 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     }
 
     override fun onFrameAvailable(st: SurfaceTexture?) {
-        if (nativeHandle == 0L || st == null) return
+        if (st == null) return
 
-        st.updateTexImage()
-        st.getTransformMatrix(transformMatrix)
+        handleLock.read {
+            if (nativeHandle == 0L) return
 
-        // Pass timestamp to native layer for MediaCodec EGL presentation time
-        // [PTS Drift Fix]: Use audio master clock to forcefully align video PTS to the
-        // audio crystal if recording is active.
-        var timestampNs = st.timestamp
-        if (isRecording && recordingStartTimeNs > 0) {
-            val audioTimeNs = getAudioTimeNs()
-            if (audioTimeNs > 0) {
-                timestampNs = recordingStartTimeNs + audioTimeNs
-                if (timestampNs <= lastVideoPtsNs) {
-                    timestampNs = lastVideoPtsNs + 10000 // Ensure strict monotonicity (10us)
+            st.updateTexImage()
+            st.getTransformMatrix(transformMatrix)
+
+            // Pass timestamp to native layer for MediaCodec EGL presentation time
+            // [PTS Drift Fix]: Use audio master clock to forcefully align video PTS to the
+            // audio crystal if recording is active.
+            var timestampNs = st.timestamp
+            if (isRecording && recordingStartTimeNs > 0) {
+                val audioTimeNs = getAudioTimeNs()
+                if (audioTimeNs > 0) {
+                    timestampNs = recordingStartTimeNs + audioTimeNs
+                    if (timestampNs <= lastVideoPtsNs) {
+                        timestampNs = lastVideoPtsNs + 10000 // Ensure strict monotonicity (10us)
+                    }
+                    lastVideoPtsNs = timestampNs
                 }
-                lastVideoPtsNs = timestampNs
             }
-        }
 
-        val outputTexId = nativeProcessFrame(nativeHandle, oesTextureId, width, height, transformMatrix, timestampNs)
+            val outputTexId = nativeProcessFrame(nativeHandle, oesTextureId, width, height, transformMatrix, timestampNs)
 
-        // 如果返回值是负数，表示产生了错误 (onNativeRenderError is called from C++)
-        if (outputTexId >= 0) {
-            onFrameProcessedListener?.invoke(outputTexId)
-            if (lastFrameTimeMs > 0) {
-                onPerformanceUpdateListener?.invoke(lastFrameTimeMs)
+            // 如果返回值是负数，表示产生了错误 (onNativeRenderError is called from C++)
+            if (outputTexId >= 0) {
+                onFrameProcessedListener?.invoke(outputTexId)
+                if (lastFrameTimeMs > 0) {
+                    onPerformanceUpdateListener?.invoke(lastFrameTimeMs)
+                }
             }
         }
     }
@@ -145,84 +162,102 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     }
 
     fun startRecording(surface: Surface): Result<Unit> {
-        if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
-        return try {
-            nativeSetRecordingSurface(nativeHandle, surface)
-            isRecording = true
-            Result.success(Unit)
-        } catch (e: NativeRenderException) {
-            Result.failure(VideoSdkError.NativeError(e.errorCode, e.message ?: "Unknown native error"))
+        handleLock.read {
+            if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
+            return try {
+                nativeSetRecordingSurface(nativeHandle, surface)
+                isRecording = true
+                Result.success(Unit)
+            } catch (e: NativeRenderException) {
+                Result.failure(VideoSdkError.NativeError(e.errorCode, e.message ?: "Unknown native error"))
+            }
         }
     }
 
     fun stopRecording(): Result<Unit> {
-        if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
-        return try {
-            nativeSetRecordingSurface(nativeHandle, null)
-            isRecording = false
-            recordingStartTimeNs = 0L
-            Result.success(Unit)
-        } catch (e: NativeRenderException) {
-            Result.failure(VideoSdkError.NativeError(e.errorCode, e.message ?: "Unknown native error"))
+        handleLock.read {
+            if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
+            return try {
+                nativeSetRecordingSurface(nativeHandle, null)
+                isRecording = false
+                recordingStartTimeNs = 0L
+                Result.success(Unit)
+            } catch (e: NativeRenderException) {
+                Result.failure(VideoSdkError.NativeError(e.errorCode, e.message ?: "Unknown native error"))
+            }
         }
     }
 
     // Parameters
     fun setFlip(horizontal: Boolean, vertical: Boolean): Result<Unit> {
-        if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
-        return try {
-            nativeUpdateParameterBool(nativeHandle, "flipHorizontal", horizontal)
-            nativeUpdateParameterBool(nativeHandle, "flipVertical", vertical)
-            Result.success(Unit)
-        } catch (e: NativeRenderException) {
-            Result.failure(VideoSdkError.NativeError(e.errorCode, e.message ?: "Unknown native error"))
+        handleLock.read {
+            if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
+            return try {
+                nativeUpdateParameterBool(nativeHandle, "flipHorizontal", horizontal)
+                nativeUpdateParameterBool(nativeHandle, "flipVertical", vertical)
+                Result.success(Unit)
+            } catch (e: NativeRenderException) {
+                Result.failure(VideoSdkError.NativeError(e.errorCode, e.message ?: "Unknown native error"))
+            }
         }
     }
 
     fun updateParameterFloat(key: String, value: Float): Result<Unit> {
-        if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
-        return try {
-            nativeUpdateParameterFloat(nativeHandle, key, value)
-            Result.success(Unit)
-        } catch (e: NativeRenderException) {
-            Result.failure(VideoSdkError.NativeError(e.errorCode, e.message ?: "Unknown native error"))
+        handleLock.read {
+            if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
+            return try {
+                nativeUpdateParameterFloat(nativeHandle, key, value)
+                Result.success(Unit)
+            } catch (e: NativeRenderException) {
+                Result.failure(VideoSdkError.NativeError(e.errorCode, e.message ?: "Unknown native error"))
+            }
         }
     }
 
     fun updateParameterInt(key: String, value: Int): Result<Unit> {
-        if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
-        return try {
-            nativeUpdateParameterInt(nativeHandle, key, value)
-            Result.success(Unit)
-        } catch (e: NativeRenderException) {
-            Result.failure(VideoSdkError.NativeError(e.errorCode, e.message ?: "Unknown native error"))
+        handleLock.read {
+            if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
+            return try {
+                nativeUpdateParameterInt(nativeHandle, key, value)
+                Result.success(Unit)
+            } catch (e: NativeRenderException) {
+                Result.failure(VideoSdkError.NativeError(e.errorCode, e.message ?: "Unknown native error"))
+            }
         }
     }
 
     // Pipeline
     fun addFilter(type: Int): Result<Unit> {
-        return try {
-            nativeAddFilter(nativeHandle, type)
-            Result.success(Unit)
-        } catch (e: NativeRenderException) {
-            Result.failure(VideoSdkError.NativeError(e.errorCode, e.message ?: "Unknown native error"))
+        handleLock.read {
+            if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
+            return try {
+                nativeAddFilter(nativeHandle, type)
+                Result.success(Unit)
+            } catch (e: NativeRenderException) {
+                Result.failure(VideoSdkError.NativeError(e.errorCode, e.message ?: "Unknown native error"))
+            }
         }
     }
 
     fun removeAllFilters(): Result<Unit> {
-        return try {
-            nativeRemoveAllFilters(nativeHandle)
-            Result.success(Unit)
-        } catch (e: NativeRenderException) {
-            Result.failure(VideoSdkError.NativeError(e.errorCode, e.message ?: "Unknown native error"))
+        handleLock.read {
+            if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
+            return try {
+                nativeRemoveAllFilters(nativeHandle)
+                Result.success(Unit)
+            } catch (e: NativeRenderException) {
+                Result.failure(VideoSdkError.NativeError(e.errorCode, e.message ?: "Unknown native error"))
+            }
         }
     }
 
     // Call on GL thread to release
     fun release() {
-        if (nativeHandle != 0L) {
-            nativeRelease(nativeHandle)
-            nativeHandle = 0
+        handleLock.write {
+            if (nativeHandle != 0L) {
+                nativeRelease(nativeHandle)
+                nativeHandle = 0
+            }
         }
         surfaceTexture?.release()
         surfaceTexture = null
@@ -235,31 +270,39 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
 
 
     fun startAudioRecord(sampleRate: Int): Result<Unit> {
-        if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
-        return try {
-            nativeStartAudioRecord(nativeHandle, sampleRate)
-            Result.success(Unit)
-        } catch (e: NativeRenderException) {
-            Result.failure(VideoSdkError.NativeError(e.errorCode, e.message ?: "Unknown native error"))
+        handleLock.read {
+            if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
+            return try {
+                nativeStartAudioRecord(nativeHandle, sampleRate)
+                Result.success(Unit)
+            } catch (e: NativeRenderException) {
+                Result.failure(VideoSdkError.NativeError(e.errorCode, e.message ?: "Unknown native error"))
+            }
         }
     }
 
     fun stopAudioRecord(): Result<Unit> {
-        if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
-        return try {
-            nativeStopAudioRecord(nativeHandle)
-            Result.success(Unit)
-        } catch (e: NativeRenderException) {
-            Result.failure(VideoSdkError.NativeError(e.errorCode, e.message ?: "Unknown native error"))
+        handleLock.read {
+            if (nativeHandle == 0L) return Result.failure(VideoSdkError.InvalidOperation("Engine not initialized"))
+            return try {
+                nativeStopAudioRecord(nativeHandle)
+                Result.success(Unit)
+            } catch (e: NativeRenderException) {
+                Result.failure(VideoSdkError.NativeError(e.errorCode, e.message ?: "Unknown native error"))
+            }
         }
     }
 
     fun readAudioPCM(buffer: ByteArray, length: Int): Int {
-        return if (nativeHandle != 0L) nativeReadAudioPCM(nativeHandle, buffer, length) else 0
+        handleLock.read {
+            return if (nativeHandle != 0L) nativeReadAudioPCM(nativeHandle, buffer, length) else 0
+        }
     }
 
     fun getAudioTimeNs(): Long {
-        return if (nativeHandle != 0L) nativeGetAudioTimeNs(nativeHandle) else 0L
+        handleLock.read {
+            return if (nativeHandle != 0L) nativeGetAudioTimeNs(nativeHandle) else 0L
+        }
     }
 
     // Native methods
