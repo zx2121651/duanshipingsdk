@@ -160,8 +160,6 @@ protected:
     std::string getVertexShaderSource() const override { return ""; }
     std::string getFragmentShaderSource() const override { return ""; }
 
-    const char* getComputeShaderSource() const;
-
 private:
     GLuint m_computeProgramId;
     GLuint m_blurSizeHandle;

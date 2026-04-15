@@ -11,103 +11,6 @@
 namespace sdk {
 namespace video {
 
-// --- Shader sources ---
-
-const char* kOESVertexShader = R"(
-#version 300 es
-layout(location = 0) in vec4 position;
-layout(location = 1) in vec4 inputTextureCoordinate;
-uniform mat4 textureMatrix;
-uniform bool flipHorizontal;
-uniform bool flipVertical;
-out vec2 textureCoordinate;
-void main() {
-    gl_Position = position;
-
-    vec4 coord = inputTextureCoordinate;
-    // Apply manual flips if necessary BEFORE the matrix transform
-    if (flipHorizontal) coord.x = 1.0 - coord.x;
-    if (flipVertical) coord.y = 1.0 - coord.y;
-
-    // Apply SurfaceTexture transform matrix to fix orientation/cropping
-    textureCoordinate = (textureMatrix * coord).xy;
-}
-)";
-
-const char* kOESFragmentShader = R"(
-#version 300 es
-#extension GL_OES_EGL_image_external_essl3 : require
-precision mediump float;
-in vec2 textureCoordinate;
-out vec4 fragColor;
-uniform samplerExternalOES inputImageTexture;
-
-void main() {
-    fragColor = texture(inputImageTexture, textureCoordinate);
-}
-)";
-
-const char* kBrightnessFragmentShader = R"(
-#version 300 es
-precision mediump float;
-in vec2 textureCoordinate;
-out vec4 fragColor;
-uniform sampler2D inputImageTexture;
-uniform float brightness;
-
-void main() {
-    vec4 textureColor = texture(inputImageTexture, textureCoordinate);
-    fragColor = vec4((textureColor.rgb + vec3(brightness)), textureColor.w);
-}
-)";
-
-
-
-const char* kLookupFragmentShader = R"(
-#version 300 es
-precision mediump float;
-in vec2 textureCoordinate;
-out vec4 fragColor;
-
-uniform sampler2D inputImageTexture;
-uniform sampler2D lookupTexture;
-uniform float intensity;
-
-void main() {
-    vec4 textureColor = texture(inputImageTexture, textureCoordinate);
-    // 3D LUT 核心算法：
-            // 1. 获取输入像素的 B (蓝) 通道值，将其映射为 0~63 之间的浮点数，这代表着它在 LUT 图的 64 个网格中的位置索引。
-            float blueColor = textureColor.b * 63.0;
-
-    // 2. 因为 blueColor 是浮点数，所以它通常落在两个相邻的整数网格之间。
-            // 我们算出这两个相邻网格的索引 (quad1 对应向下取整，quad2 对应向上取整)。
-            vec2 quad1;
-    quad1.y = floor(floor(blueColor) / 8.0);
-    quad1.x = floor(blueColor) - (quad1.y * 8.0);
-
-    vec2 quad2;
-    quad2.y = floor(ceil(blueColor) / 8.0);
-    quad2.x = ceil(blueColor) - (quad2.y * 8.0);
-
-    // 3. 在对应的网格中，根据输入像素的 R (红) 和 G (绿) 算出在这个 8x8 小方块中的精确 x, y 坐标。
-            // 0.125 是 1/8 (每个网格占总宽高的 1/8)，0.5/512.0 是半像素偏移，用于防止 OpenGL 边缘采样时出现像素串线。
-            vec2 texPos1;
-    texPos1.x = (quad1.x * 0.125) + 0.5/512.0 + ((0.125 - 1.0/512.0) * textureColor.r);
-    texPos1.y = (quad1.y * 0.125) + 0.5/512.0 + ((0.125 - 1.0/512.0) * textureColor.g);
-
-    vec2 texPos2;
-    texPos2.x = (quad2.x * 0.125) + 0.5/512.0 + ((0.125 - 1.0/512.0) * textureColor.r);
-    texPos2.y = (quad2.y * 0.125) + 0.5/512.0 + ((0.125 - 1.0/512.0) * textureColor.g);
-
-    vec4 newColor1 = texture(lookupTexture, texPos1);
-    vec4 newColor2 = texture(lookupTexture, texPos2);
-
-    // 4. 根据蓝通道的小数部分 (fract)，将从两个网格采到的颜色进行 mix (线性插值) 混合。
-            // 这消除了色彩渐变时的 Banding (色阶断层) 现象。
-            vec4 newColor = mix(newColor1, newColor2, fract(blueColor));
-    fragColor = mix(textureColor, vec4(newColor.rgb, textureColor.w), intensity);
-}
-)";
 
 
 // Common vertex coordinates
@@ -149,7 +52,7 @@ Result OES2RGBFilter::initialize() {
 }
 
 std::string OES2RGBFilter::getVertexShaderSource() const {
-    return kOESVertexShader;
+    return "";
 }
 
 void OES2RGBFilter::onProgramRecompiled() {
@@ -158,7 +61,7 @@ void OES2RGBFilter::onProgramRecompiled() {
     m_flipVerticalHandle = glGetUniformLocation(m_programId, "flipVertical");
 }
 std::string OES2RGBFilter::getFragmentShaderSource() const {
-    return kOESFragmentShader;
+    return "";
 }
 
 void OES2RGBFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {
@@ -221,7 +124,7 @@ void BrightnessFilter::onProgramRecompiled() {
     m_brightnessHandle = glGetUniformLocation(m_programId, "brightness");
 }
 std::string BrightnessFilter::getFragmentShaderSource() const {
-    return m_shaderManager ? m_shaderManager->getShaderSource("shaders/brightness.frag") : "";
+    return "";
 }
 
 void BrightnessFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {
@@ -365,38 +268,11 @@ void GaussianBlurFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outp
 }
 
 std::string GaussianBlurFilter::getVertexShaderSource() const {
-    // 顶点着色器预计算优化 (VS Pre-calculation):
-    // 提前计算 5 个采样点的纹理坐标偏移。在 Vertex Shader 中做这件事，
-    // 可以避免在 Fragment Shader 中针对每一个像素（可能数百万个）进行重复计算，极大地节省 ALU 算力。
-    return R"(#version 300 es
-        layout(location = 0) in vec4 a_position;
-        layout(location = 1) in vec4 a_texCoord;
-
-        uniform float texelWidthOffset;
-        uniform float texelHeightOffset;
-        uniform float blurSize;
-
-        // 传递给片段着色器的 5 个采样点坐标（利用硬件双线性插值，这相当于采样了 9 个点）
-        out vec2 blurCoordinates[5];
-
-        void main() {
-            gl_Position = a_position;
-            vec2 singleStepOffset = vec2(texelWidthOffset, texelHeightOffset) * blurSize;
-
-            // 当前像素点 (中心点)
-            blurCoordinates[0] = a_texCoord.xy;
-            // 距离中心 1.407333 像素的偏移（经过精心计算的硬件线性插值中心位置）
-            blurCoordinates[1] = a_texCoord.xy + singleStepOffset * 1.407333;
-            blurCoordinates[2] = a_texCoord.xy - singleStepOffset * 1.407333;
-            // 距离中心 3.294215 像素的偏移
-            blurCoordinates[3] = a_texCoord.xy + singleStepOffset * 3.294215;
-            blurCoordinates[4] = a_texCoord.xy - singleStepOffset * 3.294215;
-        }
-    )";
+    return "";
 }
 
 std::string GaussianBlurFilter::getFragmentShaderSource() const {
-    return m_shaderManager ? m_shaderManager->getShaderSource("shaders/gaussian_blur.frag") : "";
+    return "";
 }
 
 LookupFilter::LookupFilter() : m_lookupTextureId(0) {
@@ -424,7 +300,7 @@ void LookupFilter::onProgramRecompiled() {
     m_lookupTextureHandle = glGetUniformLocation(m_programId, "lookupTexture");
 }
 std::string LookupFilter::getFragmentShaderSource() const {
-    return m_shaderManager ? m_shaderManager->getShaderSource("shaders/lookup.frag") : "";
+    return "";
 }
 
 void LookupFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {
@@ -493,7 +369,7 @@ void BilateralFilter::onProgramRecompiled() {
     m_distanceNormalizationFactorHandle = glGetUniformLocation(m_programId, "distanceNormalizationFactor");
 }
 std::string BilateralFilter::getFragmentShaderSource() const {
-    return m_shaderManager ? m_shaderManager->getShaderSource("shaders/bilateral.frag") : "";
+    return "";
 }
 
 void BilateralFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {
@@ -597,7 +473,7 @@ void CinematicLookupFilter::onProgramRecompiled() {
     m_lookupTextureHandle = glGetUniformLocation(m_programId, "lookupTexture");
 }
 std::string CinematicLookupFilter::getFragmentShaderSource() const {
-    return m_shaderManager ? m_shaderManager->getShaderSource("shaders/cinematic_lookup.frag") : "";
+    return "";
 }
 
 #ifdef __ANDROID__
@@ -615,9 +491,9 @@ ComputeBlurFilter::~ComputeBlurFilter() {
 
 Result ComputeBlurFilter::initialize() {
     // 1. 编译 Compute Shader
-    std::string csStr = getComputeShaderSource();
+    std::string csStr = "";
     if (m_shaderManager) {
-        csStr = m_shaderManager->getShaderSource(getComputeShaderName(), csStr);
+        csStr = m_shaderManager->getShaderSource(getComputeShaderName());
     }
     const char* csSrc = csStr.c_str();
     GLuint computeShader = glCreateShader(GL_COMPUTE_SHADER);
@@ -703,53 +579,6 @@ void ComputeBlurFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outpu
     // 留空，重载 processFrame 直接使用 Compute
 }
 
-const char* ComputeBlurFilter::getComputeShaderSource() const {
-    // 这是一个利用 GLES 3.1 并行计算优势的 Box Blur 演示。
-    // 它完全抛弃了传统的顶点/片段着色器管线，直接在显存层面对纹理像素发起多线程并行读写。
-    // 这对于极其复杂的 AI 计算或物理仿真特效来说，算力碾压传统的 Fragment Shader。
-    return R"(#version 310 es
-        // 声明每个工作组内有 16x16 个计算线程 (Invocation)
-        layout(local_size_x = 16, local_size_y = 16) in;
-
-        // 绑定输入输出的 Image (无需经过 sampler 纹理过滤，直接读取裸数据)
-        layout(binding = 0, rgba8) uniform readonly highp image2D inputImage;
-        layout(binding = 1, rgba8) uniform writeonly highp image2D outputImage;
-
-        uniform float blurSize;
-
-        void main() {
-            // 获取当前计算线程对应的像素坐标
-            ivec2 texelPos = ivec2(gl_GlobalInvocationID.xy);
-            ivec2 size = imageSize(inputImage);
-
-            // 越界保护
-            if (texelPos.x >= size.x || texelPos.y >= size.y) {
-                return;
-            }
-
-            vec4 sum = vec4(0.0);
-            int count = 0;
-            int radius = int(blurSize);
-
-            // 粗暴的盒式模糊 (Box Blur) 演示并行算力
-            for(int y = -radius; y <= radius; y++) {
-                for(int x = -radius; x <= radius; x++) {
-                    ivec2 offsetPos = texelPos + ivec2(x, y);
-                    // 处理边界 clamp
-                    offsetPos.x = clamp(offsetPos.x, 0, size.x - 1);
-                    offsetPos.y = clamp(offsetPos.y, 0, size.y - 1);
-
-                    sum += imageLoad(inputImage, offsetPos);
-                    count++;
-                }
-            }
-
-            vec4 result = sum / float(count);
-            // 将计算结果直接写入显存的输出纹理中
-            imageStore(outputImage, texelPos, result);
-        }
-    )";
-}
 #endif
 
 } // namespace video

@@ -75,12 +75,12 @@ struct EngineWrapper {
 
         // Compile simple passthrough program if not done
         if (recordProgram == 0) {
-            std::string vsrc_str = "#version 300 es\n layout(location=0) in vec4 p; layout(location=1) in vec2 tc; out vec2 vtc; void main(){gl_Position=p; vtc=tc;}";
-            std::string fsrc_str = "#version 300 es\n precision mediump float; in vec2 vtc; out vec4 c; uniform sampler2D tex; void main(){c=texture(tex, vtc);}";
+            std::string vsrc_str = "";
+            std::string fsrc_str = "";
 
             if (filterEngine && filterEngine->getShaderManager()) {
-                vsrc_str = filterEngine->getShaderManager()->getShaderSource("record_passthrough.vert", vsrc_str);
-                fsrc_str = filterEngine->getShaderManager()->getShaderSource("record_passthrough.frag", fsrc_str);
+                vsrc_str = filterEngine->getShaderManager()->getShaderSource("record_passthrough.vert");
+                fsrc_str = filterEngine->getShaderManager()->getShaderSource("record_passthrough.frag");
             }
 
             const char* vsrc = vsrc_str.c_str();

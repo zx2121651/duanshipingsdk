@@ -1,41 +1,43 @@
-#version 310 es
-        // 声明每个工作组内有 16x16 个计算线程 (Invocation)
-        layout(local_size_x = 16, local_size_y = 16) in;
+#version 300 es
+precision mediump float;
+in vec2 textureCoordinate;
+out vec4 fragColor;
 
-        // 绑定输入输出的 Image (无需经过 sampler 纹理过滤，直接读取裸数据)
-        layout(binding = 0, rgba8) uniform readonly highp image2D inputImage;
-        layout(binding = 1, rgba8) uniform writeonly highp image2D outputImage;
+uniform sampler2D inputImageTexture;
+uniform sampler2D lookupTexture;
+uniform float intensity;
 
-        uniform float blurSize;
+void main() {
+    vec4 textureColor = texture(inputImageTexture, textureCoordinate);
+    // 3D LUT 核心算法：
+            // 1. 获取输入像素的 B (蓝) 通道值，将其映射为 0~63 之间的浮点数，这代表着它在 LUT 图的 64 个网格中的位置索引。
+            float blueColor = textureColor.b * 63.0;
 
-        void main() {
-            // 获取当前计算线程对应的像素坐标
-            ivec2 texelPos = ivec2(gl_GlobalInvocationID.xy);
-            ivec2 size = imageSize(inputImage);
+    // 2. 因为 blueColor 是浮点数，所以它通常落在两个相邻的整数网格之间。
+            // 我们算出这两个相邻网格的索引 (quad1 对应向下取整，quad2 对应向上取整)。
+            vec2 quad1;
+    quad1.y = floor(floor(blueColor) / 8.0);
+    quad1.x = floor(blueColor) - (quad1.y * 8.0);
 
-            // 越界保护
-            if (texelPos.x >= size.x || texelPos.y >= size.y) {
-                return;
-            }
+    vec2 quad2;
+    quad2.y = floor(ceil(blueColor) / 8.0);
+    quad2.x = ceil(blueColor) - (quad2.y * 8.0);
 
-            vec4 sum = vec4(0.0);
-            int count = 0;
-            int radius = int(blurSize);
+    // 3. 在对应的网格中，根据输入像素的 R (红) 和 G (绿) 算出在这个 8x8 小方块中的精确 x, y 坐标。
+            // 0.125 是 1/8 (每个网格占总宽高的 1/8)，0.5/512.0 是半像素偏移，用于防止 OpenGL 边缘采样时出现像素串线。
+            vec2 texPos1;
+    texPos1.x = (quad1.x * 0.125) + 0.5/512.0 + ((0.125 - 1.0/512.0) * textureColor.r);
+    texPos1.y = (quad1.y * 0.125) + 0.5/512.0 + ((0.125 - 1.0/512.0) * textureColor.g);
 
-            // 粗暴的盒式模糊 (Box Blur) 演示并行算力
-            for(int y = -radius; y <= radius; y++) {
-                for(int x = -radius; x <= radius; x++) {
-                    ivec2 offsetPos = texelPos + ivec2(x, y);
-                    // 处理边界 clamp
-                    offsetPos.x = clamp(offsetPos.x, 0, size.x - 1);
-                    offsetPos.y = clamp(offsetPos.y, 0, size.y - 1);
+    vec2 texPos2;
+    texPos2.x = (quad2.x * 0.125) + 0.5/512.0 + ((0.125 - 1.0/512.0) * textureColor.r);
+    texPos2.y = (quad2.y * 0.125) + 0.5/512.0 + ((0.125 - 1.0/512.0) * textureColor.g);
 
-                    sum += imageLoad(inputImage, offsetPos);
-                    count++;
-                }
-            }
+    vec4 newColor1 = texture(lookupTexture, texPos1);
+    vec4 newColor2 = texture(lookupTexture, texPos2);
 
-            vec4 result = sum / float(count);
-            // 将计算结果直接写入显存的输出纹理中
-            imageStore(outputImage, texelPos, result);
-        }
+    // 4. 根据蓝通道的小数部分 (fract)，将从两个网格采到的颜色进行 mix (线性插值) 混合。
+            // 这消除了色彩渐变时的 Banding (色阶断层) 现象。
+            vec4 newColor = mix(newColor1, newColor2, fract(blueColor));
+    fragColor = mix(textureColor, vec4(newColor.rgb, textureColor.w), intensity);
+}
