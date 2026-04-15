@@ -28,7 +28,7 @@ public:
 
     // Pull-model: Requests a frame for a given timestamp
     // Upstream nodes will evaluate and process recursively
-    virtual VideoFrame pullFrame(int64_t timestampNs) = 0;
+    virtual ResultPayload<VideoFrame> pullFrame(int64_t timestampNs) = 0;
 
     // Initialization hook (e.g., compiling shaders, allocating resources)
     virtual void initialize() {}

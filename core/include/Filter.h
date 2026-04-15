@@ -28,7 +28,7 @@ public:
     virtual void release();
 
     // Renders the input texture to an output framebuffer and returns the output texture.
-    virtual Texture processFrame(const Texture& inputTexture, FrameBufferPtr outputFb);
+    virtual ResultPayload<Texture> processFrame(const Texture& inputTexture, FrameBufferPtr outputFb);
 
     virtual void setParameter(const std::string& key, const std::any& value);
     virtual void setParameterMat4(const std::string& key, const float* matrix);

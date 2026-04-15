@@ -44,6 +44,8 @@ void test_lifecycle_functionality() {
 
     // Should fail gracefully because no GL context, but shouldn't crash
     auto res1 = engine.processFrame(inTex, 1920, 1080);
+    assert(!res1.isOk());
+
     // It should be ERR_RENDER_INVALID_STATE because glGetString(GL_VERSION) likely returns null without context
     // causing initialize or graph compile to fail, or just processFrame to fail.
 
@@ -55,6 +57,7 @@ void test_lifecycle_functionality() {
     engine.initialize();
     engine.addFilter(FilterType::BRIGHTNESS);
     auto res2 = engine.processFrame(inTex, 1920, 1080);
+    assert(!res2.isOk());
 
     // Check performance metrics (should be cleared on release)
     PerformanceMetrics metrics = engine.getPerformanceMetrics();
