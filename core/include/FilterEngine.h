@@ -17,6 +17,8 @@
 namespace sdk {
 namespace video {
 
+class FilterEngineTestAccessor;
+
 class FilterEngine {
 public:
     std::shared_ptr<ShaderManager> getShaderManager() const { return m_shaderManager; }
@@ -58,6 +60,9 @@ public:
 
     // 暴露 ContextManager 给 NativeBridge 探测
     GLContextManager& getContextManager() { return m_contextManager; }
+
+    // Test access
+    friend class FilterEngineTestAccessor;
 
 private:
     FrameBufferPool m_frameBufferPool;
