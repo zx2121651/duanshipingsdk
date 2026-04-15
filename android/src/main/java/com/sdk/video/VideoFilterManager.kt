@@ -23,7 +23,7 @@ enum class FilterEngineState {
  * 1. 使用 Kotlin 协程和专属的单线程调度器 (GLRenderThread) 来保障 OpenGL 上下文的线程安全。
  * 2. 使用 SharedFlow (共享数据流) 作为生产者-消费者模型，向外界抛出处理后的纹理 ID，解耦底层渲染与上层 UI。
  */
-@OptIn(InternalApi::class)
+@OptIn(InternalApi::class, ExperimentalCoroutinesApi::class)
 class VideoFilterManager(private val context: android.content.Context,
     private val width: Int,
     private val height: Int,
