@@ -26,6 +26,16 @@ sealed class VideoSdkError(message: String, val code: Int) : Exception("[$code] 
     class NativeError(code: Int, val nativeMessage: String) : VideoSdkError(nativeMessage, code)
 
     companion object {
+        /**
+         * Determines if an error is fatal (requires stopping the engine)
+         * or recoverable (allows falling back to a degraded mode).
+         */
+        fun isFatal(code: Int): Boolean {
+            // Initialization errors (-1000 to -1999) are considered fatal.
+            // Rendering and other runtime errors are often recoverable via bypass.
+            return code in -1999..-1000
+        }
+
         fun fromNativeCode(code: Int): VideoSdkError {
             return when (code) {
                 -1001 -> InitContextFailed()

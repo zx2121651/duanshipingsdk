@@ -145,13 +145,18 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
 
             val outputTexId = nativeProcessFrame(nativeHandle, oesTextureId, width, height, transformMatrix, timestampNs)
 
-            // 如果返回值是负数，表示产生了错误 (onNativeRenderError is called from C++)
+            // 如果返回值是负数，表示产生了错误
             if (outputTexId >= 0) {
                 onFrameProcessedListener?.invoke(outputTexId)
                 if (lastFrameTimeMs > 0) {
                     onPerformanceUpdateListener?.invoke(lastFrameTimeMs)
                 }
+            } else {
+                // Defensive fallback: if native code returned an error but didn't call onNativeRenderError callback
+                // (e.g., due to JNI reference issues), we manually notify the listener.
+                onRenderErrorListener?.invoke(outputTexId, "Native frame processing failed with code: $outputTexId")
             }
+            Unit
         }
     }
 
