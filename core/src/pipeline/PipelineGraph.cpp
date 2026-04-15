@@ -49,10 +49,15 @@ void topoSortUtil(PipelineNode* node, std::unordered_set<PipelineNode*>& visited
     sorted.push_back(node);
 }
 Result PipelineGraph::compile() {
+    m_isCompiled = false;
     std::unordered_set<PipelineNode*> visited;
     std::unordered_set<PipelineNode*> recStack;
 
     m_sinkNodes.clear();
+
+    if (m_nodes.empty()) {
+        return Result::error(ErrorCode::ERR_GRAPH_NO_SINK, "Invalid Graph: No nodes added");
+    }
 
     for (auto& node : m_nodes) {
         if (detectCycleUtil(node.get(), visited, recStack)) {
@@ -92,6 +97,10 @@ Result PipelineGraph::compile() {
 Result PipelineGraph::execute(int64_t timestampNs) {
     if (!m_isCompiled) {
         return Result::error(ErrorCode::ERR_RENDER_INVALID_STATE, "PipelineGraph executed before successful compile()");
+    }
+
+    if (m_sinkNodes.empty()) {
+        return Result::error(ErrorCode::ERR_GRAPH_NO_SINK, "PipelineGraph has no sink nodes and cannot be executed");
     }
 
     // In a pure pull model, we just ask the sinks to pull.

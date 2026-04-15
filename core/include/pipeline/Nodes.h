@@ -2,6 +2,7 @@
 
 #include "PipelineNode.h"
 #include "../Filter.h"
+#include "../FrameBufferPool.h"
 #include <mutex>
 
 namespace sdk {

@@ -25,6 +25,7 @@ Filter::~Filter() {
 }
 
 Result Filter::initialize() {
+    release();
     m_programId = createProgram(getVertexShaderSource().c_str(), getFragmentShaderSource().c_str());
     if (m_programId == 0) {
         return Result::error(ErrorCode::ERR_INIT_SHADER_FAILED, "Failed to create program for " + getFragmentShaderName());
