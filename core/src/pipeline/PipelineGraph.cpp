@@ -56,7 +56,7 @@ Result PipelineGraph::compile() {
 
     for (auto& node : m_nodes) {
         if (detectCycleUtil(node.get(), visited, recStack)) {
-            return Result::error(-2002, "Cycle detected in Pipeline Graph topology");
+            return Result::error(ErrorCode::ERR_GRAPH_CYCLE_DETECTED, "Cycle detected in Pipeline Graph topology");
         }
 
         if (node->getOutputs().empty()) {
@@ -65,7 +65,7 @@ Result PipelineGraph::compile() {
     }
 
     if (m_sinkNodes.empty() && !m_nodes.empty()) {
-        return Result::error(-2002, "Invalid Graph: No sink nodes (outputs) found");
+        return Result::error(ErrorCode::ERR_GRAPH_NO_SINK, "Invalid Graph: No sink nodes (outputs) found");
     }
 
     // Perform topological sorting
@@ -79,7 +79,11 @@ Result PipelineGraph::compile() {
     std::reverse(m_sortedNodes.begin(), m_sortedNodes.end());
     // Initialize all nodes
     for (auto* node : m_sortedNodes) {
-        node->initialize();
+        auto res = node->initialize();
+        if (!res.isOk()) {
+            return Result::error(ErrorCode::ERR_GRAPH_NODE_INIT_FAILED,
+                "Node '" + node->getName() + "' failed to initialize: " + res.getMessage());
+        }
     }
     m_isCompiled = true;
     return Result::ok();

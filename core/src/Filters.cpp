@@ -139,11 +139,13 @@ OES2RGBFilter::OES2RGBFilter() {
     m_parameters["flipVertical"] = false;
 }
 
-void OES2RGBFilter::initialize() {
-    Filter::initialize();
+Result OES2RGBFilter::initialize() {
+    auto res = Filter::initialize();
+    if (!res.isOk()) return res;
     m_textureMatrixHandle = glGetUniformLocation(m_programId, "textureMatrix");
     m_flipHorizontalHandle = glGetUniformLocation(m_programId, "flipHorizontal");
     m_flipVerticalHandle = glGetUniformLocation(m_programId, "flipVertical");
+    return Result::ok();
 }
 
 std::string OES2RGBFilter::getVertexShaderSource() const {
@@ -208,9 +210,11 @@ BrightnessFilter::BrightnessFilter() {
     m_parameters["brightness"] = 0.0f; // Default brightness
 }
 
-void BrightnessFilter::initialize() {
-    Filter::initialize();
+Result BrightnessFilter::initialize() {
+    auto res = Filter::initialize();
+    if (!res.isOk()) return res;
     m_brightnessHandle = glGetUniformLocation(m_programId, "brightness");
+    return Result::ok();
 }
 
 void BrightnessFilter::onProgramRecompiled() {
@@ -263,11 +267,13 @@ GaussianBlurFilter::GaussianBlurFilter(FrameBufferPool* pool) : m_pool(pool) {
 GaussianBlurFilter::~GaussianBlurFilter() {
 }
 
-void GaussianBlurFilter::initialize() {
-    Filter::initialize();
+Result GaussianBlurFilter::initialize() {
+    auto res = Filter::initialize();
+    if (!res.isOk()) return res;
     m_texelWidthOffsetHandle = glGetUniformLocation(m_programId, "texelWidthOffset");
     m_texelHeightOffsetHandle = glGetUniformLocation(m_programId, "texelHeightOffset");
     m_blurSizeHandle = glGetUniformLocation(m_programId, "blurSize");
+    return Result::ok();
 }
 
 void GaussianBlurFilter::onProgramRecompiled() {
@@ -401,10 +407,12 @@ LookupFilter::LookupFilter() : m_lookupTextureId(0) {
 LookupFilter::~LookupFilter() {
 }
 
-void LookupFilter::initialize() {
-    Filter::initialize();
+Result LookupFilter::initialize() {
+    auto res = Filter::initialize();
+    if (!res.isOk()) return res;
     m_lookupTextureHandle = glGetUniformLocation(m_programId, "lookupTexture");
     m_intensityHandle = glGetUniformLocation(m_programId, "intensity");
+    return Result::ok();
 }
 
 void LookupFilter::setLookupTexture(GLuint textureId) {
@@ -470,11 +478,13 @@ BilateralFilter::BilateralFilter() {
     m_parameters["distanceNormalizationFactor"] = 8.0f; // Default smoothing factor
 }
 
-void BilateralFilter::initialize() {
-    Filter::initialize();
+Result BilateralFilter::initialize() {
+    auto res = Filter::initialize();
+    if (!res.isOk()) return res;
     m_texelWidthOffsetHandle = glGetUniformLocation(m_programId, "texelWidthOffset");
     m_texelHeightOffsetHandle = glGetUniformLocation(m_programId, "texelHeightOffset");
     m_distanceNormalizationFactorHandle = glGetUniformLocation(m_programId, "distanceNormalizationFactor");
+    return Result::ok();
 }
 
 void BilateralFilter::onProgramRecompiled() {
@@ -552,10 +562,12 @@ void CinematicLookupFilter::setLookupTexture(GLuint textureId) {
     m_lookupTextureId = textureId;
 }
 
-void CinematicLookupFilter::initialize() {
-    Filter::initialize();
+Result CinematicLookupFilter::initialize() {
+    auto res = Filter::initialize();
+    if (!res.isOk()) return res;
     m_lookupTextureHandle = glGetUniformLocation(m_programId, "lookupTexture");
     m_intensityHandle = glGetUniformLocation(m_programId, "intensity");
+    return Result::ok();
 }
 
 void CinematicLookupFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {
@@ -601,7 +613,7 @@ ComputeBlurFilter::~ComputeBlurFilter() {
     }
 }
 
-void ComputeBlurFilter::initialize() {
+Result ComputeBlurFilter::initialize() {
     // 1. 编译 Compute Shader
     std::string csStr = getComputeShaderSource();
     if (m_shaderManager) {
@@ -615,16 +627,17 @@ void ComputeBlurFilter::initialize() {
     GLint compiled = 0;
     glGetShaderiv(computeShader, GL_COMPILE_STATUS, &compiled);
     if (!compiled) {
+        std::string infoLogStr = "";
         GLint infoLen = 0;
         glGetShaderiv(computeShader, GL_INFO_LOG_LENGTH, &infoLen);
         if (infoLen > 1) {
             char* infoLog = new char[infoLen];
             glGetShaderInfoLog(computeShader, infoLen, NULL, infoLog);
-            std::cerr << "Error compiling compute shader:\n" << infoLog << std::endl;
+            infoLogStr = infoLog;
             delete[] infoLog;
         }
         glDeleteShader(computeShader);
-        return;
+        return Result::error(ErrorCode::ERR_INIT_SHADER_FAILED, "Error compiling compute shader: " + infoLogStr);
     }
 
     // 2. 链接 Program
@@ -635,14 +648,16 @@ void ComputeBlurFilter::initialize() {
     GLint linked = 0;
     glGetProgramiv(m_computeProgramId, GL_LINK_STATUS, &linked);
     if (!linked) {
-        std::cerr << "Error linking compute program" << std::endl;
         glDeleteProgram(m_computeProgramId);
         m_computeProgramId = 0;
+        glDeleteShader(computeShader);
+        return Result::error(ErrorCode::ERR_INIT_SHADER_FAILED, "Error linking compute program");
     }
 
     glDeleteShader(computeShader);
 
     m_blurSizeHandle = glGetUniformLocation(m_computeProgramId, "blurSize");
+    return Result::ok();
 }
 
 ResultPayload<Texture> ComputeBlurFilter::processFrame(const Texture& inputTexture, FrameBufferPtr outputFb) {

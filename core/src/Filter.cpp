@@ -24,16 +24,17 @@ Filter::~Filter() {
     release();
 }
 
-void Filter::initialize() {
+Result Filter::initialize() {
     m_programId = createProgram(getVertexShaderSource().c_str(), getFragmentShaderSource().c_str());
     if (m_programId == 0) {
-        std::cerr << "Failed to create program." << std::endl;
-        return;
+        return Result::error(ErrorCode::ERR_INIT_SHADER_FAILED, "Failed to create program for " + getFragmentShaderName());
     }
 
     m_positionHandle = glGetAttribLocation(m_programId, "position");
     m_texCoordHandle = glGetAttribLocation(m_programId, "inputTextureCoordinate");
     m_inputImageTextureHandle = glGetUniformLocation(m_programId, "inputImageTexture");
+
+    return Result::ok();
 }
 
 void Filter::release() {

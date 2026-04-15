@@ -39,8 +39,9 @@ public:
         : PipelineNode(name), m_filter(filter) {}
 
     std::shared_ptr<Filter> getFilter() const { return m_filter; }
-    void initialize() override {
-        if (m_filter) m_filter->initialize();
+    Result initialize() override {
+        if (m_filter) return m_filter->initialize();
+        return Result::ok();
     }
 
     void release() override {
