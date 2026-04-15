@@ -18,7 +18,7 @@ public:
     std::string getFragmentShaderName() const override { return "oes_to_rgb.frag"; }
     OES2RGBFilter();
     ~OES2RGBFilter() override = default;
-    void initialize() override;
+    Result initialize() override;
     void onProgramRecompiled() override;
 protected:
     void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
@@ -36,7 +36,7 @@ public:
     std::string getFragmentShaderName() const override { return "brightness.frag"; }
     BrightnessFilter();
     ~BrightnessFilter() override = default;
-    void initialize() override;
+    Result initialize() override;
     void onProgramRecompiled() override;
 protected:
     void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
@@ -55,7 +55,7 @@ public:
     // 注入 FrameBufferPool 用于在 Two-Pass 之间借用临时 FBO
     GaussianBlurFilter(FrameBufferPool* pool);
     ~GaussianBlurFilter() override;
-    void initialize() override;
+    Result initialize() override;
     void onProgramRecompiled() override;
 
     // 重写 processFrame 因为双趟渲染不只是一次 onDraw
@@ -80,7 +80,7 @@ public:
     std::string getFragmentShaderName() const override { return "lookup.frag"; }
     LookupFilter();
     ~LookupFilter() override;
-    void initialize() override;
+    Result initialize() override;
     void onProgramRecompiled() override;
 
     // Call this before processing frames to set the LUT
@@ -101,7 +101,7 @@ public:
     std::string getFragmentShaderName() const override { return "bilateral.frag"; }
     BilateralFilter();
     ~BilateralFilter() override = default;
-    void initialize() override;
+    Result initialize() override;
     void onProgramRecompiled() override;
 protected:
     void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
@@ -118,7 +118,7 @@ public:
     std::string getFragmentShaderName() const override { return "cinematic_lookup.frag"; }
     CinematicLookupFilter();
     ~CinematicLookupFilter() override;
-    void initialize() override;
+    Result initialize() override;
     void onProgramRecompiled() override;
 
     // Set the 512x512 2D LUT texture
@@ -150,7 +150,7 @@ public:
     std::string getComputeShaderName() const { return "compute_blur.comp"; }
     ComputeBlurFilter();
     ~ComputeBlurFilter() override;
-    void initialize() override;
+    Result initialize() override;
 
     // Compute Shader 不需要 Vertex 和 Fragment Shader
     ResultPayload<Texture> processFrame(const Texture& inputTexture, FrameBufferPtr outputFb) override;

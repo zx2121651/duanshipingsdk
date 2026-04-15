@@ -21,7 +21,7 @@ public:
     Filter();
     virtual ~Filter();
 
-    virtual void initialize();
+    virtual Result initialize();
     virtual void onProgramRecompiled() {}
     virtual void recompileProgram();
     void setShaderManager(std::shared_ptr<ShaderManager> manager) { m_shaderManager = manager; }

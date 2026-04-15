@@ -31,7 +31,7 @@ public:
     virtual ResultPayload<VideoFrame> pullFrame(int64_t timestampNs) = 0;
 
     // Initialization hook (e.g., compiling shaders, allocating resources)
-    virtual void initialize() {}
+    virtual Result initialize() { return Result::ok(); }
     virtual void release() {}
 
 protected:
