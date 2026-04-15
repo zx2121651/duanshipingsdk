@@ -131,25 +131,20 @@ Result FilterEngine::addFilterRaw(FilterPtr filter) {
         auto filterNode = std::make_shared<FilterNode>("Filter_" + std::to_string(m_graph->getNodes().size()), filter);
         m_graph->addNode(filterNode);
         if (m_initialized) {
-            filter->initialize();
+            auto res = filter->initialize();
+            if (!res.isOk()) return res;
         }
         m_isGraphDirty = true;
+        return Result::ok();
     }
-    return Result::ok();
+    return Result::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Filter is null");
 }
 Result FilterEngine::addFilter(FilterType type) {
     FilterPtr filter = FilterFactory::createFilter(type, m_contextManager, &m_frameBufferPool);
     if (filter) {
-        filter->setShaderManager(m_shaderManager);
-        if (!m_graph) { m_graph = std::make_shared<PipelineGraph>(); }
-        auto filterNode = std::make_shared<FilterNode>("Filter_" + std::to_string(m_graph->getNodes().size()), filter);
-        m_graph->addNode(filterNode);
-        if (m_initialized) {
-            filter->initialize();
-        }
-        m_isGraphDirty = true;
+        return addFilterRaw(filter);
     }
-    return Result::ok();
+    return Result::error(ErrorCode::ERR_INIT_SHADER_FAILED, "Failed to create filter from factory");
 }
 
 Result FilterEngine::removeAllFilters() {
@@ -163,8 +158,8 @@ Result FilterEngine::removeAllFilters() {
 
 
 
-void FilterEngine::updateShaderSource(const std::string& name, const std::string& source) {
-    if (!m_shaderManager) return;
+Result FilterEngine::updateShaderSource(const std::string& name, const std::string& source) {
+    if (!m_shaderManager) return Result::error("ShaderManager is null");
 
     m_shaderManager->updateShaderSource(name, source);
 
@@ -175,10 +170,12 @@ void FilterEngine::updateShaderSource(const std::string& name, const std::string
         for (const auto& node : m_graph->getNodes()) {
             auto filterNode = std::dynamic_pointer_cast<FilterNode>(node);
             if (filterNode && filterNode->getFilter()) {
-                filterNode->getFilter()->recompileProgram();
+                auto res = filterNode->getFilter()->recompileProgram();
+                if (!res.isOk()) return res;
             }
         }
     }
+    return Result::ok();
 }
 
 Result FilterEngine::buildCameraPipeline() {

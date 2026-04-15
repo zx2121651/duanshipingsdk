@@ -135,7 +135,7 @@ GLuint Filter::createProgram(const char* pVertexSource, const char* pFragmentSou
 
 
 
-void Filter::recompileProgram() {
+Result Filter::recompileProgram() {
     std::string vertexShaderSource = getVertexShaderSource();
     std::string fragmentShaderSource = getFragmentShaderSource();
 
@@ -146,20 +146,23 @@ void Filter::recompileProgram() {
 
     // Create new program
     GLuint newProgramId = createProgram(vertexShaderSource.c_str(), fragmentShaderSource.c_str());
-    if (newProgramId != 0) {
-        // Delete old
-        if (m_programId != 0) {
-            glDeleteProgram(m_programId);
-        }
-        m_programId = newProgramId;
-
-        // Update locations
-        m_positionHandle = glGetAttribLocation(m_programId, "position");
-        m_texCoordHandle = glGetAttribLocation(m_programId, "inputTextureCoordinate");
-        m_inputImageTextureHandle = glGetUniformLocation(m_programId, "inputImageTexture");
-
-        onProgramRecompiled();
+    if (newProgramId == 0) {
+        return Result::error(ErrorCode::ERR_INIT_SHADER_FAILED, "Failed to recompile program for " + getFragmentShaderName());
     }
+
+    // Delete old
+    if (m_programId != 0) {
+        glDeleteProgram(m_programId);
+    }
+    m_programId = newProgramId;
+
+    // Update locations
+    m_positionHandle = glGetAttribLocation(m_programId, "position");
+    m_texCoordHandle = glGetAttribLocation(m_programId, "inputTextureCoordinate");
+    m_inputImageTextureHandle = glGetUniformLocation(m_programId, "inputImageTexture");
+
+    onProgramRecompiled();
+    return Result::ok();
 }
 
 } // namespace video

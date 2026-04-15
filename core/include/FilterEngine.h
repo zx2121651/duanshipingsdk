@@ -52,7 +52,7 @@ public:
 
     PerformanceMetrics getPerformanceMetrics() const { return m_metricsCollector.getMetrics(); }
     void recordDroppedFrame() { m_metricsCollector.recordDroppedFrame(); }
-    void updateShaderSource(const std::string& name, const std::string& source);
+    Result updateShaderSource(const std::string& name, const std::string& source);
 
 
     // 暴露 FBO 内存池供子滤镜（如 Two-pass 高斯模糊）借用

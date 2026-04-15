@@ -23,7 +23,7 @@ public:
 
     virtual Result initialize();
     virtual void onProgramRecompiled() {}
-    virtual void recompileProgram();
+    virtual Result recompileProgram();
     void setShaderManager(std::shared_ptr<ShaderManager> manager) { m_shaderManager = manager; }
     virtual void release();
 
