@@ -97,6 +97,30 @@ class VideoFilterManager(private val context: android.content.Context,
     private val _performanceMetrics = MutableStateFlow<RenderEngine.PerformanceMetrics?>(null)
     val performanceMetrics: StateFlow<RenderEngine.PerformanceMetrics?> = _performanceMetrics.asStateFlow()
 
+    /**
+     * Unified error handling for both synchronous initialization and asynchronous rendering errors.
+     * Categorizes errors into fatal (ERROR) or recoverable (DEGRADED).
+     */
+    private fun handleError(errorCode: Int, errorMessage: String) {
+        val isFatal = VideoSdkError.isFatal(errorCode)
+        val newState = if (isFatal) FilterEngineState.ERROR else FilterEngineState.DEGRADED
+
+        // Update engine state (but don't overwrite ERROR with DEGRADED)
+        if (_engineState.value != FilterEngineState.ERROR) {
+            _engineState.value = newState
+        }
+
+        // Propagate failure to the processed frames flow
+        val error = VideoSdkError.NativeError(errorCode, errorMessage)
+        _processedFrames.tryEmit(Result.failure(error))
+
+        if (isFatal) {
+            Log.e("VideoFilterManager", "FATAL ENGINE ERROR: $errorMessage")
+        } else {
+            Log.w("VideoFilterManager", "Engine degraded: $errorMessage")
+        }
+    }
+
     // 初始化引擎，必须切换到专属的 GL 线程
     suspend fun initialize(): Result<Unit> {
         return runOnGLThread {
@@ -106,12 +130,14 @@ class VideoFilterManager(private val context: android.content.Context,
             glThreadId = Thread.currentThread().id
 
             val res = renderEngine.init(context.assets)
-            if (res != 0) return@runOnGLThread Result.failure(VideoSdkError.fromNativeCode(res))
+            if (res != 0) {
+                handleError(res, "Initialization failed")
+                return@runOnGLThread Result.failure(VideoSdkError.fromNativeCode(res))
+            }
 
-            // 监听底层渲染错误
+            // 监听底层渲染错误 (Callback from JNI)
             renderEngine.onRenderErrorListener = { errorCode, errorMessage ->
-                _engineState.value = FilterEngineState.DEGRADED // or ERROR
-                _processedFrames.tryEmit(Result.failure(VideoSdkError.NativeError(errorCode, errorMessage)))
+                handleError(errorCode, errorMessage)
             }
 
             // 监听性能数据
@@ -122,13 +148,10 @@ class VideoFilterManager(private val context: android.content.Context,
 
             // 设置底层每处理完一帧的回调监听
             renderEngine.onFrameProcessedListener = { outputTexId ->
+                // Note: outputTexId < 0 cases are now handled by onRenderErrorListener
                 if (outputTexId >= 0) {
                     // 成功渲染，发送最新的纹理 ID 给 UI 层
                     _processedFrames.tryEmit(Result.success(outputTexId))
-                } else {
-                    // 异常降级：如果底层 C++ 渲染失败返回非法 ID，则抛出异常
-                    _processedFrames.tryEmit(Result.failure(RuntimeException("GL Engine Render Failed")))
-                    _engineState.value = FilterEngineState.DEGRADED // 状态变为降级
                 }
             }
 
@@ -139,11 +162,13 @@ class VideoFilterManager(private val context: android.content.Context,
                 _engineState.value = FilterEngineState.RUNNING
                 Result.success(Unit)
             } else {
-                Result.failure(Exception("Failed to create input surface"))
+                val e = Exception("Failed to create input surface")
+                handleError(-1001, e.message ?: "Unknown surface failure")
+                Result.failure(e)
             }
         }.onFailure { e ->
-            _engineState.value = FilterEngineState.ERROR
-            _processedFrames.tryEmit(Result.failure(e))
+            val code = if (e is VideoSdkError) e.code else -1
+            handleError(code, e.message ?: "Unknown async failure")
         }
     }
 

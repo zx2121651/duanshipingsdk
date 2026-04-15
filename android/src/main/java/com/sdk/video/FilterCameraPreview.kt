@@ -38,7 +38,7 @@ fun FilterCameraPreview(
 
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         if (engineState == FilterEngineState.ERROR) {
-            Text("Camera failed. Degrading to safe mode...", color = Color.Red)
+            Text("Critical Engine Error. Please restart the app.", color = Color.Red)
         } else {
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
@@ -125,7 +125,8 @@ fun FilterCameraPreview(
 
                                 GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
 
-                                if (currentTextureId >= 0 && engineState != FilterEngineState.DEGRADED) {
+                                if (currentTextureId >= 0) {
+                                    // Even if DEGRADED, we still want to show the frame (it might be the last successful one or a fallback)
                                     GLES20.glUseProgram(displayProgram)
 
 
@@ -169,6 +170,13 @@ fun FilterCameraPreview(
                     }
                 }
             )
+        }
+
+        // Error/Warning Overlay
+        if (engineState == FilterEngineState.DEGRADED) {
+            Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.TopCenter) {
+                Text("Warning: Engine degraded. Some filters may be disabled.", color = Color.Yellow)
+            }
         }
 
         // Overlay UI
