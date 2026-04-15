@@ -26,7 +26,7 @@ public:
     Result execute(int64_t timestampNs);
 
     const std::vector<NodePtr>& getNodes() const { return m_nodes; }
-    void detachAllNodes() { m_nodes.clear(); m_sortedNodes.clear(); m_sinkNodes.clear(); }
+    void detachAllNodes() { m_nodes.clear(); m_sortedNodes.clear(); m_sinkNodes.clear(); m_isCompiled = false; }
     void release();
 
 private:
