@@ -192,14 +192,18 @@ Result FilterEngine::buildTimelinePipeline(std::shared_ptr<timeline::Timeline> t
 }
 
 Result FilterEngine::rebuildGraph(std::shared_ptr<PipelineNode> inputNode) {
-    m_outputNode = std::make_shared<OutputNode>("Display");
+    // Transactional Graph Rebuild:
+    // We build the new graph in isolation and only commit it to the engine state
+    // if compilation succeeds.
 
+    auto newOutputNode = std::make_shared<OutputNode>("Display");
+    auto newCameraNode = std::dynamic_pointer_cast<CameraInputNode>(inputNode);
     std::shared_ptr<PipelineNode> lastNode = inputNode;
 
     // Create new graph
     auto newGraph = std::make_shared<PipelineGraph>();
     newGraph->addNode(inputNode);
-    newGraph->addNode(m_outputNode);
+    newGraph->addNode(newOutputNode);
 
     // Keep existing filters
     if (m_graph) {
@@ -209,9 +213,6 @@ Result FilterEngine::rebuildGraph(std::shared_ptr<PipelineNode> inputNode) {
                 rawFilters.push_back(filterNode->getFilter());
             }
         }
-
-        // Properly release the old graph as instructed
-        m_graph->release();
 
         for (size_t i = 0; i < rawFilters.size(); ++i) {
             auto filterNode = std::make_shared<FilterNode>("Filter_" + std::to_string(i), rawFilters[i]);
@@ -234,15 +235,23 @@ Result FilterEngine::rebuildGraph(std::shared_ptr<PipelineNode> inputNode) {
         }
     }
 
-    newGraph->connect(lastNode, m_outputNode);
+    newGraph->connect(lastNode, newOutputNode);
 
-    m_graph = newGraph;
-
-    Result res = m_graph->compile();
+    // Verify the new topology before committing
+    Result res = newGraph->compile();
     if (!res.isOk()) {
-        std::cerr << "Pipeline Compile Failed: " << res.getMessage() << std::endl;
+        std::cerr << "Pipeline Compile Failed during rebuild: " << res.getMessage() << std::endl;
         return res;
     }
+
+    // Atomic commit of the new state
+    if (m_graph) {
+        m_graph->release();
+    }
+    m_graph = newGraph;
+    m_outputNode = newOutputNode;
+    m_cameraNode = newCameraNode;
+
     return Result::ok();
 }
 
