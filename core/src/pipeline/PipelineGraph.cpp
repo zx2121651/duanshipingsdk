@@ -92,7 +92,10 @@ Result PipelineGraph::execute(int64_t timestampNs) {
 
     // In a pure pull model, we just ask the sinks to pull.
     for (auto* sink : m_sinkNodes) {
-        sink->pullFrame(timestampNs);
+        auto res = sink->pullFrame(timestampNs);
+        if (!res.isOk()) {
+            return Result::error(res.getErrorCode(), res.getMessage());
+        }
     }
 
     return Result::ok();

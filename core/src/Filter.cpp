@@ -43,19 +43,17 @@ void Filter::release() {
     }
 }
 
-Texture Filter::processFrame(const Texture& inputTexture, FrameBufferPtr outputFb) {
+ResultPayload<Texture> Filter::processFrame(const Texture& inputTexture, FrameBufferPtr outputFb) {
     if (m_programId == 0) {
-        std::cerr << "Filter not initialized or program invalid." << std::endl;
-        return inputTexture; // Passthrough if error
+        return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Filter not initialized or program invalid.");
     }
 
     if (!outputFb) {
-        std::cerr << "Output framebuffer is null." << std::endl;
-        return inputTexture;
+        return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Output framebuffer is null.");
     }
 
     onDraw(inputTexture, outputFb);
-    return outputFb->getTexture();
+    return ResultPayload<Texture>::ok(outputFb->getTexture());
 }
 
 void Filter::setParameter(const std::string& key, const std::any& value) {

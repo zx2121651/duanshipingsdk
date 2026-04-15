@@ -59,7 +59,7 @@ public:
     void onProgramRecompiled() override;
 
     // 重写 processFrame 因为双趟渲染不只是一次 onDraw
-    Texture processFrame(const Texture& inputTexture, FrameBufferPtr outputFb) override;
+    ResultPayload<Texture> processFrame(const Texture& inputTexture, FrameBufferPtr outputFb) override;
 
 protected:
     void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
@@ -153,7 +153,7 @@ public:
     void initialize() override;
 
     // Compute Shader 不需要 Vertex 和 Fragment Shader
-    Texture processFrame(const Texture& inputTexture, FrameBufferPtr outputFb) override;
+    ResultPayload<Texture> processFrame(const Texture& inputTexture, FrameBufferPtr outputFb) override;
 
 protected:
     void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;

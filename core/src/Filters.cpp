@@ -275,11 +275,21 @@ void GaussianBlurFilter::onProgramRecompiled() {
     m_texelHeightOffsetHandle = glGetUniformLocation(m_programId, "texelHeightOffset");
     m_blurSizeHandle = glGetUniformLocation(m_programId, "blurSize");
 }
-Texture GaussianBlurFilter::processFrame(const Texture& inputTexture, FrameBufferPtr outputFb) {
-    if (!m_pool) return inputTexture;
+ResultPayload<Texture> GaussianBlurFilter::processFrame(const Texture& inputTexture, FrameBufferPtr outputFb) {
+    if (!m_pool) {
+        return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "FrameBufferPool is null in GaussianBlurFilter");
+    }
 
     // 从 FBO 池中借用一个与输入尺寸一致的临时 FrameBuffer 用于存放第一趟（水平模糊）的结果
     FrameBufferPtr intermediateFb = m_pool->get(inputTexture.width, inputTexture.height);
+    if (!intermediateFb) {
+        return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_FBO_ALLOC_FAILED, "Failed to allocate intermediate FBO for GaussianBlurFilter");
+    }
+
+    if (!outputFb) {
+        m_pool->release(intermediateFb);
+        return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Output framebuffer is null in GaussianBlurFilter");
+    }
 
     // ---------------------------------------------------------
     // Pass 1: 水平模糊 (Horizontal Blur)
@@ -341,7 +351,7 @@ Texture GaussianBlurFilter::processFrame(const Texture& inputTexture, FrameBuffe
     // 释放临时 FBO，归还到池中
     m_pool->release(intermediateFb);
 
-    return outputFb->getTexture();
+    return ResultPayload<Texture>::ok(outputFb->getTexture());
 }
 
 void GaussianBlurFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {
@@ -635,8 +645,14 @@ void ComputeBlurFilter::initialize() {
     m_blurSizeHandle = glGetUniformLocation(m_computeProgramId, "blurSize");
 }
 
-Texture ComputeBlurFilter::processFrame(const Texture& inputTexture, FrameBufferPtr outputFb) {
-    if (m_computeProgramId == 0) return inputTexture; // 兼容性失败时回退
+ResultPayload<Texture> ComputeBlurFilter::processFrame(const Texture& inputTexture, FrameBufferPtr outputFb) {
+    if (m_computeProgramId == 0) {
+        return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "ComputeBlurFilter program not initialized");
+    }
+
+    if (!outputFb) {
+        return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Output framebuffer is null in ComputeBlurFilter");
+    }
 
     // 我们不需要调用 FBO 的 bind() 来画三角形。
     // Compute Shader 直接对着内存中的 Texture 进行读写（Image Store）。
@@ -665,7 +681,7 @@ Texture ComputeBlurFilter::processFrame(const Texture& inputTexture, FrameBuffer
     // 设置内存屏障，确保在下次被当作纹理采样前，Compute Shader 的写入已经完全落盘到显存
     glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
-    return outputFb->getTexture();
+    return ResultPayload<Texture>::ok(outputFb->getTexture());
 }
 
 void ComputeBlurFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {

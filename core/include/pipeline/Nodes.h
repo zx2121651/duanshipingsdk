@@ -18,10 +18,13 @@ public:
         m_latestFrame = frame;
     }
 
-    VideoFrame pullFrame(int64_t timestampNs) override {
+    ResultPayload<VideoFrame> pullFrame(int64_t timestampNs) override {
         std::lock_guard<std::mutex> lock(m_mutex);
         // Note: For advanced sync, we'd compare timestampNs to m_latestFrame.timestampNs
-        return m_latestFrame;
+        if (!m_latestFrame.isValid()) {
+            return ResultPayload<VideoFrame>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "CameraInputNode has no valid frame");
+        }
+        return ResultPayload<VideoFrame>::ok(m_latestFrame);
     }
 
 private:
@@ -44,12 +47,22 @@ public:
         if (m_filter) m_filter->release();
     }
 
-    VideoFrame pullFrame(int64_t timestampNs) override {
-        if (m_inputs.empty() || !m_filter) return VideoFrame();
+    ResultPayload<VideoFrame> pullFrame(int64_t timestampNs) override {
+        if (m_inputs.empty()) {
+            return ResultPayload<VideoFrame>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "FilterNode has no input");
+        }
+        if (!m_filter) {
+            return ResultPayload<VideoFrame>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "FilterNode has no filter");
+        }
 
         // Pull from upstream
-        VideoFrame upstreamFrame = m_inputs[0]->pullFrame(timestampNs);
-        if (!upstreamFrame.isValid()) return upstreamFrame;
+        auto upstreamRes = m_inputs[0]->pullFrame(timestampNs);
+        if (!upstreamRes.isOk()) return upstreamRes;
+
+        VideoFrame upstreamFrame = upstreamRes.getValue();
+        if (!upstreamFrame.isValid()) {
+            return ResultPayload<VideoFrame>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Upstream produced an invalid frame");
+        }
 
         Texture texIn{upstreamFrame.textureId, upstreamFrame.width, upstreamFrame.height};
 
@@ -59,7 +72,11 @@ public:
             fbo = m_pool->getFrameBuffer(upstreamFrame.width, upstreamFrame.height, m_targetPrecision);
         }
 
-        Texture texOut = m_filter->processFrame(texIn, fbo);
+        auto processRes = m_filter->processFrame(texIn, fbo);
+        if (!processRes.isOk()) {
+            return ResultPayload<VideoFrame>::error(processRes.getErrorCode(), processRes.getMessage());
+        }
+        Texture texOut = processRes.getValue();
 
         VideoFrame outFrame;
         outFrame.textureId = texOut.id;
@@ -70,7 +87,7 @@ public:
         // Retain the FBO so it is returned to the pool only when this VideoFrame is destroyed
         outFrame.frameBuffer = fbo;
 
-        return outFrame;
+        return ResultPayload<VideoFrame>::ok(outFrame);
     }
 
     void setFrameBufferPool(FrameBufferPool* pool) { m_pool = pool; }
@@ -87,11 +104,16 @@ class OutputNode : public PipelineNode {
 public:
     OutputNode(const std::string& name) : PipelineNode(name) {}
 
-    VideoFrame pullFrame(int64_t timestampNs) override {
-        if (m_inputs.empty()) return VideoFrame();
+    ResultPayload<VideoFrame> pullFrame(int64_t timestampNs) override {
+        if (m_inputs.empty()) {
+            return ResultPayload<VideoFrame>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "OutputNode has no input");
+        }
 
-        m_lastFrame = m_inputs[0]->pullFrame(timestampNs);
-        return m_lastFrame;
+        auto res = m_inputs[0]->pullFrame(timestampNs);
+        if (res.isOk()) {
+            m_lastFrame = res.getValue();
+        }
+        return res;
     }
 
     VideoFrame getLastFrame() const { return m_lastFrame; }

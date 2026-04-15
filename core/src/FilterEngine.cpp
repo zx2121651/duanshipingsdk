@@ -74,7 +74,7 @@ ResultPayload<Texture> FilterEngine::processFrame(const Texture& textureIn, int 
         m_metricsCollector.recordFrameTime(duration_ms);
 
         if (!outFrame.isValid()) {
-            return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Pipeline executed but produced an invalid output texture");
+            return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Pipeline produced an invalid output frame (missing texture)");
         }
         return ResultPayload<Texture>::ok(Texture{outFrame.textureId, outFrame.width, outFrame.height});
     }
