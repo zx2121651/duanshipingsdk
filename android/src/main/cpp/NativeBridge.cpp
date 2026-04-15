@@ -178,6 +178,24 @@ void throwNativeException(JNIEnv* env, int errorCode, const std::string& message
     }
 }
 
+/**
+ * Unified error reporting to Kotlin via onNativeRenderError callback.
+ * Ensures JNI local references are correctly managed.
+ */
+void reportErrorToKotlin(JNIEnv* env, jobject thiz, int errorCode, const std::string& message) {
+    jclass cls = env->GetObjectClass(thiz);
+    if (!cls) return;
+
+    // Look for the @Keep annotated guardian method in Kotlin
+    jmethodID mid = env->GetMethodID(cls, "onNativeRenderError", "(ILjava/lang/String;)V");
+    if (mid != nullptr) {
+        jstring jmsg = env->NewStringUTF(message.c_str());
+        env->CallVoidMethod(thiz, mid, errorCode, jmsg);
+        env->DeleteLocalRef(jmsg);
+    }
+    env->DeleteLocalRef(cls);
+}
+
 
 extern "C" {
 
@@ -231,16 +249,8 @@ JNIEXPORT jint JNICALL
 Java_com_sdk_video_RenderEngine_nativeProcessFrame(JNIEnv *env, jobject thiz, jlong handle, jint textureId, jint width, jint height, jfloatArray matrix, jlong timestampNs) {
     EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
     if (!wrapper || !wrapper->filterEngine) {
-        jclass cls = env->GetObjectClass(thiz);
-        // 寻找 Kotlin 层特别标注了 @Keep 的警戒方法
-        jmethodID mid = env->GetMethodID(cls, "onNativeRenderError", "(ILjava/lang/String;)V");
-        if (mid != nullptr) {
-            jstring jmsg = env->NewStringUTF("Engine Critical Failure: FilterEngine is null or destroyed. Halted.");
-            // 主动上报错误码 -1001
-            env->CallVoidMethod(thiz, mid, -1001, jmsg);
-            env->DeleteLocalRef(jmsg);
-        }
-        env->DeleteLocalRef(cls);
+        reportErrorToKotlin(env, thiz, static_cast<int>(ErrorCode::ERR_INIT_CONTEXT_FAILED),
+                           "Engine Critical Failure: FilterEngine is null or destroyed. Halted.");
         return -1;
     }
 
@@ -254,22 +264,23 @@ Java_com_sdk_video_RenderEngine_nativeProcessFrame(JNIEnv *env, jobject thiz, jl
     }
 
     Texture inTex = {static_cast<uint32_t>(textureId), static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
+
+    // Unified ResultPayload unpacking and error propagation
     auto result = wrapper->filterEngine->processFrame(inTex, width, height);
     if (!result.isOk()) {
-        __android_log_print(ANDROID_LOG_ERROR, "NativeBridge", "Frame rendering failed: [%d] %s", result.getErrorCode(), result.getMessage().c_str());
+        __android_log_print(ANDROID_LOG_ERROR, "NativeBridge", "Frame rendering failed: [%d] %s",
+                           result.getErrorCode(), result.getMessage().c_str());
 
-        jclass cls = env->GetObjectClass(thiz);
-        jmethodID mid = env->GetMethodID(cls, "onNativeRenderError", "(ILjava/lang/String;)V");
-        if (mid != nullptr) {
-            jstring jmsg = env->NewStringUTF(result.getMessage().c_str());
-            env->CallVoidMethod(thiz, mid, result.getErrorCode(), jmsg);
-            env->DeleteLocalRef(jmsg);
-        }
-        env->DeleteLocalRef(cls);
+        reportErrorToKotlin(env, thiz, result.getErrorCode(), result.getMessage());
         return result.getErrorCode();
     }
 
     Texture outTex = result.getValue();
+    if (outTex.id == 0) {
+        reportErrorToKotlin(env, thiz, static_cast<int>(ErrorCode::ERR_RENDER_INVALID_STATE),
+                           "Pipeline produced an invalid texture ID (0).");
+        return static_cast<int>(ErrorCode::ERR_RENDER_INVALID_STATE);
+    }
 
 #ifndef WIN32
     wrapper->renderToRecordingSurface(outTex, width, height, timestampNs);
@@ -282,7 +293,7 @@ Java_com_sdk_video_RenderEngine_nativeProcessFrame(JNIEnv *env, jobject thiz, jl
         env->SetLongField(thiz, g_lastFrameTimeMsId, static_cast<jlong>(durationMs));
     }
 
-    return outTex.id;
+    return static_cast<jint>(outTex.id);
 }
 
 JNIEXPORT void JNICALL
