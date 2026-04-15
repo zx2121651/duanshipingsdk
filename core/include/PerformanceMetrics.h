@@ -35,6 +35,12 @@ public:
         m_droppedFrames++;
     }
 
+    void clear() {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_frameTimesMs.clear();
+        m_droppedFrames = 0;
+    }
+
     PerformanceMetrics getMetrics() {
         std::lock_guard<std::mutex> lock(m_mutex);
         PerformanceMetrics metrics;

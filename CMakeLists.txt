@@ -31,6 +31,12 @@ add_library(video_sdk_core STATIC ${CORE_SOURCES})
 add_executable(test_filter_graph tests/test_filter_graph.cpp tests/mocks/MockCompositor.cpp)
 target_link_libraries(test_filter_graph video_sdk_core)
 
+add_executable(test_lifecycle tests/test_lifecycle.cpp tests/mocks/MockCompositor.cpp)
+if (NOT WIN32 AND NOT GLES2_LIBRARY)
+    target_include_directories(test_lifecycle PRIVATE ${CMAKE_SOURCE_DIR}/mock_gl)
+endif()
+target_link_libraries(test_lifecycle video_sdk_core)
+
 # If we are on Windows and using vcpkg, configure ANGLE (GLES implementation)
 if(WIN32 AND DEFINED CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES "vcpkg.cmake")
     find_package(unofficial-angle CONFIG REQUIRED)

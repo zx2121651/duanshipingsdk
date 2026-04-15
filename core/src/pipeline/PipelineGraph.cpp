@@ -103,6 +103,7 @@ void PipelineGraph::release() {
         node->release();
     }
     m_nodes.clear();
+    m_sortedNodes.clear();
     m_sinkNodes.clear();
     m_isCompiled = false;
 }

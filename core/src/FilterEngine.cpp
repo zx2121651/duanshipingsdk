@@ -12,6 +12,10 @@ FilterEngine::~FilterEngine() {
 }
 
 Result FilterEngine::initialize() {
+    if (m_initialized) {
+        return Result::ok();
+    }
+
     m_threadCheck.bind(); // Bind to current (GL) thread.
 
     // 初始化前首先唤醒嗅探器，对底层硬件进行深度体检
@@ -101,14 +105,23 @@ void FilterEngine::updateParameterMat4(const std::string& key, const float* matr
 }
 
 void FilterEngine::release() {
-    if (m_initialized) {
-        if (m_graph) {
-            m_graph->release();
-            m_graph.reset();
-        }
-        m_frameBufferPool.clear();
-        m_initialized = false;
+    if (!m_initialized) {
+        return;
     }
+
+    if (m_graph) {
+        m_graph->release();
+        m_graph.reset();
+    }
+
+    m_cameraNode = nullptr;
+    m_outputNode = nullptr;
+    m_isGraphDirty = true;
+
+    m_metricsCollector.clear();
+    m_frameBufferPool.clear();
+
+    m_initialized = false;
 }
 
 Result FilterEngine::addFilterRaw(FilterPtr filter) {
