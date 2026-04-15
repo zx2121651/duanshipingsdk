@@ -73,7 +73,12 @@ fun FilterCameraPreview(
                                 // ---- 【核心修复：GL 线程归属权】 ----
                                 // 在 GLSurfaceView 分配的 GLThread 中初始化底层渲染引擎
                                 // 这保证了底层 FBO、Texture 和 GLSurfaceView 永远在同一个上下文中
-                                filterManager.initialize()
+                                scope.launch {
+                                    val res = filterManager.initialize()
+                                    if (res.isFailure) {
+                                        android.util.Log.e("FilterCameraPreview", "Failed to initialize: ${res.exceptionOrNull()?.message}")
+                                    }
+                                }
 //                                 kotlinx.coroutines.GlobalScope.launch { filterManager.addFilter(VideoFilterType.COMPUTE_BLUR) }
 
                                 val vertexShader = loadShader(GLES20.GL_VERTEX_SHADER, vertexShaderCode)

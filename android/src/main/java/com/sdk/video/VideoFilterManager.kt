@@ -23,7 +23,7 @@ enum class FilterEngineState {
  * 1. 使用 Kotlin 协程和专属的单线程调度器 (GLRenderThread) 来保障 OpenGL 上下文的线程安全。
  * 2. 使用 SharedFlow (共享数据流) 作为生产者-消费者模型，向外界抛出处理后的纹理 ID，解耦底层渲染与上层 UI。
  */
-@OptIn(InternalApi::class)
+@OptIn(InternalApi::class, ExperimentalCoroutinesApi::class)
 class VideoFilterManager(private val context: android.content.Context,
     private val width: Int,
     private val height: Int,
@@ -47,8 +47,17 @@ class VideoFilterManager(private val context: android.content.Context,
     // 这解决了之前 "依靠约定保证单线程" 带来的巨大维护隐患。
     var glThreadDispatcher: ((Runnable) -> Unit)? = null
 
+    @Volatile
+    private var glThreadId: Long = -1
+
     // 将所有的配置更新请求统一收敛并安全分发给 GL 线程，并挂起等待执行结果
+    @OptIn(ExperimentalCoroutinesApi::class)
     private suspend fun <T> runOnGLThread(action: () -> Result<T>): Result<T> {
+        // [Optimization]: If already on GL thread, execute immediately to reduce latency
+        if (glThreadId != -1L && Thread.currentThread().id == glThreadId) {
+            return try { action() } catch (e: Exception) { Result.failure(e) }
+        }
+
         val dispatcher = glThreadDispatcher
             ?: return Result.failure(IllegalStateException("GL thread dispatcher not bound. Cannot execute GL action."))
 
@@ -57,11 +66,11 @@ class VideoFilterManager(private val context: android.content.Context,
                 try {
                     val result = action()
                     if (continuation.isActive) {
-                        continuation.resume(result, null)
+                        continuation.resume(result) { /* cancellation cleanup */ }
                     }
                 } catch (e: Exception) {
                     if (continuation.isActive) {
-                        continuation.resume(Result.failure(e), null)
+                        continuation.resume(Result.failure(e)) { }
                     }
                 }
             }
@@ -89,11 +98,15 @@ class VideoFilterManager(private val context: android.content.Context,
     val performanceMetrics: StateFlow<RenderEngine.PerformanceMetrics?> = _performanceMetrics.asStateFlow()
 
     // 初始化引擎，必须切换到专属的 GL 线程
-    fun initialize(): Result<Unit> {
-        try {
+    suspend fun initialize(): Result<Unit> {
+        return runOnGLThread {
             _engineState.value = FilterEngineState.INITIALIZING
+
+            // Capture GL thread ID for optimization
+            glThreadId = Thread.currentThread().id
+
             val res = renderEngine.init(context.assets)
-            if (res != 0) return Result.failure(VideoSdkError.fromNativeCode(res))
+            if (res != 0) return@runOnGLThread Result.failure(VideoSdkError.fromNativeCode(res))
 
             // 监听底层渲染错误
             renderEngine.onRenderErrorListener = { errorCode, errorMessage ->
@@ -102,7 +115,7 @@ class VideoFilterManager(private val context: android.content.Context,
             }
 
             // 监听性能数据
-            renderEngine.onPerformanceUpdateListener = { durationMs ->
+            renderEngine.onPerformanceUpdateListener = { _ ->
                 // 每次性能回调时主动拉取一次 metrics 并推到流里
                 _performanceMetrics.value = renderEngine.getMetrics()
             }
@@ -124,14 +137,13 @@ class VideoFilterManager(private val context: android.content.Context,
             if (st != null) {
                 inputSurface = Surface(st)
                 _engineState.value = FilterEngineState.RUNNING
-                return Result.success(Unit)
+                Result.success(Unit)
             } else {
-                return Result.failure(Exception("Failed to create input surface"))
+                Result.failure(Exception("Failed to create input surface"))
             }
-        } catch (e: Exception) {
+        }.onFailure { e ->
             _engineState.value = FilterEngineState.ERROR
             _processedFrames.tryEmit(Result.failure(e))
-            return Result.failure(e)
         }
     }
 
@@ -179,26 +191,29 @@ class VideoFilterManager(private val context: android.content.Context,
 
     // --- 音视频录制代理方法 ---
 
-    fun startVideoRecording(config: VideoExportConfig): Result<Unit> {
-        return try {
-            val encoder = VideoEncoder(this, config)
-            val surface = encoder.startRecording()
-            if (surface != null) {
-                videoEncoder = encoder
-                renderEngine.setRecordingAnchor(encoder.getStartTimeNs())
-                renderEngine.startRecording(surface)
-            } else {
-                Result.failure(VideoSdkError.InvalidOperation("Failed to start MediaCodec encoder"))
-            }
-        } catch (e: Exception) {
-            Result.failure(VideoSdkError.InvalidOperation(e.message ?: "Encoder exception"))
+    suspend fun startVideoRecording(config: VideoExportConfig): Result<Unit> {
+        val encoder = VideoEncoder(this, config)
+        val surface = encoder.startRecording()
+            ?: return Result.failure(VideoSdkError.InvalidOperation("Failed to start MediaCodec encoder"))
+
+        val glResult = runOnGLThread {
+            videoEncoder = encoder
+            renderEngine.setRecordingAnchor(encoder.getStartTimeNs())
+            renderEngine.startRecording(surface)
         }
+
+        if (glResult.isFailure) {
+            encoder.stopRecording()
+            videoEncoder = null
+        }
+        return glResult
     }
 
-    fun stopVideoRecording(isFallback: Boolean = false) {
-        renderEngine.stopRecording()
+    suspend fun stopVideoRecording(isFallback: Boolean = false): Result<Unit> {
+        val res = runOnGLThread { renderEngine.stopRecording() }
         videoEncoder?.stopRecording(isFallback)
         videoEncoder = null
+        return res
     }
 
     // Oboe 音频控制不需要强制在 GL 线程，但为了统一管理也可以放进来
@@ -236,7 +251,8 @@ class VideoFilterManager(private val context: android.content.Context,
     }
     fun release() {
         // 1. 先停掉录制和音频，防止异步任务还在调用 renderEngine
-        stopVideoRecording()
+        videoEncoder?.stopRecording()
+        videoEncoder = null
         stopAudioRecord()
 
         inputSurface?.release()
@@ -249,6 +265,7 @@ class VideoFilterManager(private val context: android.content.Context,
             // 将释放命令丢至 GL 线程队列的绝对末尾
             dispatcher.invoke {
                 try {
+                    renderEngine.stopRecording()
                     renderEngine.release()
                     Log.i("VideoFilterManager", "RenderEngine safely deleted via Poison Pill.")
                 } catch (e: Exception) {

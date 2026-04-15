@@ -198,12 +198,16 @@ class MainActivity : ComponentActivity() {
             outputPath = outputFile.absolutePath
         )
 
-        val result = fm.startVideoRecording(config)
-        if (result.isSuccess) {
-            isRecordingState.value = true
-            Toast.makeText(this, "Recording started", Toast.LENGTH_SHORT).show()
-        } else {
-            Toast.makeText(this, "Failed to start recording: ${result.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+        fm.scope.launch {
+            val result = fm.startVideoRecording(config)
+            runOnUiThread {
+                if (result.isSuccess) {
+                    isRecordingState.value = true
+                    Toast.makeText(this@MainActivity, "Recording started", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this@MainActivity, "Failed to start recording: ${result.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+                }
+            }
         }
     }
 

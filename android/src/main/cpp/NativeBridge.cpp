@@ -50,14 +50,14 @@ struct EngineWrapper {
     }
 
 #ifndef WIN32
-    void setupRecordingSurface(JNIEnv* env, jobject surface) {
-        if (!surface) return;
+    bool setupRecordingSurface(JNIEnv* env, jobject surface) {
+        if (!surface) return false;
 
         // Cleanup existing surface before overwriting
         releaseRecordingSurface();
 
         recordingWindow = ANativeWindow_fromSurface(env, surface);
-        if (!recordingWindow) return;
+        if (!recordingWindow) return false;
 
         // Current context from GLSurfaceView or TextureView
         eglDisplay = eglGetCurrentDisplay();
@@ -66,7 +66,7 @@ struct EngineWrapper {
         if (eglDisplay == EGL_NO_DISPLAY || sharedContext == EGL_NO_CONTEXT) {
             ANativeWindow_release(recordingWindow);
             recordingWindow = nullptr;
-            return;
+            return false;
         }
 
         // Create EGL window surface for MediaCodec input
@@ -106,6 +106,7 @@ struct EngineWrapper {
             glAttachShader(recordProgram, vs); glAttachShader(recordProgram, fs);
             glLinkProgram(recordProgram);
         }
+        return true;
     }
 
     void releaseRecordingSurface() {
@@ -315,7 +316,9 @@ Java_com_sdk_video_RenderEngine_nativeSetRecordingSurface(JNIEnv *env, jobject t
     }
 
     if (surface) {
-        wrapper->setupRecordingSurface(env, surface);
+        if (!wrapper->setupRecordingSurface(env, surface)) {
+            throwNativeException(env, static_cast<int>(sdk::video::ERR_INIT_CONTEXT_FAILED), "Failed to setup recording surface (EGL Context missing?)");
+        }
     } else {
         wrapper->releaseRecordingSurface();
     }
@@ -451,10 +454,14 @@ Java_com_sdk_video_RenderEngine_nativeUpdateShaderSource(JNIEnv *env, jobject th
     const char* nameStr = env->GetStringUTFChars(name, nullptr);
     const char* sourceStr = env->GetStringUTFChars(source, nullptr);
 
-    wrapper->filterEngine->updateShaderSource(nameStr, sourceStr);
+    auto res = wrapper->filterEngine->updateShaderSource(nameStr, sourceStr);
 
     env->ReleaseStringUTFChars(name, nameStr);
     env->ReleaseStringUTFChars(source, sourceStr);
+
+    if (!res.isOk()) {
+        throwNativeException(env, res.getErrorCode(), res.getMessage());
+    }
 }
 
 JNIEXPORT jfloatArray JNICALL
