@@ -44,6 +44,8 @@ struct EngineWrapper {
     ~EngineWrapper() {
 #ifndef WIN32
         releaseRecordingSurface();
+        glDeleteProgram(recordProgram);
+        recordProgram = 0;
 #endif
     }
 
@@ -184,10 +186,16 @@ Java_com_sdk_video_RenderEngine_nativeInit(JNIEnv *env, jobject thiz, jobject as
     if (!g_lastFrameTimeMsId) {
         jclass cls = env->GetObjectClass(thiz);
         g_lastFrameTimeMsId = env->GetFieldID(cls, "lastFrameTimeMs", "J");
+        env->DeleteLocalRef(cls);
     }
 
-    EngineWrapper* wrapper = new EngineWrapper();
-    wrapper->filterEngine = std::make_shared<FilterEngine>();
+    std::unique_ptr<EngineWrapper> wrapper;
+    try {
+        wrapper = std::make_unique<EngineWrapper>();
+    } catch (const std::bad_alloc& e) {
+        throwNativeException(env, static_cast<int>(ErrorCode::ERR_INIT_CONTEXT_FAILED), "Native Memory Allocation Failed");
+        return 0;
+    }
 
     if (assetManager) {
         AAssetManager* nativeAssetManager = AAssetManager_fromJava(env, assetManager);
@@ -196,14 +204,18 @@ Java_com_sdk_video_RenderEngine_nativeInit(JNIEnv *env, jobject thiz, jobject as
     }
 
     auto oesFilter = std::make_shared<OES2RGBFilter>();
-    wrapper->filterEngine->addFilterRaw(oesFilter);
+    auto addRes = wrapper->filterEngine->addFilterRaw(oesFilter);
+    if (!addRes.isOk()) {
+        throwNativeException(env, addRes.getErrorCode(), "Failed to add initial OES filter: " + addRes.getMessage());
+        return 0;
+    }
+
     auto res = wrapper->filterEngine->initialize();
     if (!res.isOk()) {
-        delete wrapper;
         throwNativeException(env, res.getErrorCode(), res.getMessage());
         return 0;
     }
-    return reinterpret_cast<jlong>(wrapper);
+    return reinterpret_cast<jlong>(wrapper.release());
 }
 
 JNIEXPORT void JNICALL
