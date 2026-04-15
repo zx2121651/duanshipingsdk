@@ -6,18 +6,6 @@
 namespace sdk {
 namespace video {
 
-// A standard passthrough vertex shader for full-screen quads.
-const char* kDefaultVertexShader = R"(
-#version 300 es
-layout(location = 0) in vec4 position;
-layout(location = 1) in vec2 inputTextureCoordinate;
-out vec2 textureCoordinate;
-void main() {
-    gl_Position = position;
-    textureCoordinate = inputTextureCoordinate;
-}
-)";
-
 Filter::Filter() : m_programId(0) {}
 
 Filter::~Filter() {
@@ -26,7 +14,16 @@ Filter::~Filter() {
 
 Result Filter::initialize() {
     release();
-    m_programId = createProgram(getVertexShaderSource().c_str(), getFragmentShaderSource().c_str());
+
+    std::string vertexShaderSource = getVertexShaderSource();
+    std::string fragmentShaderSource = getFragmentShaderSource();
+
+    if (m_shaderManager) {
+        vertexShaderSource = m_shaderManager->getShaderSource(getVertexShaderName(), vertexShaderSource);
+        fragmentShaderSource = m_shaderManager->getShaderSource(getFragmentShaderName(), fragmentShaderSource);
+    }
+
+    m_programId = createProgram(vertexShaderSource.c_str(), fragmentShaderSource.c_str());
     if (m_programId == 0) {
         return Result::error(ErrorCode::ERR_INIT_SHADER_FAILED, "Failed to create program for " + getFragmentShaderName());
     }
@@ -76,7 +73,7 @@ std::string Filter::getVertexShaderName() const {
 }
 
 std::string Filter::getVertexShaderSource() const {
-    return kDefaultVertexShader;
+    return "";
 }
 
 GLuint Filter::loadShader(GLenum shaderType, const char* pSource) {
