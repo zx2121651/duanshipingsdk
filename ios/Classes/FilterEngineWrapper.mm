@@ -41,19 +41,42 @@ using namespace sdk::video;
     return self;
 }
 
+- (void)_cleanupGLResources {
+    if (m_context) {
+        [EAGLContext setCurrentContext:m_context];
+    }
+    if (textureCache) {
+        CFRelease(textureCache);
+        textureCache = NULL;
+    }
+    if (pixelBufferPool) {
+        CVPixelBufferPoolRelease(pixelBufferPool);
+        pixelBufferPool = NULL;
+        poolWidth = 0;
+        poolHeight = 0;
+    }
+    if (blitFboRead != 0) {
+        glDeleteFramebuffers(1, &blitFboRead);
+        blitFboRead = 0;
+    }
+    if (blitFboDraw != 0) {
+        glDeleteFramebuffers(1, &blitFboDraw);
+        blitFboDraw = 0;
+    }
+}
+
 - (int)initializeWithContext:(EAGLContext *)context {
     if (!context || !engine) {
         self.lastErrorCode = static_cast<int>(sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED);
         return self.lastErrorCode;
     }
 
+    if (m_context) {
+        [self _cleanupGLResources];
+    }
+
     m_context = context;
     [EAGLContext setCurrentContext:m_context];
-
-    if (textureCache) {
-        CFRelease(textureCache);
-        textureCache = NULL;
-    }
 
     CVReturn err = CVOpenGLESTextureCacheCreate(kCFAllocatorDefault, NULL, m_context, NULL, &textureCache);
     if (err != kCVReturnSuccess) {
@@ -189,6 +212,10 @@ using namespace sdk::video;
     // Blit from engine output to CVPixelBuffer-backed texture
     glBlitFramebuffer(0, 0, (GLint)width, (GLint)height, 0, 0, (GLint)width, (GLint)height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
+    // Detach textures to avoid illegal reuse or holding onto references
+    glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
+    glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
+
     // Restore state
     glBindFramebuffer(GL_READ_FRAMEBUFFER, oldReadFBO);
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, oldDrawFBO);
@@ -230,26 +257,10 @@ using namespace sdk::video;
 }
 
 - (void)releaseResources {
-    if (m_context) [EAGLContext setCurrentContext:m_context];
     if (engine) {
         engine->release();
     }
-    if (textureCache) {
-        CFRelease(textureCache);
-        textureCache = NULL;
-    }
-    if (pixelBufferPool) {
-        CVPixelBufferPoolRelease(pixelBufferPool);
-        pixelBufferPool = NULL;
-    }
-    if (blitFboRead != 0) {
-        glDeleteFramebuffers(1, &blitFboRead);
-        blitFboRead = 0;
-    }
-    if (blitFboDraw != 0) {
-        glDeleteFramebuffers(1, &blitFboDraw);
-        blitFboDraw = 0;
-    }
+    [self _cleanupGLResources];
     m_context = nil;
 }
 
@@ -269,6 +280,10 @@ using namespace sdk::video;
     if (engine) {
         engine->recordDroppedFrame();
     }
+}
+
+- (void)dealloc {
+    [self releaseResources];
 }
 
 @end

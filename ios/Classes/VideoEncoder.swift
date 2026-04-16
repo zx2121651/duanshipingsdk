@@ -182,10 +182,10 @@ public class VideoEncoder {
                 }
 
                 self.lock.lock()
-                self.assetWriter = nil
+                self.pixelBufferAdaptor = nil
                 self.videoInput = nil
                 self.audioInput = nil
-                self.pixelBufferAdaptor = nil
+                self.assetWriter = nil
                 self.lock.unlock()
             }
         }
