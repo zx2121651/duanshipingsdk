@@ -67,10 +67,14 @@ class VideoEncoder(
         val isVideo: Boolean
     )
 
-    fun startRecording(): Surface? {
-        if (isRecording) return inputSurface
+    fun startRecording(): Result<Surface> {
+        if (isRecording) {
+            return inputSurface?.let { Result.success(it) }
+                ?: Result.failure(IllegalStateException("Recording is active but inputSurface is null"))
+        }
 
         try {
+            Log.i(TAG, "Starting recording to: $outputPath")
             muxer = MediaMuxer(outputPath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
 
             setupVideoCodec()
@@ -90,11 +94,12 @@ class VideoEncoder(
             // 启动协程去消费底层吐出的 PCM 数据
             startAudioRecordLoop()
 
-            return inputSurface
+            val surface = inputSurface ?: throw IllegalStateException("Input surface not created after codec setup")
+            return Result.success(surface)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start recording", e)
             stopRecording()
-            return null
+            return Result.failure(e)
         }
     }
 
@@ -294,14 +299,20 @@ class VideoEncoder(
     }
 
     fun stopRecording(isFallback: Boolean = false) {
+        Log.i(TAG, "Stopping recording... (isFallback=$isFallback)")
         isRecording = false
         encoderScope.coroutineContext.cancelChildren()
 
         // 关闭底层的 Oboe 音频采集引擎
         filterManager.stopAudioRecord()
 
-        try { videoCodec?.signalEndOfInputStream() } catch (e: Exception) { Log.e(TAG, "Error signaling end of video stream", e) }
+        try {
+            videoCodec?.signalEndOfInputStream()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error signaling end of video stream: ${e.message}")
+        }
 
+        // 稍微等待最后一帧写入，生产环境可考虑使用更加严谨的 EOS 标志等待
         Thread.sleep(100)
 
         // 独立且严格释放视频编码器
@@ -334,10 +345,22 @@ class VideoEncoder(
         }
 
         synchronized(this) {
-            if (muxerStarted) {
-                try { muxer?.stop(); muxer?.release() } catch (e: Exception) { Log.e(TAG, "Error releasing muxer", e) }
+            try {
+                if (muxerStarted) {
+                    muxer?.stop()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error stopping muxer (maybe no data was written): ${e.message}")
+            } finally {
+                try {
+                    muxer?.release()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error releasing muxer: ${e.message}")
+                }
+                muxer = null
+                muxerStarted = false
             }
-            muxerStarted = false
+            Unit
         }
 
         inputSurface?.release()
@@ -348,5 +371,6 @@ class VideoEncoder(
         isVideoFormatAdded = false
         isAudioFormatAdded = false
         pendingFrames.clear()
+        Log.i(TAG, "Recording stopped and resources released.")
     }
 }

@@ -225,9 +225,13 @@ class VideoFilterManager(private val context: android.content.Context,
 
     suspend fun startVideoRecording(config: VideoExportConfig): Result<Unit> {
         val encoder = VideoEncoder(this, config)
-        val surface = encoder.startRecording()
-            ?: return Result.failure(VideoSdkError.InvalidOperation("Failed to start MediaCodec encoder"))
+        val startResult = encoder.startRecording()
 
+        if (startResult.isFailure) {
+            return Result.failure(startResult.exceptionOrNull() ?: Exception("Unknown encoder failure"))
+        }
+
+        val surface = startResult.getOrThrow()
         val glResult = runOnGLThread {
             videoEncoder = encoder
             renderEngine.setRecordingAnchor(encoder.getStartTimeNs())
