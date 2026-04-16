@@ -1,4 +1,5 @@
 #include "../../include/timeline/Clip.h"
+#include <algorithm>
 
 namespace sdk {
 namespace video {
@@ -9,8 +10,17 @@ Clip::Clip(const std::string& id, const std::string& sourcePath, MediaType type)
 
 int64_t Clip::getTimelineOut() const {
     if (m_speed <= 0.0f) return m_timelineIn;
-    int64_t duration = m_trimOut - m_trimIn;
-    return m_timelineIn + static_cast<int64_t>(duration / m_speed);
+    int64_t duration = getEffectiveTrimOut() - getEffectiveTrimIn();
+    return m_timelineIn + static_cast<int64_t>(duration / static_cast<double>(m_speed));
+}
+
+int64_t Clip::getEffectiveTrimIn() const {
+    return std::min(m_trimIn, getEffectiveTrimOut());
+}
+
+int64_t Clip::getEffectiveTrimOut() const {
+    int64_t effectiveOut = (m_trimOut > 0) ? m_trimOut : m_sourceDuration;
+    return std::min(effectiveOut, m_sourceDuration);
 }
 
 void Clip::setTransform(float scale, float rotation, float transX, float transY) {

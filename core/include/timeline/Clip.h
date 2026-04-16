@@ -46,6 +46,9 @@ public:
     int64_t getTimelineIn() const { return m_timelineIn; }
     int64_t getTimelineOut() const;
 
+    int64_t getEffectiveTrimIn() const;
+    int64_t getEffectiveTrimOut() const;
+
     // 播放控制
     void setSpeed(float speed) { m_speed = speed; }
     float getSpeed() const { return m_speed; }
@@ -60,6 +63,14 @@ public:
     }
     TransitionType getInTransitionType() const { return m_inTransitionType; }
     int64_t getInTransitionDurationNs() const { return m_inTransitionDurationNs; }
+
+    // 此 Clip 结束时，与下一层画面的融合方式
+    void setOutTransition(TransitionType type, int64_t durationNs) {
+        m_outTransitionType = type;
+        m_outTransitionDurationNs = durationNs;
+    }
+    TransitionType getOutTransitionType() const { return m_outTransitionType; }
+    int64_t getOutTransitionDurationNs() const { return m_outTransitionDurationNs; }
 
     // 关键帧控制
     // 注意: 时间戳是相对于 Clip 的 timelineIn 而言的相对时间 (0 开始)
@@ -95,6 +106,9 @@ private:
 
     TransitionType m_inTransitionType = TransitionType::NONE;
     int64_t m_inTransitionDurationNs = 0;
+
+    TransitionType m_outTransitionType = TransitionType::NONE;
+    int64_t m_outTransitionDurationNs = 0;
 
     // 数据结构：属性名 -> (相对时间戳 -> 参数值)
     // std::map 自带按 Key (时间戳) 排序的特性，极大方便插值查找

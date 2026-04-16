@@ -49,14 +49,14 @@ void Compositor::initCopyProgram() {
     glDeleteShader(vs); glDeleteShader(fs);
 }
 
-void Compositor::copyTexture(const Texture& src, FrameBufferPtr target) {
+void Compositor::copyTexture(const Texture& src, FrameBufferPtr target, float opacity) {
     if (!target || src.id == 0) return;
     target->bind();
     GLStateManager::getInstance().useProgram(m_copyProgram);
     GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
     GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, src.id);
     glUniform1i(glGetUniformLocation(m_copyProgram, "texForeground"), 0);
-    glUniform1f(glGetUniformLocation(m_copyProgram, "opacity"), 1.0f);
+    glUniform1f(glGetUniformLocation(m_copyProgram, "opacity"), opacity);
 
     static const float squareCoords[] = {-1, -1, 1, -1, -1, 1, 1, 1};
     static const float textureCoords[] = {0, 0, 1, 0, 0, 1, 1, 1};
@@ -249,10 +249,29 @@ Result Compositor::renderFrameAtTime(int64_t timelineNs, FrameBufferPtr outputFb
     FrameBufferPtr pongFb = m_filterEngine->getFrameBufferPool()->getFrameBuffer(outputFb->width(), outputFb->height());
 
     for (const auto& clip : m_activeClips) {
-        int64_t localTimeNs = (timelineNs - clip->getTimelineIn()) * clip->getSpeed() + clip->getTrimIn();
+        int64_t clipRelativeNs = timelineNs - clip->getTimelineIn();
+        int64_t localTimeNs = static_cast<int64_t>(clipRelativeNs * clip->getSpeed()) + clip->getEffectiveTrimIn();
+
+        // Clamp local time to effective trim range
+        localTimeNs = std::max(clip->getEffectiveTrimIn(), std::min(localTimeNs, clip->getEffectiveTrimOut()));
 
         Texture fgTex = m_decoderPool->getFrame(clip->getId(), localTimeNs);
         if (fgTex.id == 0) continue;
+
+        float alpha = clip->getOpacity(clipRelativeNs);
+        TransitionType transitionToUse = TransitionType::NONE;
+        float transitionProgress = 1.0f;
+
+        if (clip->getInTransitionType() != TransitionType::NONE && clipRelativeNs < clip->getInTransitionDurationNs()) {
+            transitionToUse = clip->getInTransitionType();
+            transitionProgress = static_cast<float>(clipRelativeNs) / clip->getInTransitionDurationNs();
+        } else if (clip->getOutTransitionType() != TransitionType::NONE) {
+            int64_t clipRemainingNs = clip->getTimelineOut() - timelineNs;
+            if (clipRemainingNs < clip->getOutTransitionDurationNs()) {
+                transitionToUse = clip->getOutTransitionType();
+                transitionProgress = static_cast<float>(clipRemainingNs) / clip->getOutTransitionDurationNs();
+            }
+        }
 
         if (isFirst) {
             pingFb->bind();
@@ -260,21 +279,18 @@ Result Compositor::renderFrameAtTime(int64_t timelineNs, FrameBufferPtr outputFb
             glClear(GL_COLOR_BUFFER_BIT);
             pingFb->unbind();
 
-            copyTexture(fgTex, pingFb);
+            float initialAlpha = alpha;
+            if (transitionToUse != TransitionType::NONE) {
+                initialAlpha *= transitionProgress;
+            }
+            copyTexture(fgTex, pingFb, initialAlpha);
             accumulatedTexture = pingFb->getTexture();
             isFirst = false;
         } else {
-            // Check Transition
-            int64_t clipRelativeNs = timelineNs - clip->getTimelineIn();
-            if (clip->getInTransitionType() != TransitionType::NONE && clipRelativeNs < clip->getInTransitionDurationNs()) {
-                // Inside transition window
-                float progress = static_cast<float>(clipRelativeNs) / clip->getInTransitionDurationNs();
-                accumulatedTexture = transitionTextures(accumulatedTexture, fgTex, clip->getInTransitionType(), progress, pongFb);
+            if (transitionToUse != TransitionType::NONE) {
+                accumulatedTexture = transitionTextures(accumulatedTexture, fgTex, transitionToUse, transitionProgress * alpha, pongFb);
             } else {
-                // Keyframe interpolated Alpha Blending
-                // Nse keyframe value instead of static value!
-                float interpolatedOpacity = clip->getOpacity(clipRelativeNs);
-                accumulatedTexture = blendTextures(accumulatedTexture, fgTex, interpolatedOpacity, pongFb);
+                accumulatedTexture = blendTextures(accumulatedTexture, fgTex, alpha, pongFb);
             }
             std::swap(pingFb, pongFb);
         }

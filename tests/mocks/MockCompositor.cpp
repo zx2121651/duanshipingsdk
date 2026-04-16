@@ -9,7 +9,7 @@ Compositor::Compositor(std::shared_ptr<Timeline> timeline, std::shared_ptr<Filte
 
 void Compositor::initPrograms() {}
 void Compositor::initCopyProgram() {}
-void Compositor::copyTexture(const Texture& src, FrameBufferPtr target) {}
+void Compositor::copyTexture(const Texture& src, FrameBufferPtr target, float opacity) {}
 void Compositor::initBlendProgram() {}
 void Compositor::initWipeTransitionProgram() {}
 Texture Compositor::blendTextures(const Texture& bg, const Texture& fg, float opacity, FrameBufferPtr target) { return Texture(); }

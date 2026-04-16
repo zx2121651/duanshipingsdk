@@ -26,6 +26,7 @@ void test_sequential_clips_and_gaps() {
 
     // Clip 1: 0s to 2s
     auto clip1 = std::make_shared<Clip>("clip_1", "v1.mp4", Clip::MediaType::VIDEO);
+    clip1->setSourceDuration(10000000000); // 10s
     clip1->setTimelineIn(0);
     clip1->setTrimIn(0);
     clip1->setTrimOut(2000000000); // 2s
@@ -35,6 +36,7 @@ void test_sequential_clips_and_gaps() {
 
     // Clip 2: 3s to 5s
     auto clip2 = std::make_shared<Clip>("clip_2", "v2.mp4", Clip::MediaType::VIDEO);
+    clip2->setSourceDuration(10000000000); // 10s
     clip2->setTimelineIn(3000000000); // 3s
     clip2->setTrimIn(0);
     clip2->setTrimOut(2000000000); // 2s
@@ -58,12 +60,14 @@ void test_multi_track_activation() {
 
     // Main clip: 0s to 5s
     auto mainClip = std::make_shared<Clip>("main", "main.mp4", Clip::MediaType::VIDEO);
+    mainClip->setSourceDuration(10000000000); // 10s
     mainClip->setTimelineIn(0);
     mainClip->setTrimOut(5000000000);
     mainTrack->addClip(mainClip);
 
     // PIP clip: 1s to 3s
     auto pipClip = std::make_shared<Clip>("pip", "pip.mp4", Clip::MediaType::VIDEO);
+    pipClip->setSourceDuration(10000000000); // 10s
     pipClip->setTimelineIn(1000000000);
     pipClip->setTrimOut(2000000000);
     pipTrack->addClip(pipClip);
@@ -103,12 +107,87 @@ void test_transition_properties() {
     std::cout << "test_transition_properties passed" << std::endl;
 }
 
+void test_out_transition_properties() {
+    auto clip = std::make_shared<Clip>("clip", "v.mp4", Clip::MediaType::VIDEO);
+
+    // Default should be NONE
+    assert(clip->getOutTransitionType() == TransitionType::NONE);
+    assert(clip->getOutTransitionDurationNs() == 0);
+
+    clip->setOutTransition(TransitionType::CROSSFADE, 300000000); // 0.3s
+    assert(clip->getOutTransitionType() == TransitionType::CROSSFADE);
+    assert(clip->getOutTransitionDurationNs() == 300000000);
+
+    std::cout << "test_out_transition_properties passed" << std::endl;
+}
+
+void test_default_trim_out() {
+    auto clip = std::make_shared<Clip>("clip", "v.mp4", Clip::MediaType::VIDEO);
+    clip->setSourceDuration(5000000000); // 5s
+    clip->setTimelineIn(0);
+    clip->setTrimIn(1000000000); // 1s
+    clip->setTrimOut(0); // Default
+
+    // Effective TrimOut should be SourceDuration (5s)
+    // Duration = 5s - 1s = 4s
+    assert(clip->getEffectiveTrimOut() == 5000000000);
+    assert(clip->getTimelineOut() == 4000000000);
+
+    std::cout << "test_default_trim_out passed" << std::endl;
+}
+
+void test_overlapping_clips_retrieval() {
+    auto timeline = std::make_shared<Timeline>(1920, 1080, 30);
+    auto track = timeline->addTrack(0, Track::TrackType::MAIN_VIDEO);
+
+    // Clip 1: 0s to 2s
+    auto clip1 = std::make_shared<Clip>("clip_1", "v1.mp4", Clip::MediaType::VIDEO);
+    clip1->setSourceDuration(10000000000);
+    clip1->setTimelineIn(0);
+    clip1->setTrimIn(0);
+    clip1->setTrimOut(2000000000);
+    track->addClip(clip1);
+
+    // Clip 2: 1s to 3s (Overlaps with Clip 1)
+    auto clip2 = std::make_shared<Clip>("clip_2", "v2.mp4", Clip::MediaType::VIDEO);
+    clip2->setSourceDuration(10000000000);
+    clip2->setTimelineIn(1000000000);
+    clip2->setTrimIn(0);
+    clip2->setTrimOut(2000000000);
+    track->addClip(clip2);
+
+    std::vector<ClipPtr> activeClips;
+
+    // At 0.5s: only clip 1
+    track->getActiveClipsAtTime(500000000, activeClips);
+    assert(activeClips.size() == 1);
+    assert(activeClips[0]->getId() == "clip_1");
+    activeClips.clear();
+
+    // At 1.5s: both clip 1 and clip 2
+    track->getActiveClipsAtTime(1500000000, activeClips);
+    assert(activeClips.size() == 2);
+    // Order should be by TimelineIn (Clip 1 then Clip 2)
+    assert(activeClips[0]->getId() == "clip_1");
+    assert(activeClips[1]->getId() == "clip_2");
+    activeClips.clear();
+
+    // At 2.5s: only clip 2
+    track->getActiveClipsAtTime(2500000000, activeClips);
+    assert(activeClips.size() == 1);
+    assert(activeClips[0]->getId() == "clip_2");
+    activeClips.clear();
+
+    std::cout << "test_overlapping_clips_retrieval passed" << std::endl;
+}
+
 void test_duration_and_speed() {
     auto timeline = std::make_shared<Timeline>(1920, 1080, 30);
     auto track = timeline->addTrack(0, Track::TrackType::MAIN_VIDEO);
 
     // Clip: 0s to 4s in timeline (but 2x speed, so 8s source used)
     auto clip = std::make_shared<Clip>("clip", "v.mp4", Clip::MediaType::VIDEO);
+    clip->setSourceDuration(10000000000); // 10s
     clip->setTimelineIn(0);
     clip->setTrimIn(0);
     clip->setTrimOut(8000000000); // 8s
@@ -121,6 +200,7 @@ void test_duration_and_speed() {
 
     // Add another clip at 5s
     auto clip2 = std::make_shared<Clip>("clip2", "v2.mp4", Clip::MediaType::VIDEO);
+    clip2->setSourceDuration(10000000000); // 10s
     clip2->setTimelineIn(5000000000); // 5s
     clip2->setTrimIn(0);
     clip2->setTrimOut(1000000000); // 1s
@@ -166,6 +246,9 @@ int main() {
     test_sequential_clips_and_gaps();
     test_multi_track_activation();
     test_transition_properties();
+    test_out_transition_properties();
+    test_default_trim_out();
+    test_overlapping_clips_retrieval();
     test_duration_and_speed();
     test_keyframe_interpolation();
     return 0;
