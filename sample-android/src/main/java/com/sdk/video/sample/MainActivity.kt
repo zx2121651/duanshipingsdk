@@ -213,15 +213,19 @@ class MainActivity : ComponentActivity() {
         }, ContextCompat.getMainExecutor(this))
     }
 
+    private var lastOutputFile: File? = null
+
     private fun startRecording() {
         val safeSize = activeCameraResolution ?: return
         val fm = filterManager ?: return
 
-        val moviesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES)
-        if (!moviesDir.exists()) moviesDir.mkdirs()
+        // 优先使用 getExternalFilesDir 避免 Android 10+ 的 Scoped Storage 权限困扰
+        val moviesDir = getExternalFilesDir(Environment.DIRECTORY_MOVIES)
+        if (moviesDir != null && !moviesDir.exists()) moviesDir.mkdirs()
 
         val timeStamp: String = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val outputFile = File(moviesDir, "VideoSDK_$timeStamp.mp4")
+        lastOutputFile = outputFile
 
         val config = VideoExportConfig(
             width = safeSize.width,
@@ -250,9 +254,20 @@ class MainActivity : ComponentActivity() {
         val fm = filterManager
         fm?.scope?.launch {
             fm.stopVideoRecording()
+
+            // 录制结束后的完整性校验
+            val file = lastOutputFile
+            val isSuccessful = file != null && file.exists() && file.length() > 0
+
             runOnUiThread {
                 isRecordingState.value = false
-                Toast.makeText(this@MainActivity, "Video saved!", Toast.LENGTH_SHORT).show()
+                if (isSuccessful) {
+                    Toast.makeText(this@MainActivity, "Video saved: ${file?.name}\nSize: ${file?.length()?.div(1024)} KB", Toast.LENGTH_LONG).show()
+                    Log.i(TAG, "Recording successful: ${file?.absolutePath}")
+                } else {
+                    Toast.makeText(this@MainActivity, "Recording failed or file empty", Toast.LENGTH_LONG).show()
+                    Log.e(TAG, "Recording failed: file=${file?.absolutePath}, exists=${file?.exists()}, size=${file?.length()}")
+                }
             }
         }
     }
