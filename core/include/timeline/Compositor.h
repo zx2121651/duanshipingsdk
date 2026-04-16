@@ -39,15 +39,15 @@ private:
     GLuint m_copyProgram = 0;
     GLuint m_wipeTransitionProgram = 0;
 
-    void initPrograms();
-    void initCopyProgram();
-    void copyTexture(const Texture& src, FrameBufferPtr target, float opacity = 1.0f);
+    Result initPrograms();
+    Result initCopyProgram();
+    Result copyTexture(const Texture& src, FrameBufferPtr target, float opacity = 1.0f);
 
-    void initBlendProgram();
-    void initWipeTransitionProgram();
+    Result initBlendProgram();
+    Result initWipeTransitionProgram();
 
-    Texture blendTextures(const Texture& bg, const Texture& fg, float opacity, FrameBufferPtr target);
-    Texture transitionTextures(const Texture& bg, const Texture& fg, TransitionType type, float progress, FrameBufferPtr target);
+    ResultPayload<Texture> blendTextures(const Texture& bg, const Texture& fg, float opacity, FrameBufferPtr target);
+    ResultPayload<Texture> transitionTextures(const Texture& bg, const Texture& fg, TransitionType type, float progress, FrameBufferPtr target);
 };
 
 } // namespace timeline

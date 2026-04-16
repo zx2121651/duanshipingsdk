@@ -10,14 +10,47 @@ namespace timeline {
 Compositor::Compositor(std::shared_ptr<Timeline> timeline, std::shared_ptr<FilterEngine> engine)
     : m_timeline(timeline), m_filterEngine(engine), m_decoderPool(nullptr) {}
 
-void Compositor::initPrograms() {
-    initCopyProgram();
-    initBlendProgram();
-    initWipeTransitionProgram();
+Result Compositor::initPrograms() {
+    Result res = initCopyProgram();
+    if (!res.isOk()) return res;
+    res = initBlendProgram();
+    if (!res.isOk()) return res;
+    res = initWipeTransitionProgram();
+    if (!res.isOk()) return res;
+    return Result::ok();
 }
 
-void Compositor::initCopyProgram() {
-    if (m_copyProgram != 0) return;
+static GLuint compileShader(GLenum type, const char* s) {
+    GLuint sh = glCreateShader(type);
+    glShaderSource(sh, 1, &s, NULL);
+    glCompileShader(sh);
+    GLint status;
+    glGetShaderiv(sh, GL_COMPILE_STATUS, &status);
+    if (status != GL_TRUE) {
+        char buf[512];
+        glGetShaderInfoLog(sh, 512, NULL, buf);
+        std::cerr << "Compositor Shader Compile Error: " << buf << std::endl;
+        glDeleteShader(sh);
+        return 0;
+    }
+    return sh;
+}
+
+static Result linkProgram(GLuint program) {
+    glLinkProgram(program);
+    GLint status;
+    glGetProgramiv(program, GL_LINK_STATUS, &status);
+    if (status != GL_TRUE) {
+        char buf[512];
+        glGetProgramInfoLog(program, 512, NULL, buf);
+        std::cerr << "Compositor Program Link Error: " << buf << std::endl;
+        return Result::error(ErrorCode::ERR_TIMELINE_COMPOSITOR_INIT_FAILED, "Program link failed");
+    }
+    return Result::ok();
+}
+
+Result Compositor::initCopyProgram() {
+    if (m_copyProgram != 0) return Result::ok();
     const char* vsrc = R"(#version 300 es
         layout(location = 0) in vec4 position;
         layout(location = 1) in vec2 texCoord;
@@ -38,19 +71,28 @@ void Compositor::initCopyProgram() {
             fragColor = vec4(fg.rgb, fg.a * opacity);
         }
     )";
-    auto compile = [](GLenum type, const char* s) {
-        GLuint sh = glCreateShader(type); glShaderSource(sh, 1, &s, NULL); glCompileShader(sh); return sh;
-    };
-    GLuint vs = compile(GL_VERTEX_SHADER, vsrc);
-    GLuint fs = compile(GL_FRAGMENT_SHADER, fsrc);
+    GLuint vs = compileShader(GL_VERTEX_SHADER, vsrc);
+    if (!vs) return Result::error(ErrorCode::ERR_TIMELINE_COMPOSITOR_INIT_FAILED, "Vertex shader compile failed");
+    GLuint fs = compileShader(GL_FRAGMENT_SHADER, fsrc);
+    if (!fs) { glDeleteShader(vs); return Result::error(ErrorCode::ERR_TIMELINE_COMPOSITOR_INIT_FAILED, "Fragment shader compile failed"); }
+
     m_copyProgram = glCreateProgram();
-    glAttachShader(m_copyProgram, vs); glAttachShader(m_copyProgram, fs);
-    glLinkProgram(m_copyProgram);
-    glDeleteShader(vs); glDeleteShader(fs);
+    glAttachShader(m_copyProgram, vs);
+    glAttachShader(m_copyProgram, fs);
+    Result res = linkProgram(m_copyProgram);
+    glDeleteShader(vs);
+    glDeleteShader(fs);
+    if (!res.isOk()) {
+        glDeleteProgram(m_copyProgram);
+        m_copyProgram = 0;
+    }
+    return res;
 }
 
-void Compositor::copyTexture(const Texture& src, FrameBufferPtr target, float opacity) {
-    if (!target || src.id == 0) return;
+Result Compositor::copyTexture(const Texture& src, FrameBufferPtr target, float opacity) {
+    if (!target) return Result::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Target FBO is null");
+    if (src.id == 0) return Result::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Source texture ID is 0");
+
     target->bind();
     GLStateManager::getInstance().useProgram(m_copyProgram);
     GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
@@ -66,10 +108,11 @@ void Compositor::copyTexture(const Texture& src, FrameBufferPtr target, float op
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, textureCoords);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
     target->unbind();
+    return Result::ok();
 }
 
-void Compositor::initBlendProgram() {
-    if (m_blendProgram != 0) return;
+Result Compositor::initBlendProgram() {
+    if (m_blendProgram != 0) return Result::ok();
 
     const char* vsrc = R"(#version 300 es
         layout(location = 0) in vec4 position;
@@ -97,19 +140,26 @@ void Compositor::initBlendProgram() {
         }
     )";
 
-    auto compile = [](GLenum type, const char* s) {
-        GLuint sh = glCreateShader(type); glShaderSource(sh, 1, &s, NULL); glCompileShader(sh); return sh;
-    };
-    GLuint vs = compile(GL_VERTEX_SHADER, vsrc);
-    GLuint fs = compile(GL_FRAGMENT_SHADER, fsrc);
+    GLuint vs = compileShader(GL_VERTEX_SHADER, vsrc);
+    if (!vs) return Result::error(ErrorCode::ERR_TIMELINE_COMPOSITOR_INIT_FAILED, "Vertex shader compile failed");
+    GLuint fs = compileShader(GL_FRAGMENT_SHADER, fsrc);
+    if (!fs) { glDeleteShader(vs); return Result::error(ErrorCode::ERR_TIMELINE_COMPOSITOR_INIT_FAILED, "Fragment shader compile failed"); }
+
     m_blendProgram = glCreateProgram();
-    glAttachShader(m_blendProgram, vs); glAttachShader(m_blendProgram, fs);
-    glLinkProgram(m_blendProgram);
-    glDeleteShader(vs); glDeleteShader(fs);
+    glAttachShader(m_blendProgram, vs);
+    glAttachShader(m_blendProgram, fs);
+    Result res = linkProgram(m_blendProgram);
+    glDeleteShader(vs);
+    glDeleteShader(fs);
+    if (!res.isOk()) {
+        glDeleteProgram(m_blendProgram);
+        m_blendProgram = 0;
+    }
+    return res;
 }
 
-void Compositor::initWipeTransitionProgram() {
-    if (m_wipeTransitionProgram != 0) return;
+Result Compositor::initWipeTransitionProgram() {
+    if (m_wipeTransitionProgram != 0) return Result::ok();
 
     const char* vsrc = R"(#version 300 es
         layout(location = 0) in vec4 position;
@@ -142,19 +192,26 @@ void Compositor::initWipeTransitionProgram() {
         }
     )";
 
-    auto compile = [](GLenum type, const char* s) {
-        GLuint sh = glCreateShader(type); glShaderSource(sh, 1, &s, NULL); glCompileShader(sh); return sh;
-    };
-    GLuint vs = compile(GL_VERTEX_SHADER, vsrc);
-    GLuint fs = compile(GL_FRAGMENT_SHADER, fsrc);
+    GLuint vs = compileShader(GL_VERTEX_SHADER, vsrc);
+    if (!vs) return Result::error(ErrorCode::ERR_TIMELINE_COMPOSITOR_INIT_FAILED, "Vertex shader compile failed");
+    GLuint fs = compileShader(GL_FRAGMENT_SHADER, fsrc);
+    if (!fs) { glDeleteShader(vs); return Result::error(ErrorCode::ERR_TIMELINE_COMPOSITOR_INIT_FAILED, "Fragment shader compile failed"); }
+
     m_wipeTransitionProgram = glCreateProgram();
-    glAttachShader(m_wipeTransitionProgram, vs); glAttachShader(m_wipeTransitionProgram, fs);
-    glLinkProgram(m_wipeTransitionProgram);
-    glDeleteShader(vs); glDeleteShader(fs);
+    glAttachShader(m_wipeTransitionProgram, vs);
+    glAttachShader(m_wipeTransitionProgram, fs);
+    Result res = linkProgram(m_wipeTransitionProgram);
+    glDeleteShader(vs);
+    glDeleteShader(fs);
+    if (!res.isOk()) {
+        glDeleteProgram(m_wipeTransitionProgram);
+        m_wipeTransitionProgram = 0;
+    }
+    return res;
 }
 
-Texture Compositor::blendTextures(const Texture& bg, const Texture& fg, float opacity, FrameBufferPtr target) {
-    if (!target) return bg;
+ResultPayload<Texture> Compositor::blendTextures(const Texture& bg, const Texture& fg, float opacity, FrameBufferPtr target) {
+    if (!target) return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Target FBO is null");
 
     target->bind();
     GLStateManager::getInstance().useProgram(m_blendProgram);
@@ -180,11 +237,11 @@ Texture Compositor::blendTextures(const Texture& bg, const Texture& fg, float op
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
     target->unbind();
 
-    return target->getTexture();
+    return ResultPayload<Texture>::ok(target->getTexture());
 }
 
-Texture Compositor::transitionTextures(const Texture& bg, const Texture& fg, TransitionType type, float progress, FrameBufferPtr target) {
-    if (!target) return bg;
+ResultPayload<Texture> Compositor::transitionTextures(const Texture& bg, const Texture& fg, TransitionType type, float progress, FrameBufferPtr target) {
+    if (!target) return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Target FBO is null");
 
     target->bind();
 
@@ -222,19 +279,20 @@ Texture Compositor::transitionTextures(const Texture& bg, const Texture& fg, Tra
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
     target->unbind();
 
-    return target->getTexture();
+    return ResultPayload<Texture>::ok(target->getTexture());
 }
 
 Result Compositor::renderFrameAtTime(int64_t timelineNs, FrameBufferPtr outputFb) {
     if (!m_timeline || !m_filterEngine || !outputFb) {
-        return Result::error(-3, "Compositor not properly initialized with Timeline/Engine/FBO");
+        return Result::error(ErrorCode::ERR_TIMELINE_NULL, "Compositor not properly initialized with Timeline/Engine/FBO");
     }
 
-    initPrograms();
+    Result res = initPrograms();
+    if (!res.isOk()) return res;
 
     m_timeline->getActiveVideoClipsAtTime(timelineNs, m_activeClips);
 
-    if (m_activeClips.empty() || !m_decoderPool) {
+    if (m_activeClips.empty()) {
         outputFb->bind();
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
@@ -242,11 +300,19 @@ Result Compositor::renderFrameAtTime(int64_t timelineNs, FrameBufferPtr outputFb
         return Result::ok();
     }
 
+    if (!m_decoderPool) {
+        return Result::error(ErrorCode::ERR_TIMELINE_DECODER_POOL_NULL, "Active clips exist but no decoder pool set");
+    }
+
     Texture accumulatedTexture = {0, 0, 0};
     bool isFirst = true;
 
     FrameBufferPtr pingFb = m_filterEngine->getFrameBufferPool()->getFrameBuffer(outputFb->width(), outputFb->height());
     FrameBufferPtr pongFb = m_filterEngine->getFrameBufferPool()->getFrameBuffer(outputFb->width(), outputFb->height());
+
+    if (!pingFb || !pongFb) {
+        return Result::error(ErrorCode::ERR_RENDER_FBO_ALLOC_FAILED, "Failed to allocate ping/pong FBOs");
+    }
 
     for (const auto& clip : m_activeClips) {
         int64_t clipRelativeNs = timelineNs - clip->getTimelineIn();
@@ -256,7 +322,9 @@ Result Compositor::renderFrameAtTime(int64_t timelineNs, FrameBufferPtr outputFb
         localTimeNs = std::max(clip->getEffectiveTrimIn(), std::min(localTimeNs, clip->getEffectiveTrimOut()));
 
         Texture fgTex = m_decoderPool->getFrame(clip->getId(), localTimeNs);
-        if (fgTex.id == 0) continue;
+        if (fgTex.id == 0) {
+            return Result::error(ErrorCode::ERR_TIMELINE_DECODER_GET_FRAME_FAILED, "Decoder returned invalid texture for clip: " + clip->getId());
+        }
 
         float alpha = clip->getOpacity(clipRelativeNs);
         TransitionType transitionToUse = TransitionType::NONE;
@@ -283,28 +351,34 @@ Result Compositor::renderFrameAtTime(int64_t timelineNs, FrameBufferPtr outputFb
             if (transitionToUse != TransitionType::NONE) {
                 initialAlpha *= transitionProgress;
             }
-            copyTexture(fgTex, pingFb, initialAlpha);
+            res = copyTexture(fgTex, pingFb, initialAlpha);
+            if (!res.isOk()) return res;
             accumulatedTexture = pingFb->getTexture();
             isFirst = false;
         } else {
+            ResultPayload<Texture> blendRes = ResultPayload<Texture>::error(-1, "");
             if (transitionToUse != TransitionType::NONE) {
-                accumulatedTexture = transitionTextures(accumulatedTexture, fgTex, transitionToUse, transitionProgress * alpha, pongFb);
+                blendRes = transitionTextures(accumulatedTexture, fgTex, transitionToUse, transitionProgress * alpha, pongFb);
             } else {
-                accumulatedTexture = blendTextures(accumulatedTexture, fgTex, alpha, pongFb);
+                blendRes = blendTextures(accumulatedTexture, fgTex, alpha, pongFb);
             }
+            if (!blendRes.isOk()) return blendRes;
+            accumulatedTexture = blendRes.getValue();
             std::swap(pingFb, pongFb);
         }
     }
 
-    auto result = m_filterEngine->processFrame(accumulatedTexture, outputFb->width(), outputFb->height());
-    if (!result.isOk()) {
-        return Result::error(result.getErrorCode(), result.getMessage());
+    if (accumulatedTexture.id == 0) {
+        return Result::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Composition produced invalid texture");
     }
-    Texture finalTex = result.getValue();
 
-    copyTexture(finalTex, outputFb);
+    auto processResult = m_filterEngine->processFrame(accumulatedTexture, outputFb->width(), outputFb->height());
+    if (!processResult.isOk()) {
+        return Result::error(processResult.getErrorCode(), processResult.getMessage());
+    }
+    Texture finalTex = processResult.getValue();
 
-    return Result::ok();
+    return copyTexture(finalTex, outputFb);
 }
 
 } // namespace timeline
