@@ -20,12 +20,17 @@ public class VideoEncoder {
     private var startTime: CMTime = .zero
     private var lastVideoPts: CMTime = .zero
     private var lastAudioPts: CMTime = .zero
+    private var totalAudioSamplesEncoded: Int64 = 0
+    private let lock = NSRecursiveLock()
 
     public init(config: VideoExportConfig) {
         self.config = config
     }
 
     public func startRecording() throws {
+        lock.lock()
+        defer { lock.unlock() }
+
         let outputURL = config.outputURL
         guard !isRecording else { throw VideoEncoderError.recordingAlreadyStarted }
 
@@ -72,8 +77,8 @@ public class VideoEncoder {
         let audioSettings: [String: Any] = [
             AVFormatIDKey: kAudioFormatMPEG4AAC,
             AVNumberOfChannelsKey: 2,
-            AVSampleRateKey: 44100,
-            AVEncoderBitRateKey: 128000
+            AVSampleRateKey: config.audioSampleRate,
+            AVEncoderBitRateKey: config.audioBitrate
         ]
 
         audioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
@@ -86,9 +91,15 @@ public class VideoEncoder {
         assetWriter?.startWriting()
         isRecording = true
         isFirstFrame = true
+        lastVideoPts = .zero
+        lastAudioPts = .zero
+        totalAudioSamplesEncoded = 0
     }
 
     public func appendVideoPixelBuffer(_ pixelBuffer: CVPixelBuffer, timestamp: CMTime) {
+        lock.lock()
+        defer { lock.unlock() }
+
         guard isRecording, let assetWriter = assetWriter else { return }
         if assetWriter.status == .failed {
             stopRecording(isFallback: true)
@@ -102,8 +113,8 @@ public class VideoEncoder {
             startTime = safeTimestamp
             isFirstFrame = false
         } else if safeTimestamp <= lastVideoPts {
-            // A/V Sync monotonic enforcement
-            safeTimestamp = CMTimeAdd(lastVideoPts, CMTimeMake(value: 1, timescale: Int32(config.fps)))
+            // A/V Sync monotonic enforcement: ensure at least 0.1ms increment
+            safeTimestamp = CMTimeAdd(lastVideoPts, CMTime(value: 1, timescale: 10000))
         }
 
         lastVideoPts = safeTimestamp
@@ -113,22 +124,43 @@ public class VideoEncoder {
     }
 
     public func appendAudioSampleBuffer(_ sampleBuffer: CMSampleBuffer) {
+        lock.lock()
+        defer { lock.unlock() }
+
         guard isRecording, let audioInput = audioInput, !isFirstFrame else { return }
 
-        let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-        if pts <= lastAudioPts {
-            // Drop abnormal sample buffer to enforce strict monotonic timeline safely
-            return
+        // Audio drift prevention: Use cumulative sample count to calculate PTS
+        let audioPts = CMTimeAdd(startTime, CMTime(value: totalAudioSamplesEncoded, timescale: Int32(config.audioSampleRate)))
+
+        if audioPts <= lastAudioPts {
+            // Safety fallback to ensure monotonicity
+            lastAudioPts = CMTimeAdd(lastAudioPts, CMTime(value: 1, timescale: 10000))
+        } else {
+            lastAudioPts = audioPts
         }
-        lastAudioPts = pts
 
         if audioInput.isReadyForMoreMediaData {
-            audioInput.append(sampleBuffer)
+            var sbuf: CMSampleBuffer?
+            var timing = CMSampleTimingInfo(duration: CMSampleBufferGetDuration(sampleBuffer), presentationTimeStamp: lastAudioPts, decodeTimeStamp: .invalid)
+            CMSampleBufferCreateCopyWithNewTiming(
+                allocator: kCFAllocatorDefault,
+                sampleBuffer: sampleBuffer,
+                sampleTimingEntryCount: 1,
+                sampleTimingArray: &timing,
+                sampleBufferOut: &sbuf
+            )
+
+            if let sbuf = sbuf {
+                audioInput.append(sbuf)
+                totalAudioSamplesEncoded += Int64(CMSampleBufferGetNumSamples(sampleBuffer))
+            }
         }
     }
 
     public func stopRecording(isFallback: Bool = false, completion: ((URL?) -> Void)? = nil) {
+        lock.lock()
         guard isRecording, let writer = assetWriter else {
+            lock.unlock()
             completion?(nil)
             return
         }
@@ -136,8 +168,10 @@ public class VideoEncoder {
         isRecording = false
         videoInput?.markAsFinished()
         audioInput?.markAsFinished()
+        lock.unlock()
 
-        writer.finishWriting {
+        writer.finishWriting { [weak self] in
+            guard let self = self else { return }
             DispatchQueue.main.async {
                 if writer.status == .completed && !isFallback {
                     completion?(writer.outputURL)
@@ -147,10 +181,12 @@ public class VideoEncoder {
                     completion?(nil)
                 }
 
+                self.lock.lock()
                 self.assetWriter = nil
                 self.videoInput = nil
                 self.audioInput = nil
                 self.pixelBufferAdaptor = nil
+                self.lock.unlock()
             }
         }
     }
