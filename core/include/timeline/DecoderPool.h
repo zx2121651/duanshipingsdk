@@ -23,10 +23,10 @@ public:
 
     // 核心接口：获取在 localTimeNs 微秒时刻，clipId 对应的视频解码后的 GL 纹理
     // requiresExactSeek: 如果为 true，表示这不是按顺序播放，而是用户在拖拽游标或者倒放，此时需要精准 Seek
-    Texture getFrame(const std::string& clipId, int64_t localTimeNs, bool requiresExactSeek = false);
+    ResultPayload<Texture> getFrame(const std::string& clipId, int64_t localTimeNs, bool requiresExactSeek = false);
 
     // [旧接口兼容] 默认顺序播放
-    Texture getFrame(const std::string& clipId, int64_t localTimeNs) override {
+    ResultPayload<Texture> getFrame(const std::string& clipId, int64_t localTimeNs) override {
         return getFrame(clipId, localTimeNs, false);
     }
 

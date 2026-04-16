@@ -321,7 +321,11 @@ Result Compositor::renderFrameAtTime(int64_t timelineNs, FrameBufferPtr outputFb
         // Clamp local time to effective trim range
         localTimeNs = std::max(clip->getEffectiveTrimIn(), std::min(localTimeNs, clip->getEffectiveTrimOut()));
 
-        Texture fgTex = m_decoderPool->getFrame(clip->getId(), localTimeNs);
+        ResultPayload<Texture> frameRes = m_decoderPool->getFrame(clip->getId(), localTimeNs);
+        if (!frameRes.isOk()) {
+            return Result::error(frameRes.getErrorCode(), "Decoder failed for clip " + clip->getId() + ": " + frameRes.getMessage());
+        }
+        Texture fgTex = frameRes.getValue();
         if (fgTex.id == 0) {
             return Result::error(ErrorCode::ERR_TIMELINE_DECODER_GET_FRAME_FAILED, "Decoder returned invalid texture for clip: " + clip->getId());
         }

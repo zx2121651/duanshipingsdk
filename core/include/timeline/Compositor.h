@@ -15,7 +15,7 @@ namespace timeline {
 class IDecoderPool {
 public:
     virtual ~IDecoderPool() = default;
-    virtual Texture getFrame(const std::string& clipId, int64_t localTimeNs) = 0;
+    virtual ResultPayload<Texture> getFrame(const std::string& clipId, int64_t localTimeNs) = 0;
 };
 
 class Compositor {

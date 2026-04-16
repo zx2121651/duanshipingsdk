@@ -64,21 +64,21 @@ void test_decoder_pool_lru_eviction() {
     pool.registerMedia("clip5", "v5.mp4");
 
     // Access 1-4 using the specific overload to avoid ambiguity in test
-    pool.getFrame("clip1", 0, false);
-    pool.getFrame("clip2", 0, false);
-    pool.getFrame("clip3", 0, false);
-    pool.getFrame("clip4", 0, false);
+    assert(pool.getFrame("clip1", 0, false).isOk());
+    assert(pool.getFrame("clip2", 0, false).isOk());
+    assert(pool.getFrame("clip3", 0, false).isOk());
+    assert(pool.getFrame("clip4", 0, false).isOk());
 
     assert(MockVideoDecoder::m_openCount == 4);
     assert(MockVideoDecoder::m_closeCount == 0);
 
     // Access 5, should evict clip1
-    pool.getFrame("clip5", 0, false);
+    assert(pool.getFrame("clip5", 0, false).isOk());
     assert(MockVideoDecoder::m_openCount == 5);
     assert(MockVideoDecoder::m_closeCount == 1);
 
     // Access 1 again, should evict clip2
-    pool.getFrame("clip1", 0, false);
+    assert(pool.getFrame("clip1", 0, false).isOk());
     assert(MockVideoDecoder::m_openCount == 6);
     assert(MockVideoDecoder::m_closeCount == 2);
 
@@ -93,7 +93,7 @@ void test_decoder_pool_release() {
     {
         DecoderPool pool;
         pool.registerMedia("clip1", "v1.mp4");
-        pool.getFrame("clip1", 0, false);
+        assert(pool.getFrame("clip1", 0, false).isOk());
         assert(MockVideoDecoder::m_openCount == 1);
 
         pool.releaseMedia("clip1");
@@ -112,14 +112,14 @@ void test_decoder_pool_re_register() {
 
     DecoderPool pool;
     pool.registerMedia("clip1", "v1.mp4");
-    pool.getFrame("clip1", 0, false);
+    assert(pool.getFrame("clip1", 0, false).isOk());
     assert(MockVideoDecoder::m_openCount == 1);
 
     // Re-register same clipId
     pool.registerMedia("clip1", "v1_new.mp4");
     assert(MockVideoDecoder::m_closeCount == 1);
 
-    pool.getFrame("clip1", 0, false);
+    assert(pool.getFrame("clip1", 0, false).isOk());
     assert(MockVideoDecoder::m_openCount == 2);
 
     std::cout << "test_decoder_pool_re_register passed" << std::endl;
@@ -133,8 +133,8 @@ void test_decoder_pool_clear() {
     DecoderPool pool;
     pool.registerMedia("clip1", "v1.mp4");
     pool.registerMedia("clip2", "v2.mp4");
-    pool.getFrame("clip1", 0, false);
-    pool.getFrame("clip2", 0, false);
+    assert(pool.getFrame("clip1", 0, false).isOk());
+    assert(pool.getFrame("clip2", 0, false).isOk());
     assert(MockVideoDecoder::m_openCount == 2);
 
     pool.clear();
@@ -154,15 +154,16 @@ void test_decoder_pool_stale_texture() {
     pool.registerMedia("clip3", "v3.mp4");
     pool.registerMedia("clip4", "v4.mp4");
 
-    Texture t1 = pool.getFrame("clip1", 0, false);
-    assert(t1.id != 0);
+    auto res1 = pool.getFrame("clip1", 0, false);
+    assert(res1.isOk());
+    assert(res1.getValue().id != 0);
 
     // Force eviction of clip1
     pool.registerMedia("clip5", "v5.mp4");
-    pool.getFrame("clip2", 0, false);
-    pool.getFrame("clip3", 0, false);
-    pool.getFrame("clip4", 0, false);
-    pool.getFrame("clip5", 0, false); // This should evict clip1
+    assert(pool.getFrame("clip2", 0, false).isOk());
+    assert(pool.getFrame("clip3", 0, false).isOk());
+    assert(pool.getFrame("clip4", 0, false).isOk());
+    assert(pool.getFrame("clip5", 0, false).isOk()); // This should evict clip1
 
     // Register clip1 again, it should have a fresh context or at least reset frame
     // Actually, eviction doesn't remove it from m_decoders, just closes the decoder.
@@ -187,7 +188,11 @@ void test_soft_decoder_lifecycle() {
     pool.registerMedia("clip1", "v1.mp4");
 
     // Request frame with exact seek to trigger soft decoder
-    pool.getFrame("clip1", 0, true);
+    // SoftwareVideoDecoder in VideoDecoder.h returns {0,0,0} from getFrameAt by default,
+    // which now triggers ERR_TIMELINE_DECODER_GET_FRAME_FAILED in DecoderPool.
+    auto res = pool.getFrame("clip1", 0, true);
+    assert(!res.isOk());
+    assert(res.getErrorCode() == ErrorCode::ERR_TIMELINE_DECODER_GET_FRAME_FAILED);
 
     // We can't easily check if softDecoder is open without making it accessible
     // but we can trust the code if it compiles and runs without crashing for now,
