@@ -29,7 +29,11 @@ import OpenGLES
 
     // Call on GL thread to process frames from AVFoundation/Camera
     @objc public func processFrame(_ pixelBuffer: CVPixelBuffer) -> CVPixelBuffer? {
-        return wrapper.processFrame(pixelBuffer)?.takeUnretainedValue()
+        return wrapper.processFrame(pixelBuffer)?.takeRetainedValue()
+    }
+
+    @objc public var lastErrorCode: Int32 {
+        return wrapper.lastErrorCode
     }
 
     // Update float parameter on the fly

@@ -11,6 +11,7 @@ using namespace sdk::video;
 
 @interface FilterEngineWrapper () {
     std::shared_ptr<FilterEngine> engine;
+    EAGLContext *m_context;
     CVOpenGLESTextureCacheRef textureCache;
     CVPixelBufferPoolRef pixelBufferPool;
     size_t poolWidth;
@@ -18,6 +19,7 @@ using namespace sdk::video;
     GLuint blitFboRead;
     GLuint blitFboDraw;
 }
+@property (nonatomic, readwrite) int lastErrorCode;
 @end
 
 @implementation FilterEngineWrapper
@@ -27,35 +29,54 @@ using namespace sdk::video;
     if (self) {
         engine = std::make_shared<FilterEngine>();
         engine->setAssetProvider(std::make_shared<IOSAssetProvider>());
+        m_context = nil;
         textureCache = NULL;
         pixelBufferPool = NULL;
         poolWidth = 0;
         poolHeight = 0;
         blitFboRead = 0;
         blitFboDraw = 0;
+        _lastErrorCode = 0;
     }
     return self;
 }
 
 - (int)initializeWithContext:(EAGLContext *)context {
-    if (!context || !engine) return static_cast<int>(sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED);
+    if (!context || !engine) {
+        self.lastErrorCode = static_cast<int>(sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED);
+        return self.lastErrorCode;
+    }
 
-    [EAGLContext setCurrentContext:context];
+    m_context = context;
+    [EAGLContext setCurrentContext:m_context];
 
-    CVReturn err = CVOpenGLESTextureCacheCreate(kCFAllocatorDefault, NULL, context, NULL, &textureCache);
+    if (textureCache) {
+        CFRelease(textureCache);
+        textureCache = NULL;
+    }
+
+    CVReturn err = CVOpenGLESTextureCacheCreate(kCFAllocatorDefault, NULL, m_context, NULL, &textureCache);
     if (err != kCVReturnSuccess) {
-        return static_cast<int>(sdk::video::ErrorCode::ERR_RENDER_FBO_ALLOC_FAILED); // Texture cache creation failed
+        self.lastErrorCode = static_cast<int>(sdk::video::ErrorCode::ERR_RENDER_FBO_ALLOC_FAILED);
+        return self.lastErrorCode;
     }
 
     Result res = engine->initialize();
     if (!res.isOk()) {
-        return res.getErrorCode() != 0 ? res.getErrorCode() : -2;
+        self.lastErrorCode = res.getErrorCode() != 0 ? res.getErrorCode() : -2;
+        return self.lastErrorCode;
     }
+    self.lastErrorCode = 0;
     return 0; // OK
 }
 
 - (CVPixelBufferRef)processFrame:(CVPixelBufferRef)pixelBuffer {
-    if (!engine || !textureCache || !pixelBuffer) return pixelBuffer;
+    if (!engine || !textureCache || !pixelBuffer || !m_context) {
+        self.lastErrorCode = static_cast<int>(sdk::video::ErrorCode::ERR_RENDER_INVALID_STATE);
+        return nil;
+    }
+
+    [EAGLContext setCurrentContext:m_context];
 
     size_t width = CVPixelBufferGetWidth(pixelBuffer);
     size_t height = CVPixelBufferGetHeight(pixelBuffer);
@@ -76,7 +97,8 @@ using namespace sdk::video;
                                                                 &cvTexture);
 
     if (err != kCVReturnSuccess || !cvTexture) {
-        return pixelBuffer;
+        self.lastErrorCode = static_cast<int>(sdk::video::ErrorCode::ERR_RENDER_FBO_ALLOC_FAILED);
+        return nil;
     }
 
     GLuint inputTextureId = CVOpenGLESTextureGetName(cvTexture);
@@ -86,8 +108,9 @@ using namespace sdk::video;
     auto result = engine->processFrame(inTex, (int)width, (int)height);
     if (!result.isOk()) {
         NSLog(@"FilterEngineWrapper: processFrame failed [%d] %s", result.getErrorCode(), result.getMessage().c_str());
-        CVBufferRelease(cvTexture);
-        return nil; // Return nil so Swift bypasses or emits fallback
+        self.lastErrorCode = result.getErrorCode();
+        CFRelease(cvTexture);
+        return nil;
     }
 
     Texture outTex = result.getValue();
@@ -96,6 +119,7 @@ using namespace sdk::video;
     if (poolWidth != width || poolHeight != height || !pixelBufferPool) {
         if (pixelBufferPool) {
             CVPixelBufferPoolRelease(pixelBufferPool);
+            pixelBufferPool = NULL;
         }
         NSDictionary *pixelBufferAttributes = @{
             (id)kCVPixelBufferPixelFormatTypeKey: @(kCVPixelFormatType_32BGRA),
@@ -104,7 +128,12 @@ using namespace sdk::video;
             (id)kCVPixelBufferOpenGLESCompatibilityKey: @(YES),
             (id)kCVPixelBufferIOSurfacePropertiesKey: @{}
         };
-        CVPixelBufferPoolCreate(kCFAllocatorDefault, NULL, (__bridge CFDictionaryRef)pixelBufferAttributes, &pixelBufferPool);
+        err = CVPixelBufferPoolCreate(kCFAllocatorDefault, NULL, (__bridge CFDictionaryRef)pixelBufferAttributes, &pixelBufferPool);
+        if (err != kCVReturnSuccess || !pixelBufferPool) {
+            self.lastErrorCode = static_cast<int>(sdk::video::ErrorCode::ERR_RENDER_FBO_ALLOC_FAILED);
+            CFRelease(cvTexture);
+            return nil;
+        }
         poolWidth = width;
         poolHeight = height;
     }
@@ -112,8 +141,9 @@ using namespace sdk::video;
     CVPixelBufferRef outPixelBuffer = NULL;
     err = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pixelBufferPool, &outPixelBuffer);
     if (err != kCVReturnSuccess || !outPixelBuffer) {
+        self.lastErrorCode = static_cast<int>(sdk::video::ErrorCode::ERR_RENDER_FBO_ALLOC_FAILED);
         CFRelease(cvTexture);
-        return pixelBuffer;
+        return nil;
     }
 
     CVOpenGLESTextureRef outCvTexture = NULL;
@@ -130,9 +160,10 @@ using namespace sdk::video;
                                                        0,
                                                        &outCvTexture);
     if (err != kCVReturnSuccess || !outCvTexture) {
+        self.lastErrorCode = static_cast<int>(sdk::video::ErrorCode::ERR_RENDER_FBO_ALLOC_FAILED);
         CVPixelBufferRelease(outPixelBuffer);
         CFRelease(cvTexture);
-        return pixelBuffer;
+        return nil;
     }
 
     GLuint outputTextureId = CVOpenGLESTextureGetName(outCvTexture);
@@ -167,18 +198,21 @@ using namespace sdk::video;
     CFRelease(cvTexture);
     CVOpenGLESTextureCacheFlush(textureCache, 0);
 
-    // Return the new zero-copy buffer
+    // Return the new zero-copy buffer (Ownership is transferred to caller)
+    self.lastErrorCode = 0;
     return outPixelBuffer;
 }
 
 - (int)addFilter:(IOSFilterType)type {
     if (!engine) return static_cast<int>(sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED);
+    if (m_context) [EAGLContext setCurrentContext:m_context];
     auto res = engine->addFilter(static_cast<sdk::video::FilterType>(type));
     return res.isOk() ? static_cast<int>(sdk::video::ErrorCode::SUCCESS) : res.getErrorCode();
 }
 
 - (int)removeAllFilters {
     if (!engine) return static_cast<int>(sdk::video::ErrorCode::ERR_INIT_CONTEXT_FAILED);
+    if (m_context) [EAGLContext setCurrentContext:m_context];
     auto res = engine->removeAllFilters();
     return res.isOk() ? static_cast<int>(sdk::video::ErrorCode::SUCCESS) : res.getErrorCode();
 }
@@ -196,6 +230,7 @@ using namespace sdk::video;
 }
 
 - (void)releaseResources {
+    if (m_context) [EAGLContext setCurrentContext:m_context];
     if (engine) {
         engine->release();
     }
@@ -215,6 +250,7 @@ using namespace sdk::video;
         glDeleteFramebuffers(1, &blitFboDraw);
         blitFboDraw = 0;
     }
+    m_context = nil;
 }
 
 - (NSArray<NSNumber *> *)getPerformanceMetrics {

@@ -81,10 +81,16 @@ public actor VideoFilterManager {
      * - Parameter pixelBuffer: 相机硬件直出的原始视频帧
      */
     public func processFrame(_ pixelBuffer: CVPixelBuffer, timestamp: CMTime? = nil) {
+        let finalTimestamp = timestamp ?? CMClockGetTime(CMClockGetHostTimeClock())
+
         guard case .running = state else {
             // 降级策略：如果引擎未初始化或者崩溃，直接使用 yield 原样返回输入的 pixelBuffer，
             // 这确保了哪怕特效引擎坏了，用户的相机画面也不会黑屏 (Bypass 原图)。
             streamContinuation?.yield(.success(pixelBuffer))
+
+            if let encoder = videoEncoder, encoder.isRecording {
+                encoder.appendVideoPixelBuffer(pixelBuffer, timestamp: finalTimestamp)
+            }
             return
         }
 
@@ -94,15 +100,30 @@ public actor VideoFilterManager {
 
             // 如果正在录制，将处理后的帧写入编码器
             if let encoder = videoEncoder, encoder.isRecording {
-                // 使用传入的真实时间戳，或回退到系统时钟
-                let finalTimestamp = timestamp ?? CMClockGetTime(CMClockGetHostTimeClock())
                 encoder.appendVideoPixelBuffer(processedBuffer, timestamp: finalTimestamp)
             }
         } else {
             // 处理失败 (例如内部 simulateCrash 被触发，或者 GPU 显存耗尽)。
-            // 将状态标为 degraded，并 Bypass 原图。
-            self.state = .degraded
+            let errorCode = engine.lastErrorCode
+            handleError(Int(errorCode))
+
+            // Bypass 原图以防黑屏
             streamContinuation?.yield(.success(pixelBuffer))
+
+            if let encoder = videoEncoder, encoder.isRecording {
+                encoder.appendVideoPixelBuffer(pixelBuffer, timestamp: finalTimestamp)
+            }
+        }
+    }
+
+    private func handleError(_ errorCode: Int) {
+        // ERROR: fatal (-1000 to -1999)
+        // DEGRADED: recoverable (-2000 to -4999)
+        if errorCode <= -1000 && errorCode >= -1999 {
+            let error = NSError(domain: "VideoFilterManager", code: errorCode, userInfo: [NSLocalizedDescriptionKey: "Fatal engine error: \(errorCode)"])
+            self.state = .error(error)
+        } else if errorCode <= -2000 && errorCode >= -4999 {
+            self.state = .degraded
         }
     }
 
