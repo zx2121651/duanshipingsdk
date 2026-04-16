@@ -29,8 +29,8 @@ public:
     virtual Result open(const std::string& filePath) = 0;
 
     // 主渲染线程调用：获取时刻的纹理。
-    // 如果缓存中有，则取出并转换/上传到 Texture 返回；如果没准备好，则返回 0
-    virtual Texture getFrameAt(int64_t timeNs) = 0;
+    // 如果缓存中有，则取出并转换/上传到 Texture 返回。
+    virtual ResultPayload<Texture> getFrameAt(int64_t timeNs) = 0;
 
     // 精准 Seek，用于倒放或复杂转场时的 B 帧规避
     // 如果硬件解码器不支持或者跨度过大导致花屏，允许返回 Error，由上层退化到软解
@@ -49,9 +49,9 @@ public:
         m_isOpen = true;
         return Result::ok();
     }
-    Texture getFrameAt(int64_t timeNs) override {
-        if (!m_isOpen) return {0, 0, 0};
-        return {0, 0, 0};
+    ResultPayload<Texture> getFrameAt(int64_t timeNs) override {
+        if (!m_isOpen) return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Software decoder not open");
+        return ResultPayload<Texture>::ok({0, 0, 0});
     }
     Result seekExact(int64_t timeNs) override {
         return Result::ok();

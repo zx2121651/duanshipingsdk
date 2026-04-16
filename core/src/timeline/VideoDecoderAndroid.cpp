@@ -206,23 +206,36 @@ public:
         GLStateManager::getInstance().bindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 
+    void flushQueue() {
+        std::lock_guard<std::mutex> lock(m_queueMutex);
+        while (!m_frameQueue.empty()) {
+            m_frameQueue.pop();
+        }
+        m_queueCv.notify_all();
+    }
+
     Result seekExact(int64_t timeNs) override {
-        if (!m_extractor) return Result::error(-4007, "Extractor not initialized");
+        if (!m_extractor) return Result::error(ErrorCode::ERR_DECODER_HW_FAILURE, "Extractor not initialized");
         // AMediaExtractor_seekTo 在遇到带有 B 帧的复杂 H.264/H.265 时，常常无法停在准确位置
         // 会导致随后解出的画面出现马赛克（参考帧丢失）。我们在框架层抛出特定错误触发降级。
 
         // 模拟：如果是需要倒放或跨越度太大的 Seek，硬件解码器宣布失败，交给软解。
         // （在真正的实现里，判断 timeNs 是否导致解码器丢帧或花屏）
         if (timeNs < m_lastSeekTimeNs) {
-            return Result::error(-4008, "Hardware Decoder failed to seek backward accurately (B-Frame Nightmare). Trigger Software Decoder fallback.");
+            return Result::error(ErrorCode::ERR_DECODER_SEEK_FAILED, "Hardware Decoder failed to seek backward accurately (B-Frame Nightmare). Trigger Software Decoder fallback.");
         }
 
-        AMediaExtractor_seekTo(m_extractor, timeNs / 1000, AMEDIAEXTRACTOR_SEEK_PREVIOUS_SYNC);
+        flushQueue();
+        media_status_t status = AMediaExtractor_seekTo(m_extractor, timeNs / 1000, AMEDIAEXTRACTOR_SEEK_PREVIOUS_SYNC);
+        if (status != AMEDIA_OK) {
+            return Result::error(ErrorCode::ERR_DECODER_SEEK_FAILED, "AMediaExtractor_seekTo failed");
+        }
+
         m_lastSeekTimeNs = timeNs;
         return Result::ok();
     }
 
-    Texture getFrameAt(int64_t timeNs) override {
+    ResultPayload<Texture> getFrameAt(int64_t timeNs) override {
         initYUVProgram();
 
         std::shared_ptr<FrameBufferPacket> targetPacket = nullptr;
@@ -244,41 +257,44 @@ public:
             int ySize = m_width * m_height;
             int uvSize = m_width * m_height / 2;
 
-            if (targetPacket->data.size() >= ySize + uvSize) {
-                GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
-                GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, m_yTexture);
-                glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, m_width, m_height, 0, GL_RED, GL_UNSIGNED_BYTE, targetPacket->data.data());
-
-                GLStateManager::getInstance().activeTexture(GL_TEXTURE1);
-                GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, m_uvTexture);
-                glTexImage2D(GL_TEXTURE_2D, 0, GL_RG8, m_width / 2, m_height / 2, 0, GL_RG, GL_UNSIGNED_BYTE, targetPacket->data.data() + ySize);
-
-                GLint oldFBO;
-                glGetIntegerv(GL_FRAMEBUFFER_BINDING, &oldFBO);
-
-                GLStateManager::getInstance().bindFramebuffer(GL_FRAMEBUFFER, m_fbo);
-                glViewport(0, 0, m_width, m_height);
-
-                GLStateManager::getInstance().useProgram(m_yuvProgram);
-                glUniform1i(glGetUniformLocation(m_yuvProgram, "texY"), 0);
-                glUniform1i(glGetUniformLocation(m_yuvProgram, "texUV"), 1);
-
-                static const float squareCoords[] = {-1, -1, 1, -1, -1, 1, 1, 1};
-                static const float textureCoords[] = {0, 0, 1, 0, 0, 1, 1, 1};
-
-                GLStateManager::getInstance().enableVertexAttribArray(0);
-                glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, squareCoords);
-                GLStateManager::getInstance().enableVertexAttribArray(1);
-                glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, textureCoords);
-
-                glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-
-                GLStateManager::getInstance().bindFramebuffer(GL_FRAMEBUFFER, oldFBO);
+            if (targetPacket->data.size() < ySize + uvSize) {
+                return ResultPayload<Texture>::error(ErrorCode::ERR_DECODER_HW_FAILURE, "Invalid frame data size");
             }
-            return {m_textureId, (uint32_t)m_width, (uint32_t)m_height};
+
+            GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
+            GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, m_yTexture);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, m_width, m_height, 0, GL_RED, GL_UNSIGNED_BYTE, targetPacket->data.data());
+
+            GLStateManager::getInstance().activeTexture(GL_TEXTURE1);
+            GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, m_uvTexture);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RG8, m_width / 2, m_height / 2, 0, GL_RG, GL_UNSIGNED_BYTE, targetPacket->data.data() + ySize);
+
+            GLint oldFBO;
+            glGetIntegerv(GL_FRAMEBUFFER_BINDING, &oldFBO);
+
+            GLStateManager::getInstance().bindFramebuffer(GL_FRAMEBUFFER, m_fbo);
+            glViewport(0, 0, m_width, m_height);
+
+            GLStateManager::getInstance().useProgram(m_yuvProgram);
+            glUniform1i(glGetUniformLocation(m_yuvProgram, "texY"), 0);
+            glUniform1i(glGetUniformLocation(m_yuvProgram, "texUV"), 1);
+
+            static const float squareCoords[] = {-1, -1, 1, -1, -1, 1, 1, 1};
+            static const float textureCoords[] = {0, 0, 1, 0, 0, 1, 1, 1};
+
+            GLStateManager::getInstance().enableVertexAttribArray(0);
+            glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, squareCoords);
+            GLStateManager::getInstance().enableVertexAttribArray(1);
+            glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, textureCoords);
+
+            glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+            GLStateManager::getInstance().bindFramebuffer(GL_FRAMEBUFFER, oldFBO);
+
+            return ResultPayload<Texture>::ok({m_textureId, (uint32_t)m_width, (uint32_t)m_height});
         }
 
-        return {m_textureId, (uint32_t)m_width, (uint32_t)m_height}; // Return last known valid or 0
+        return ResultPayload<Texture>::error(ErrorCode::ERR_DECODER_FRAME_DROP, "Frame not ready or dropped");
     }
 
     void close() override {

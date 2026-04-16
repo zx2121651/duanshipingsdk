@@ -105,20 +105,30 @@ public:
         }
     }
 
+    void flushQueue() {
+        std::lock_guard<std::mutex> lock(m_queueMutex);
+        while (!m_frameQueue.empty()) {
+            CVPixelBufferRelease((CVPixelBufferRef)m_frameQueue.front()->nativeBuffer);
+            m_frameQueue.pop();
+        }
+        m_queueCv.notify_all();
+    }
+
     Result seekExact(int64_t timeNs) override {
-        if (!m_assetReader) return Result::error(-4007, "AssetReader not initialized");
+        if (!m_assetReader) return Result::error(ErrorCode::ERR_DECODER_HW_FAILURE, "AssetReader not initialized");
 
         // 模拟: iOS AVAssetReader 不能随意 Seek，只能重新实例化并指定 timeRange
         // 因此如果需要精准回退，通常非常昂贵，触发软解降级
         if (timeNs < m_lastSeekTimeNs) {
-            return Result::error(-4008, "Hardware Decoder failed to seek backward accurately (B-Frame Nightmare). Trigger Software Decoder fallback.");
+            return Result::error(ErrorCode::ERR_DECODER_SEEK_FAILED, "Hardware Decoder failed to seek backward accurately (B-Frame Nightmare). Trigger Software Decoder fallback.");
         }
 
+        flushQueue();
         m_lastSeekTimeNs = timeNs;
         return Result::ok();
     }
 
-    Texture getFrameAt(int64_t timeNs) override {
+    ResultPayload<Texture> getFrameAt(int64_t timeNs) override {
         std::shared_ptr<FrameBufferPacket> targetPacket = nullptr;
 
         {
@@ -136,6 +146,9 @@ public:
 
         if (targetPacket && m_textureCache) {
             CVPixelBufferRef pixelBuffer = (CVPixelBufferRef)targetPacket->nativeBuffer;
+            if (!pixelBuffer) {
+                return ResultPayload<Texture>::error(ErrorCode::ERR_DECODER_FRAME_DROP, "Invalid native buffer");
+            }
 
             if (m_cvTexture) {
                 CFRelease(m_cvTexture);
@@ -159,11 +172,13 @@ public:
 
             if (err == kCVReturnSuccess && m_cvTexture) {
                 GLuint textureId = CVOpenGLESTextureGetName(m_cvTexture);
-                return {textureId, (uint32_t)m_width, (uint32_t)m_height};
+                return ResultPayload<Texture>::ok({textureId, (uint32_t)m_width, (uint32_t)m_height});
+            } else {
+                return ResultPayload<Texture>::error(ErrorCode::ERR_DECODER_HW_FAILURE, "Failed to create texture from CVPixelBuffer");
             }
         }
 
-        return {0, 0, 0};
+        return ResultPayload<Texture>::error(ErrorCode::ERR_DECODER_FRAME_DROP, "Frame not ready or dropped");
     }
 
     void close() override {
@@ -189,10 +204,7 @@ public:
             m_textureCache = nullptr;
         }
 
-        while (!m_frameQueue.empty()) {
-            CVPixelBufferRelease((CVPixelBufferRef)m_frameQueue.front()->nativeBuffer);
-            m_frameQueue.pop();
-        }
+        flushQueue();
     }
 
 private:
