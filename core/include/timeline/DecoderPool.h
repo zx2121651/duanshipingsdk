@@ -36,6 +36,9 @@ public:
     // 释放资源
     void releaseMedia(const std::string& clipId);
 
+    // 清除所有注册的资源
+    void clear();
+
 private:
     std::mutex m_mutex;
 

@@ -25,12 +25,24 @@ std::shared_ptr<VideoDecoder> createSoftwareDecoder() {
 DecoderPool::DecoderPool() {}
 
 DecoderPool::~DecoderPool() {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    m_decoders.clear();
+    clear();
 }
 
 void DecoderPool::registerMedia(const std::string& clipId, const std::string& sourcePath) {
     std::lock_guard<std::mutex> lock(m_mutex);
+
+    // 如果已经存在，先释放旧的，确保 m_activeDecoderCount 和 decoder 资源正确回收
+    if (m_decoders.find(clipId) != m_decoders.end()) {
+        auto oldCtx = m_decoders[clipId];
+        if (oldCtx->decoder) {
+            oldCtx->decoder->close();
+            m_activeDecoderCount--;
+        }
+        if (oldCtx->softDecoder) {
+            oldCtx->softDecoder->close();
+        }
+    }
+
     auto ctx = std::make_shared<DecoderContext>();
     ctx->sourcePath = sourcePath;
     ctx->decoder = nullptr; // 懒加载，防止瞬间启动过多 decoder
@@ -48,9 +60,38 @@ void DecoderPool::releaseMedia(const std::string& clipId) {
             it->second->decoder->close();
             m_activeDecoderCount--;
         }
+        if (it->second->softDecoder) {
+            it->second->softDecoder->close();
+        }
+        it->second->decoder = nullptr;
+        it->second->softDecoder = nullptr;
+        it->second->lastDecodedFrame = {0, 0, 0};
+        it->second->lastDecodedTimeNs = -1;
+        it->second->isInitialized = false;
+
         m_decoders.erase(it);
         std::cout << "[DecoderPool] Released media " << clipId << std::endl;
     }
+}
+
+void DecoderPool::clear() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    for (auto& pair : m_decoders) {
+        if (pair.second->decoder) {
+            pair.second->decoder->close();
+        }
+        if (pair.second->softDecoder) {
+            pair.second->softDecoder->close();
+        }
+        pair.second->decoder = nullptr;
+        pair.second->softDecoder = nullptr;
+        pair.second->lastDecodedFrame = {0, 0, 0};
+        pair.second->lastDecodedTimeNs = -1;
+        pair.second->isInitialized = false;
+    }
+    m_decoders.clear();
+    m_activeDecoderCount = 0;
+    std::cout << "[DecoderPool] Cleared all media" << std::endl;
 }
 
 void DecoderPool::evictDecodersIfNeeded() {
@@ -71,6 +112,9 @@ void DecoderPool::evictDecodersIfNeeded() {
             std::cout << "[DecoderPool] Evicting active decoder for clip " << oldestId << " due to concurrency limits." << std::endl;
             oldestCtx->decoder->close();
             oldestCtx->decoder = nullptr;
+            oldestCtx->lastDecodedFrame = {0, 0, 0};
+            oldestCtx->lastDecodedTimeNs = -1;
+            oldestCtx->isInitialized = false;
             m_activeDecoderCount--;
         } else {
             break; // 理论上不可能
