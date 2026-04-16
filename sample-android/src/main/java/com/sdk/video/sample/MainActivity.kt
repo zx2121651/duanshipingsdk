@@ -24,6 +24,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -41,7 +43,9 @@ import java.util.concurrent.Executors
 @OptIn(InternalApi::class)
 class MainActivity : ComponentActivity() {
 
-    private var filterManager: VideoFilterManager? = null
+    private var filterManager by mutableStateOf<VideoFilterManager?>(null)
+    private var startupError by mutableStateOf<String?>(null)
+
     private var activeCameraResolution: Size? = null
     private lateinit var cameraExecutor: ExecutorService
 
@@ -72,44 +76,61 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-                // UI 层只接收 Facade，生命周期由下方的 CameraX 严格托管
-                filterManager?.let { fm ->
-                    FilterCameraPreview(
-                        filterManager = fm,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
+                if (startupError != null) {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("Startup Failed", color = Color.Red)
+                        Text(startupError ?: "Unknown Error", color = Color.White, modifier = Modifier.padding(16.dp))
+                        Button(onClick = {
+                            startupError = null
+                            startCamera()
+                        }) {
+                            Text("RETRY")
+                        }
+                    }
+                } else {
+                    // UI 层只接收 Facade，生命周期由下方的 CameraX 严格托管
+                    filterManager?.let { fm ->
+                        FilterCameraPreview(
+                            filterManager = fm,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
 
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(16.dp)
-                ) {
-                    Text(
-                        text = "Avg: ${String.format("%.1f", avgFrameTime.value)} ms",
-                        color = if (avgFrameTime.value > 16) Color.Red else Color.Green
-                    )
-                    Text(text = "P50: ${String.format("%.1f", p50FrameTime.value)} ms", color = Color.White)
-                    Text(text = "P90: ${String.format("%.1f", p90FrameTime.value)} ms", color = Color.White)
-                    Text(text = "P99: ${String.format("%.1f", p99FrameTime.value)} ms", color = Color.White)
-                    Text(
-                        text = "Dropped: ${droppedFrames.value}",
-                        color = if (droppedFrames.value > 0) Color.Red else Color.White
-                    )
-                }
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(16.dp)
+                    ) {
+                        Text(
+                            text = "Avg: ${String.format("%.1f", avgFrameTime.value)} ms",
+                            color = if (avgFrameTime.value > 16) Color.Red else Color.Green
+                        )
+                        Text(text = "P50: ${String.format("%.1f", p50FrameTime.value)} ms", color = Color.White)
+                        Text(text = "P90: ${String.format("%.1f", p90FrameTime.value)} ms", color = Color.White)
+                        Text(text = "P99: ${String.format("%.1f", p99FrameTime.value)} ms", color = Color.White)
+                        Text(
+                            text = "Dropped: ${droppedFrames.value}",
+                            color = if (droppedFrames.value > 0) Color.Red else Color.White
+                        )
+                    }
 
-                Button(
-                    onClick = {
-                        if (isRecordingState.value) stopRecording() else startRecording()
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isRecordingState.value) Color.DarkGray else Color.Red
-                    ),
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(32.dp)
-                ) {
-                    Text(if (isRecordingState.value) "STOP RECORDING" else "START RECORDING")
+                    Button(
+                        onClick = {
+                            if (isRecordingState.value) stopRecording() else startRecording()
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isRecordingState.value) Color.DarkGray else Color.Red
+                        ),
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(32.dp)
+                    ) {
+                        Text(if (isRecordingState.value) "STOP RECORDING" else "START RECORDING")
+                    }
                 }
             }
         }
@@ -169,6 +190,11 @@ class MainActivity : ComponentActivity() {
                         }
                     } catch (e: Exception) {
                         Log.e(TAG, "Failed to provide surface", e)
+                        runOnUiThread {
+                            startupError = e.message ?: "Failed to initialize engine"
+                            filterManager = null
+                            Toast.makeText(this@MainActivity, "Engine Error: ${e.message}", Toast.LENGTH_LONG).show()
+                        }
                     }
                 }
 

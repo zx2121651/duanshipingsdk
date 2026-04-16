@@ -1,6 +1,7 @@
 package com.sdk.video
 
 import android.opengl.GLSurfaceView
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Button
 import androidx.compose.material3.Slider
@@ -38,7 +39,18 @@ fun FilterCameraPreview(
 
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         if (engineState == FilterEngineState.ERROR) {
-            Text("Critical Engine Error. Please restart the app.", color = Color.Red)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xFF8B0000)), // DarkRed
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "Critical Engine Error. Please restart the app.",
+                    color = Color.White,
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
         } else {
             AndroidView(
                 modifier = Modifier.fillMaxSize(),

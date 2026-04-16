@@ -178,7 +178,10 @@ class VideoFilterManager(private val context: android.content.Context,
 
     suspend fun awaitInputSurface(): Surface {
         // 彻底告别脆弱的 delay(500)，使用协程 Flow 挂起等待引擎真正初始化完毕
-        engineState.first { it == FilterEngineState.RUNNING }
+        val state = engineState.first { it == FilterEngineState.RUNNING || it == FilterEngineState.ERROR }
+        if (state == FilterEngineState.ERROR) {
+            throw IllegalStateException("Engine failed to initialize (state is ERROR)")
+        }
         return inputSurface ?: throw IllegalStateException("Surface is null even though engine is RUNNING")
     }
 
