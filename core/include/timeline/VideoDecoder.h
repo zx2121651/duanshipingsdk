@@ -45,10 +45,25 @@ public:
  */
 class SoftwareVideoDecoder : public VideoDecoder {
 public:
-    Result open(const std::string& filePath) override { return Result::ok(); }
-    Texture getFrameAt(int64_t timeNs) override { return {0, 0, 0}; }
-    Result seekExact(int64_t timeNs) override { return Result::ok(); }
-    void close() override {}
+    Result open(const std::string& filePath) override {
+        m_isOpen = true;
+        return Result::ok();
+    }
+    Texture getFrameAt(int64_t timeNs) override {
+        if (!m_isOpen) return {0, 0, 0};
+        return {0, 0, 0};
+    }
+    Result seekExact(int64_t timeNs) override {
+        return Result::ok();
+    }
+    void close() override {
+        m_isOpen = false;
+    }
+
+    bool isOpen() const { return m_isOpen; }
+
+private:
+    bool m_isOpen = false;
 };
 
 
