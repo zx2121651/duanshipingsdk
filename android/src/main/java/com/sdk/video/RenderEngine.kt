@@ -260,6 +260,8 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
         }
     }
 
+    fun getNativeHandle(): Long = nativeHandle
+
     // Call on GL thread to release
     fun release() {
         handleLock.write {

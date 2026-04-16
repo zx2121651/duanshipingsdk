@@ -29,12 +29,14 @@ set(CORE_SRC
         ../../../../core/src/timeline/Compositor.cpp
         ../../../../core/src/timeline/DecoderPool.cpp
         ../../../../core/src/timeline/VideoDecoderAndroid.cpp
+        ../../../../core/src/timeline/TimelineExporterAndroid.cpp
 )
 
 add_library(video-sdk SHARED
     NativeBridge.cpp
     OboeAudioEngine.cpp
     TimelineBridge.cpp
+    TimelineExporterBridge.cpp
     ${CORE_SRC}
 )
 

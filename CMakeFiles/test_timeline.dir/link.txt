@@ -1,1 +1,0 @@
-/usr/bin/c++ CMakeFiles/test_timeline.dir/tests/test_timeline.cpp.o -o test_timeline  libvideo_sdk_core.a /usr/lib/x86_64-linux-gnu/libGLESv2.so
