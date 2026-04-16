@@ -90,7 +90,7 @@ class VideoFilterManager(private val context: android.content.Context,
      */
     private val _processedFrames = MutableSharedFlow<Result<Int>>(
         extraBufferCapacity = 1,
-        onBufferOverflow = BufferOverflow.DROP_OLDEST
+        onBufferOverflow = BufferOverflow.SUSPEND
     )
     val processedFrames: SharedFlow<Result<Int>> = _processedFrames.asSharedFlow()
 
@@ -151,7 +151,11 @@ class VideoFilterManager(private val context: android.content.Context,
                 // Note: outputTexId < 0 cases are now handled by onRenderErrorListener
                 if (outputTexId >= 0) {
                     // 成功渲染，发送最新的纹理 ID 给 UI 层
-                    _processedFrames.tryEmit(Result.success(outputTexId))
+                    // 使用 SUSPEND + tryEmit 来探测并记录丢帧情况（防背压降级）
+                    val emitted = _processedFrames.tryEmit(Result.success(outputTexId))
+                    if (!emitted) {
+                        renderEngine.recordDroppedFrame()
+                    }
                 }
             }
 

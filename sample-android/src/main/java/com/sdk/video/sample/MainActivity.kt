@@ -47,7 +47,10 @@ class MainActivity : ComponentActivity() {
 
     // Compose State
     private var isRecordingState = mutableStateOf(false)
-    private var performanceMs = mutableStateOf(0L)
+    private var avgFrameTime = mutableStateOf(0f)
+    private var p50FrameTime = mutableStateOf(0f)
+    private var p90FrameTime = mutableStateOf(0f)
+    private var p99FrameTime = mutableStateOf(0f)
     private var droppedFrames = mutableStateOf(0)
 
     companion object {
@@ -83,9 +86,12 @@ class MainActivity : ComponentActivity() {
                         .padding(16.dp)
                 ) {
                     Text(
-                        text = "Frame: ${performanceMs.value} ms",
-                        color = if (performanceMs.value > 16) Color.Red else Color.Green
+                        text = "Avg: ${String.format("%.1f", avgFrameTime.value)} ms",
+                        color = if (avgFrameTime.value > 16) Color.Red else Color.Green
                     )
+                    Text(text = "P50: ${String.format("%.1f", p50FrameTime.value)} ms", color = Color.White)
+                    Text(text = "P90: ${String.format("%.1f", p90FrameTime.value)} ms", color = Color.White)
+                    Text(text = "P99: ${String.format("%.1f", p99FrameTime.value)} ms", color = Color.White)
                     Text(
                         text = "Dropped: ${droppedFrames.value}",
                         color = if (droppedFrames.value > 0) Color.Red else Color.White
@@ -140,7 +146,10 @@ class MainActivity : ComponentActivity() {
                     newManager.performanceMetrics.collect { metrics ->
                         metrics?.let {
                             runOnUiThread {
-                                performanceMs.value = it.averageFrameTimeMs.toLong()
+                                avgFrameTime.value = it.averageFrameTimeMs
+                                p50FrameTime.value = it.p50FrameTimeMs
+                                p90FrameTime.value = it.p90FrameTimeMs
+                                p99FrameTime.value = it.p99FrameTimeMs
                                 droppedFrames.value = it.droppedFrames
                             }
                         }

@@ -5,6 +5,7 @@
 #include <mutex>
 #include <chrono>
 #include <algorithm>
+#include <cmath>
 
 namespace sdk {
 namespace video {
@@ -59,9 +60,14 @@ public:
         }
         metrics.averageFrameTimeMs = sum / sorted.size();
 
-        metrics.p50FrameTimeMs = sorted[static_cast<size_t>(sorted.size() * 0.50)];
-        metrics.p90FrameTimeMs = sorted[static_cast<size_t>(sorted.size() * 0.90)];
-        metrics.p99FrameTimeMs = sorted[static_cast<size_t>(sorted.size() * 0.99)];
+        auto getPercentile = [&](float p) {
+            size_t idx = static_cast<size_t>(std::floor(p * (sorted.size() - 1)));
+            return sorted[idx];
+        };
+
+        metrics.p50FrameTimeMs = getPercentile(0.50f);
+        metrics.p90FrameTimeMs = getPercentile(0.90f);
+        metrics.p99FrameTimeMs = getPercentile(0.99f);
 
         return metrics;
     }
