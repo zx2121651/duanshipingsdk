@@ -204,6 +204,10 @@ public actor VideoFilterManager {
     }
 
     public func release() {
+        if let encoder = videoEncoder {
+            encoder.stopRecording(isFallback: false)
+            self.videoEncoder = nil
+        }
         engine.releaseEngine()
         streamContinuation?.finish()
         self.state = .stopped
