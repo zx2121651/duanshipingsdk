@@ -59,6 +59,9 @@ class TimelineManager(val outputWidth: Int, val outputHeight: Int, val fps: Int)
     fun removeClip(zIndex: Int, clipId: String): Int {
         return nativeRemoveClip(nativeHandle, zIndex, clipId)
     }
+
+    fun getNativeHandle(): Long = nativeHandle
+
     fun release() {
         if (nativeHandle != 0L) {
             nativeReleaseTimeline(nativeHandle)

@@ -1,6 +1,0 @@
-/app/CMakeFiles/video_sdk_core.dir
-/app/CMakeFiles/test_filter_graph.dir
-/app/CMakeFiles/test_render_angle.dir
-/app/CMakeFiles/test_timeline.dir
-/app/CMakeFiles/edit_cache.dir
-/app/CMakeFiles/rebuild_cache.dir

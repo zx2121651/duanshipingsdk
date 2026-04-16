@@ -8,18 +8,17 @@
 #include "../../include/GLStateManager.h"
 #include <thread>
 #include <atomic>
+#include <mutex>
 
 namespace sdk {
 namespace video {
 namespace timeline {
 
-/**
- * @Experimental
- * This is an experimental implementation.
- */
 class TimelineExporterIOS : public TimelineExporter {
 public:
-    TimelineExporterIOS() : m_width(0), m_height(0), m_fps(30), m_bitrate(0), m_canceled(false) {}
+    TimelineExporterIOS()
+        : m_width(0), m_height(0), m_fps(30), m_bitrate(0),
+          m_state(State::IDLE), m_progress(0.0f), m_chunkDurationNs(0) {}
 
     ~TimelineExporterIOS() override {
         cancel();
@@ -29,11 +28,16 @@ public:
     }
 
     Result configure(const std::string& outputPath, int width, int height, int fps, int bitrate) override {
+        if (m_state != State::IDLE && m_state != State::COMPLETED && m_state != State::FAILED && m_state != State::CANCELED) {
+            return Result::error(ErrorCode::ERR_EXPORTER_ALREADY_RUNNING, "Cannot configure while running");
+        }
         m_outputPath = outputPath;
         m_width = width;
         m_height = height;
         m_fps = fps;
         m_bitrate = bitrate;
+        m_state = State::IDLE;
+        m_progress = 0.0f;
         return Result::ok();
     }
 
@@ -42,22 +46,58 @@ public:
         m_onChunkReady = onChunkReady;
     }
 
-    void exportAsync(std::shared_ptr<Timeline> timeline,
+    Result exportAsync(std::shared_ptr<Timeline> timeline,
                      std::shared_ptr<Compositor> compositor,
                      ProgressCallback onProgress,
                      CompletionCallback onComplete) override {
 
-        m_canceled = false;
+        if (m_state == State::STARTING || m_state == State::EXPORTING) {
+            return Result::error(ErrorCode::ERR_EXPORTER_ALREADY_RUNNING, "Export already in progress");
+        }
+
+        if (m_outputPath.empty() || m_width <= 0 || m_height <= 0) {
+            return Result::error(ErrorCode::ERR_EXPORTER_NOT_CONFIGURED, "Exporter not properly configured");
+        }
+
+        m_state = State::STARTING;
+        m_progress = 0.0f;
+
+        if (m_exportThread.joinable()) {
+            m_exportThread.join();
+        }
+
         m_exportThread = std::thread([this, timeline, compositor, onProgress, onComplete]() {
             Result res = runExport(timeline, compositor, onProgress);
+
+            {
+                std::lock_guard<std::mutex> lock(m_stateMutex);
+                if (res.isOk()) {
+                    m_state = State::COMPLETED;
+                } else if (res.getErrorCode() == ErrorCode::ERR_EXPORTER_CANCELLED) {
+                    m_state = State::CANCELED;
+                } else {
+                    m_state = State::FAILED;
+                }
+            }
+
             if (onComplete) {
                 onComplete(res);
             }
         });
+
+        return Result::ok();
     }
 
     void cancel() override {
-        m_canceled = true;
+        m_state = State::CANCELED;
+    }
+
+    State getState() const override {
+        return m_state;
+    }
+
+    float getProgress() const override {
+        return m_progress;
     }
 
 private:
@@ -65,201 +105,215 @@ private:
                      std::shared_ptr<Compositor> compositor,
                      ProgressCallback onProgress) {
 
-        if (!timeline || !compositor) return Result::error(-5001, "Invalid timeline or compositor");
+        if (!timeline || !compositor) return Result::error(ErrorCode::ERR_TIMELINE_NULL, "Invalid timeline or compositor");
 
-        std::string currentChunkPath = m_outputPath;
-        int chunkIndex = 0;
-        if (m_chunkDurationNs > 0) {
-            currentChunkPath = m_outputPath + "_chunk_" + std::to_string(chunkIndex) + ".mp4";
-        }
+        m_state = State::EXPORTING;
 
-        NSString* path = [NSString stringWithUTF8String:currentChunkPath.c_str()];
-        NSURL* url = [NSURL fileURLWithPath:path];
-
-        if ([[NSFileManager defaultManager] fileExistsAtPath:path]) {
-            [[NSFileManager defaultManager] removeItemAtPath:path error:nil];
-        }
-
-        NSError* error = nil;
-        AVAssetWriter* assetWriter = [[AVAssetWriter alloc] initWithURL:url fileType:AVFileTypeMPEG4 error:&error];
-        if (error || !assetWriter) {
-            return Result::error(-5002, "Failed to create AVAssetWriter");
-        }
-
-        NSDictionary* videoSettings = @{
-            AVVideoCodecKey: AVVideoCodecTypeH264,
-            AVVideoWidthKey: @(m_width),
-            AVVideoHeightKey: @(m_height),
-            AVVideoCompressionPropertiesKey: @{
-                AVVideoAverageBitRateKey: @(m_bitrate > 0 ? m_bitrate : 4000000),
-                AVVideoMaxKeyFrameIntervalKey: @(m_fps) // 强制 1 秒一个关键帧，方便分片
+        @autoreleasepool {
+            std::string currentChunkPath = m_outputPath;
+            int chunkIndex = 0;
+            if (m_chunkDurationNs > 0) {
+                currentChunkPath = m_outputPath + "_chunk_" + std::to_string(chunkIndex) + ".mp4";
             }
-        };
 
-        AVAssetWriterInput* videoInput = [AVAssetWriterInput assetWriterInputWithMediaType:AVMediaTypeVideo outputSettings:videoSettings];
-        videoInput.expectsMediaDataInRealTime = NO;
+            NSString* path = [NSString stringWithUTF8String:currentChunkPath.c_str()];
+            NSURL* url = [NSURL fileURLWithPath:path];
 
-        NSDictionary* pixelBufferAttributes = @{
-            (id)kCVPixelBufferPixelFormatTypeKey: @(kCVPixelFormatType_32BGRA),
-            (id)kCVPixelBufferWidthKey: @(m_width),
-            (id)kCVPixelBufferHeightKey: @(m_height),
-            (id)kCVPixelBufferOpenGLESCompatibilityKey: @YES
-        };
+            if ([[NSFileManager defaultManager] fileExistsAtPath:path]) {
+                [[NSFileManager defaultManager] removeItemAtPath:path error:nil];
+            }
 
-        AVAssetWriterInputPixelBufferAdaptor* adaptor =
-            [AVAssetWriterInputPixelBufferAdaptor assetWriterInputPixelBufferAdaptorWithAssetWriterInput:videoInput
-                                                                             sourcePixelBufferAttributes:pixelBufferAttributes];
+            NSError* error = nil;
+            AVAssetWriter* assetWriter = [[AVAssetWriter alloc] initWithURL:url fileType:AVFileTypeMPEG4 error:&error];
+            if (error || !assetWriter) {
+                return Result::error(ErrorCode::ERR_EXPORTER_MUXER_INIT_FAILED, "Failed to create AVAssetWriter");
+            }
 
-        if ([assetWriter canAddInput:videoInput]) {
-            [assetWriter addInput:videoInput];
-        } else {
-            return Result::error(-5003, "Cannot add video input");
-        }
-
-        // Setup background EAGL Context
-        EAGLContext* context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES3];
-        if (!context) {
-            context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES2];
-        }
-        if (!context) return Result::error(-5004, "Failed to create background EAGLContext");
-
-        [EAGLContext setCurrentContext:context];
-
-        CVOpenGLESTextureCacheRef textureCache = NULL;
-        CVReturn err = CVOpenGLESTextureCacheCreate(kCFAllocatorDefault, NULL, context, NULL, &textureCache);
-        if (err != kCVReturnSuccess) {
-            return Result::error(-5005, "Failed to create texture cache");
-        }
-
-        [assetWriter startWriting];
-        [assetWriter startSessionAtSourceTime:kCMTimeZero];
-
-        int64_t totalDurationNs = timeline->getTotalDuration();
-        int64_t frameDurationNs = 1000000000 / m_fps;
-        int64_t currentTimeNs = 0;
-        int64_t lastChunkStartNs = 0;
-
-        CVPixelBufferPoolRef pool = adaptor.pixelBufferPool;
-
-        // FBO setup for offscreen rendering
-        GLuint fbo;
-        glGenFramebuffers(1, &fbo);
-
-        FrameBufferPtr cvExternalFbWrapper = std::make_shared<FrameBuffer>(m_width, m_height, fbo);
-
-        while (currentTimeNs <= totalDurationNs && !m_canceled) {
-            @autoreleasepool {
-                while (!videoInput.readyForMoreMediaData && !m_canceled) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            NSDictionary* videoSettings = @{
+                AVVideoCodecKey: AVVideoCodecTypeH264,
+                AVVideoWidthKey: @(m_width),
+                AVVideoHeightKey: @(m_height),
+                AVVideoCompressionPropertiesKey: @{
+                    AVVideoAverageBitRateKey: @(m_bitrate > 0 ? m_bitrate : 4000000),
+                    AVVideoMaxKeyFrameIntervalKey: @(m_fps)
                 }
+            };
 
-                if (m_canceled) break;
+            AVAssetWriterInput* videoInput = [AVAssetWriterInput assetWriterInputWithMediaType:AVMediaTypeVideo outputSettings:videoSettings];
+            videoInput.expectsMediaDataInRealTime = NO;
 
-                CVPixelBufferRef pixelBuffer = NULL;
-                err = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &pixelBuffer);
-                if (err != kCVReturnSuccess || !pixelBuffer) {
+            NSDictionary* pixelBufferAttributes = @{
+                (id)kCVPixelBufferPixelFormatTypeKey: @(kCVPixelFormatType_32BGRA),
+                (id)kCVPixelBufferWidthKey: @(m_width),
+                (id)kCVPixelBufferHeightKey: @(m_height),
+                (id)kCVPixelBufferOpenGLESCompatibilityKey: @YES
+            };
+
+            AVAssetWriterInputPixelBufferAdaptor* adaptor =
+                [AVAssetWriterInputPixelBufferAdaptor assetWriterInputPixelBufferAdaptorWithAssetWriterInput:videoInput
+                                                                                 sourcePixelBufferAttributes:pixelBufferAttributes];
+
+            if ([assetWriter canAddInput:videoInput]) {
+                [assetWriter addInput:videoInput];
+            } else {
+                return Result::error(ErrorCode::ERR_EXPORTER_ENCODER_INIT_FAILED, "Cannot add video input");
+            }
+
+            EAGLContext* context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES3];
+            if (!context) {
+                context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES2];
+            }
+            if (!context) return Result::error(ErrorCode::ERR_EXPORTER_GL_CONTEXT_FAILED, "Failed to create background EAGLContext");
+
+            EAGLContext* previousContext = [EAGLContext currentContext];
+            [EAGLContext setCurrentContext:context];
+
+            CVOpenGLESTextureCacheRef textureCache = NULL;
+            CVReturn err = CVOpenGLESTextureCacheCreate(kCFAllocatorDefault, NULL, context, NULL, &textureCache);
+            if (err != kCVReturnSuccess) {
+                [EAGLContext setCurrentContext:previousContext];
+                return Result::error(ErrorCode::ERR_EXPORTER_GL_CONTEXT_FAILED, "Failed to create texture cache");
+            }
+
+            [assetWriter startWriting];
+            [assetWriter startSessionAtSourceTime:kCMTimeZero];
+
+            int64_t totalDurationNs = timeline->getTotalDuration();
+            int64_t frameDurationNs = 1000000000 / m_fps;
+            int64_t currentTimeNs = 0;
+            int64_t lastChunkStartNs = 0;
+
+            GLuint fbo;
+            glGenFramebuffers(1, &fbo);
+            FrameBufferPtr cvExternalFbWrapper = std::make_shared<FrameBuffer>(m_width, m_height, fbo);
+
+            Result exportResult = Result::ok();
+
+            while (currentTimeNs <= totalDurationNs) {
+                if (m_state == State::CANCELED) {
+                    exportResult = Result::error(ErrorCode::ERR_EXPORTER_CANCELLED, "Export canceled by user");
                     break;
                 }
 
-                CVOpenGLESTextureRef cvTexture = NULL;
-                err = CVOpenGLESTextureCacheCreateTextureFromImage(
-                    kCFAllocatorDefault, textureCache, pixelBuffer, NULL,
-                    GL_TEXTURE_2D, GL_RGBA, (GLsizei)m_width, (GLsizei)m_height,
-                    GL_BGRA_EXT, GL_UNSIGNED_BYTE, 0, &cvTexture);
-
-                if (err == kCVReturnSuccess && cvTexture) {
-                    GLuint textureId = CVOpenGLESTextureGetName(cvTexture);
-
-                    // Render using compositor directly to the CVPixelBuffer-backed FBO
-                    GLStateManager::getInstance().bindFramebuffer(GL_FRAMEBUFFER, fbo);
-                    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textureId, 0);
-                    glViewport(0, 0, m_width, m_height);
-
-                    // [P1 修复] 统一 Compositor 输出接口，去掉 iOS 的二次拷贝 hack
-                    // 使用扩展的 FrameBuffer 构造函数直接包装 CVPixelBuffer 挂载的外部 FBO。
-                    // Compositor 最后一层的 Explicit Copy Pass 会直接画到这个 FBO 里，完成真正的零拷贝编码。
-                    cvExternalFbWrapper->setExternalFboId(fbo); // Since fbo id is constant, this is optional, but keeps wrapper in sync if fbo ever changes
-
-                    compositor->renderFrameAtTime(currentTimeNs, cvExternalFbWrapper);
-
-                    GLStateManager::getInstance().bindFramebuffer(GL_FRAMEBUFFER, 0);
-                    glFinish(); // 确保渲染指令完成
-
-                    CMTime presentationTime = CMTimeMake(currentTimeNs, 1000000000);
-                    [adaptor appendPixelBuffer:pixelBuffer withPresentationTime:presentationTime];
-
-                    CFRelease(cvTexture);
-                    CVOpenGLESTextureCacheFlush(textureCache, 0);
-
-                    // Chunking logic
-                    if (m_chunkDurationNs > 0 && (currentTimeNs - lastChunkStartNs >= m_chunkDurationNs)) {
-                        [videoInput markAsFinished];
-
-                        dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
-                        [assetWriter finishWritingWithCompletionHandler:^{
-                            dispatch_semaphore_signal(semaphore);
-                        }];
-                        dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
-
-                        if (m_onChunkReady) {
-                            m_onChunkReady(currentChunkPath, chunkIndex);
-                        }
-
-                        // Open next chunk
-                        chunkIndex++;
-                        currentChunkPath = m_outputPath + "_chunk_" + std::to_string(chunkIndex) + ".mp4";
-
-                        NSString* nextPath = [NSString stringWithUTF8String:currentChunkPath.c_str()];
-                        NSURL* nextUrl = [NSURL fileURLWithPath:nextPath];
-                        if ([[NSFileManager defaultManager] fileExistsAtPath:nextPath]) {
-                            [[NSFileManager defaultManager] removeItemAtPath:nextPath error:nil];
-                        }
-
-                        assetWriter = [[AVAssetWriter alloc] initWithURL:nextUrl fileType:AVFileTypeMPEG4 error:&error];
-                        videoInput = [AVAssetWriterInput assetWriterInputWithMediaType:AVMediaTypeVideo outputSettings:videoSettings];
-                        videoInput.expectsMediaDataInRealTime = NO;
-                        adaptor = [AVAssetWriterInputPixelBufferAdaptor assetWriterInputPixelBufferAdaptorWithAssetWriterInput:videoInput
-                                                                             sourcePixelBufferAttributes:pixelBufferAttributes];
-                        [assetWriter addInput:videoInput];
-                        [assetWriter startWriting];
-                        [assetWriter startSessionAtSourceTime:presentationTime];
-                        pool = adaptor.pixelBufferPool;
-
-                        lastChunkStartNs = currentTimeNs;
+                @autoreleasepool {
+                    while (!videoInput.readyForMoreMediaData && m_state != State::CANCELED) {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(5));
                     }
+
+                    if (m_state == State::CANCELED) break;
+
+                    CVPixelBufferRef pixelBuffer = NULL;
+                    err = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, adaptor.pixelBufferPool, &pixelBuffer);
+                    if (err != kCVReturnSuccess || !pixelBuffer) {
+                        exportResult = Result::error(ErrorCode::ERR_EXPORTER_ENCODER_INIT_FAILED, "Failed to create pixel buffer from pool");
+                        break;
+                    }
+
+                    CVOpenGLESTextureRef cvTexture = NULL;
+                    err = CVOpenGLESTextureCacheCreateTextureFromImage(
+                        kCFAllocatorDefault, textureCache, pixelBuffer, NULL,
+                        GL_TEXTURE_2D, GL_RGBA, (GLsizei)m_width, (GLsizei)m_height,
+                        GL_BGRA_EXT, GL_UNSIGNED_BYTE, 0, &cvTexture);
+
+                    if (err == kCVReturnSuccess && cvTexture) {
+                        GLuint textureId = CVOpenGLESTextureGetName(cvTexture);
+
+                        GLStateManager::getInstance().bindFramebuffer(GL_FRAMEBUFFER, fbo);
+                        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textureId, 0);
+                        glViewport(0, 0, m_width, m_height);
+
+                        cvExternalFbWrapper->setExternalFboId(fbo);
+
+                        Result renderRes = compositor->renderFrameAtTime(currentTimeNs, cvExternalFbWrapper);
+                        if (!renderRes.isOk()) {
+                            exportResult = renderRes;
+                            CFRelease(cvTexture);
+                            CVPixelBufferRelease(pixelBuffer);
+                            break;
+                        }
+
+                        GLStateManager::getInstance().bindFramebuffer(GL_FRAMEBUFFER, 0);
+                        glFinish();
+
+                        CMTime presentationTime = CMTimeMake(currentTimeNs, 1000000000);
+                        if (![adaptor appendPixelBuffer:pixelBuffer withPresentationTime:presentationTime]) {
+                            exportResult = Result::error(ErrorCode::ERR_EXPORTER_ENCODER_INIT_FAILED, "Failed to append pixel buffer");
+                            CFRelease(cvTexture);
+                            CVPixelBufferRelease(pixelBuffer);
+                            break;
+                        }
+
+                        CFRelease(cvTexture);
+                        CVOpenGLESTextureCacheFlush(textureCache, 0);
+
+                        // Chunking logic
+                        if (m_chunkDurationNs > 0 && (currentTimeNs - lastChunkStartNs >= m_chunkDurationNs)) {
+                            [videoInput markAsFinished];
+                            dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+                            [assetWriter finishWritingWithCompletionHandler:^{
+                                dispatch_semaphore_signal(semaphore);
+                            }];
+                            dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
+
+                            if (m_onChunkReady) {
+                                m_onChunkReady(currentChunkPath, chunkIndex);
+                            }
+
+                            chunkIndex++;
+                            currentChunkPath = m_outputPath + "_chunk_" + std::to_string(chunkIndex) + ".mp4";
+                            NSString* nextPath = [NSString stringWithUTF8String:currentChunkPath.c_str()];
+                            NSURL* nextUrl = [NSURL fileURLWithPath:nextPath];
+                            if ([[NSFileManager defaultManager] fileExistsAtPath:nextPath]) {
+                                [[NSFileManager defaultManager] removeItemAtPath:nextPath error:nil];
+                            }
+
+                            assetWriter = [[AVAssetWriter alloc] initWithURL:nextUrl fileType:AVFileTypeMPEG4 error:&error];
+                            videoInput = [AVAssetWriterInput assetWriterInputWithMediaType:AVMediaTypeVideo outputSettings:videoSettings];
+                            videoInput.expectsMediaDataInRealTime = NO;
+                            adaptor = [AVAssetWriterInputPixelBufferAdaptor assetWriterInputPixelBufferAdaptorWithAssetWriterInput:videoInput
+                                                                                 sourcePixelBufferAttributes:pixelBufferAttributes];
+                            [assetWriter addInput:videoInput];
+                            [assetWriter startWriting];
+                            [assetWriter startSessionAtSourceTime:presentationTime];
+                            lastChunkStartNs = currentTimeNs;
+                        }
+                    } else {
+                        exportResult = Result::error(ErrorCode::ERR_EXPORTER_GL_CONTEXT_FAILED, "Failed to create texture from image");
+                        CVPixelBufferRelease(pixelBuffer);
+                        break;
+                    }
+
+                    CVPixelBufferRelease(pixelBuffer);
+
+                    m_progress = static_cast<float>(currentTimeNs) / static_cast<float>(totalDurationNs);
+                    if (onProgress) {
+                        onProgress(m_progress);
+                    }
+
+                    currentTimeNs += frameDurationNs;
                 }
-
-                CVPixelBufferRelease(pixelBuffer);
-
-                if (onProgress) {
-                    onProgress(static_cast<float>(currentTimeNs) / static_cast<float>(totalDurationNs));
-                }
-
-                currentTimeNs += frameDurationNs;
             }
+
+            if (exportResult.isOk()) {
+                [videoInput markAsFinished];
+                dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+                [assetWriter finishWritingWithCompletionHandler:^{
+                    dispatch_semaphore_signal(semaphore);
+                }];
+                dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
+
+                if (m_chunkDurationNs > 0 && m_onChunkReady) {
+                    m_onChunkReady(currentChunkPath, chunkIndex);
+                }
+                m_progress = 1.0f;
+            }
+
+            glDeleteFramebuffers(1, &fbo);
+            if (textureCache) CFRelease(textureCache);
+            [EAGLContext setCurrentContext:previousContext];
+
+            return exportResult;
         }
-
-        [videoInput markAsFinished];
-
-        dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
-        [assetWriter finishWritingWithCompletionHandler:^{
-            dispatch_semaphore_signal(semaphore);
-        }];
-        dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
-
-        if (m_chunkDurationNs > 0 && !m_canceled && m_onChunkReady) {
-            m_onChunkReady(currentChunkPath, chunkIndex);
-        }
-
-        glDeleteFramebuffers(1, &fbo);
-        if (textureCache) CFRelease(textureCache);
-        [EAGLContext setCurrentContext:nil];
-
-        if (m_canceled) {
-            return Result::error(-5006, "Export canceled by user");
-        }
-
-        return Result::ok();
     }
 
     std::string m_outputPath;
@@ -268,12 +322,21 @@ private:
     int m_fps;
     int m_bitrate;
 
-    int64_t m_chunkDurationNs = 0;
-    ChunkCallback m_onChunkReady = nullptr;
+    int64_t m_chunkDurationNs;
+    ChunkCallback m_onChunkReady;
 
-    std::atomic<bool> m_canceled;
+    std::atomic<State> m_state;
+    std::mutex m_stateMutex;
+    std::atomic<float> m_progress;
     std::thread m_exportThread;
 };
+
+// Only define create() on iOS
+#ifndef __ANDROID__
+std::unique_ptr<TimelineExporter> TimelineExporter::create() {
+    return std::make_unique<TimelineExporterIOS>();
+}
+#endif
 
 } // namespace timeline
 } // namespace video
