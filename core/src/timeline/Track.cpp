@@ -62,11 +62,11 @@ void Track::getActiveClipsAtTime(int64_t timelineNs, std::vector<ClipPtr>& outCl
 
         if (timelineNs >= start && timelineNs < end) {
             outClips.push_back(clip);
+        } else if (timelineNs < start) {
+            // Since clips are sorted by TimelineIn, if we reach a clip that starts
+            // after the requested time, we can stop searching.
+            break;
         }
-
-        // Clips are sorted by TimelineIn, so we can't break early here
-        // because an earlier-starting clip might still be active if it's very long
-        // and overlaps with later clips.
     }
 }
 
