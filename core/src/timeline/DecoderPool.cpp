@@ -143,24 +143,25 @@ ResultPayload<Texture> DecoderPool::getFrame(const std::string& clipId, int64_t 
             auto openRes = ctx->softDecoder->open(ctx->sourcePath);
             if (!openRes.isOk()) {
                 std::cerr << "[DecoderPool] Failed to open Software Decoder for clip " << clipId << ": " << openRes.getMessage() << std::endl;
-                return ResultPayload<Texture>::error(ErrorCode::ERR_TIMELINE_DECODER_GET_FRAME_FAILED, "Failed to open software decoder");
+                return ResultPayload<Texture>::error(ErrorCode::ERR_TIMELINE_DECODER_GET_FRAME_FAILED, "Failed to open software decoder: " + openRes.getMessage());
             }
             std::cout << "[DecoderPool] Falling back to Software Decoder for clip " << clipId << std::endl;
         }
         Result seekRes = ctx->softDecoder->seekExact(localTimeNs);
         if (seekRes.isOk()) {
-            Texture tex = ctx->softDecoder->getFrameAt(localTimeNs);
-            if (tex.id != 0) {
+            auto frameRes = ctx->softDecoder->getFrameAt(localTimeNs);
+            if (frameRes.isOk()) {
+                Texture tex = frameRes.getValue();
                 ctx->lastDecodedFrame = tex;
                 ctx->lastDecodedTimeNs = localTimeNs;
                 ctx->isInitialized = true;
-                return ResultPayload<Texture>::ok(tex);
+                return frameRes;
             }
-            std::cerr << "[DecoderPool] Software decoder returned invalid texture for clip " << clipId << std::endl;
-            return ResultPayload<Texture>::error(ErrorCode::ERR_TIMELINE_DECODER_GET_FRAME_FAILED, "Software decoder returned invalid texture");
+            std::cerr << "[DecoderPool] Software decoder returned error for clip " << clipId << ": " << frameRes.getMessage() << std::endl;
+            return frameRes;
         } else {
             std::cerr << "[DecoderPool] Software seek failed for clip " << clipId << ": " << seekRes.getMessage() << std::endl;
-            return ResultPayload<Texture>::error(ErrorCode::ERR_TIMELINE_DECODER_GET_FRAME_FAILED, "Software seek failed: " + seekRes.getMessage());
+            return ResultPayload<Texture>::error(ErrorCode::ERR_DECODER_SEEK_FAILED, "Software seek failed: " + seekRes.getMessage());
         }
     }
 
@@ -201,20 +202,29 @@ ResultPayload<Texture> DecoderPool::getFrame(const std::string& clipId, int64_t 
         }
 
         // Platform hardware decoding
-        Texture tex = ctx->decoder->getFrameAt(localTimeNs);
-        if (tex.id != 0) {
+        auto frameRes = ctx->decoder->getFrameAt(localTimeNs);
+        if (frameRes.isOk()) {
+            Texture tex = frameRes.getValue();
             ctx->lastDecodedFrame = tex;
             ctx->lastDecodedTimeNs = localTimeNs;
             ctx->isInitialized = true;
-            return ResultPayload<Texture>::ok(tex);
+            return frameRes;
         } else {
-            // If HW decoder returns 0, it might be waiting for more data or failed.
-            // In a real NLE, we might want to return the last good frame or fail.
-            // Requirement says "explicit failure or clear degradation logs" and "no longer pretending to be successful".
-            // Returning the last frame could still be considered "pretending" if it's not what was requested.
-            // But if it's just slow, maybe it's fine? No, let's be strict if it returns 0.
-            std::cerr << "[DecoderPool] Hardware decoder returned invalid texture for clip " << clipId << std::endl;
-            return ResultPayload<Texture>::error(ErrorCode::ERR_TIMELINE_DECODER_GET_FRAME_FAILED, "Hardware decoder returned invalid texture");
+            // 如果硬件解码器返回 Fatal 错误（比如设备丢失、解码器崩溃），触发降级
+            if (frameRes.getErrorCode() == ErrorCode::ERR_DECODER_HW_FAILURE) {
+                std::cerr << "[DecoderPool] Hardware decoder fatal failure for clip " << clipId << ": " << frameRes.getMessage() << ". Degrading to software." << std::endl;
+                ctx->hwFailed = true;
+                ctx->decoder->close();
+                ctx->decoder = nullptr;
+                m_activeDecoderCount--;
+
+                lock.unlock();
+                return getFrame(clipId, localTimeNs, true);
+            }
+
+            // 否则可能是暂时性的丢帧 (ERR_DECODER_FRAME_DROP)
+            std::cerr << "[DecoderPool] Hardware decoder returned error for clip " << clipId << ": " << frameRes.getMessage() << std::endl;
+            return frameRes;
         }
     } else {
         // Both HW and SW (if tried) failed, or we are in a state where we can't decode.
