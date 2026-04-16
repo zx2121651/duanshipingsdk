@@ -1,6 +1,7 @@
 package com.sdk.video.timeline
 
 import androidx.annotation.Keep
+import com.sdk.video.InternalApi
 import com.sdk.video.RenderEngine
 import com.sdk.video.VideoExportConfig
 import com.sdk.video.VideoSdkError
@@ -8,6 +9,7 @@ import com.sdk.video.VideoSdkError
 /**
  * Android Exporter Facade
  */
+@OptIn(InternalApi::class)
 class TimelineExporter {
     private var nativeHandle: Long = 0
 
