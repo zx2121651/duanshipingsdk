@@ -13,8 +13,9 @@ void Track::addClip(ClipPtr clip) {
         // 并根据需求进行“吸附”、“覆盖”或“整体后移”逻辑。这里做简化插入。
         m_clips.push_back(clip);
 
-        // 插入后按在主时间轴的起始点 TimelineIn 从小到大排序，方便后续二分查找 Seek
-        std::sort(m_clips.begin(), m_clips.end(), [](const ClipPtr& a, const ClipPtr& b) {
+        // 插入后按在主时间轴的起始点 TimelineIn 从小到大排序，方便后续二分查找 Seek。
+        // 使用 stable_sort 以确保在 TimelineIn 相同时，维持插入顺序。
+        std::stable_sort(m_clips.begin(), m_clips.end(), [](const ClipPtr& a, const ClipPtr& b) {
             return a->getTimelineIn() < b->getTimelineIn();
         });
     }
@@ -36,9 +37,9 @@ void Track::clearClips() {
 ClipPtr Track::getActiveClipAtTime(int64_t timelineNs) const {
     if (m_clips.empty()) return nullptr;
 
-    // 因为 m_clips 是按 TimelineIn 有序的，可以用二分查找 (std::lower_bound) 优化，
-    // 这里为了演示 NLE 逻辑，直接线性遍历
-    for (const auto& clip : m_clips) {
+    // 从后往前遍历，这样在有重叠的情况下，会优先返回“最晚开始”或“最后插入”的片段（即位于上层的片段）。
+    for (auto it = m_clips.rbegin(); it != m_clips.rend(); ++it) {
+        const auto& clip = *it;
         int64_t start = clip->getTimelineIn();
         int64_t end = clip->getTimelineOut();
 
@@ -47,8 +48,9 @@ ClipPtr Track::getActiveClipAtTime(int64_t timelineNs) const {
             return clip;
         }
 
-        // 如果游标早于当前 Clip，说明后面的都无需找了（因为序列是有序的）
-        if (timelineNs < start) break;
+        // 如果 timelineNs 已经大于等于当前 clip 的结束时间，且由于 m_clips 是按 start 排序的，
+        // 我们不能简单的 break，因为前面的 clip 可能还在持续。
+        // 但由于我们是从后往前找，找到的第一个符合条件的 [start, end) 就是我们要的“最顶层”片段。
     }
 
     // 轨道在这个时间点是空的 (比如两段素材之间的黑屏过渡)
