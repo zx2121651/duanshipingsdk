@@ -54,6 +54,7 @@ class VideoEncoder(
     // 早鸟帧缓存队列：在 Muxer 启动前，缓存那些提前到来的 SPS/PPS 配置头或视频帧，防止丢帧
     private val pendingFrames = ConcurrentLinkedQueue<FrameData>()
     private var startTimeNs: Long = 0
+    private var totalSamplesEncoded: Long = 0
 
     fun getStartTimeNs(): Long = startTimeNs
 
@@ -77,6 +78,7 @@ class VideoEncoder(
 
             // Align the anchor time to what SurfaceTexture uses (System.nanoTime() typically matches CLOCK_MONOTONIC on Android)
             startTimeNs = System.nanoTime()
+            totalSamplesEncoded = 0
             isRecording = true
 
             videoCodec?.start()
@@ -200,21 +202,14 @@ class VideoEncoder(
                         inputBuffer?.clear()
                         inputBuffer?.put(buffer, 0, readBytes)
 
-                        // [PTS Drift Fix]: Base everything on an absolute system uptime anchor
-                        // to perfectly match the EGL presentation time `st.timestamp`.
-                        // Add the Oboe engine's true processed duration to this anchor.
-                        val audioDurationNs = filterManager.getAudioTimeNs()
-                        var pts: Long = 0
-                        if (audioDurationNs > 0) {
-                            pts = (startTimeNs + audioDurationNs) / 1000
-                        } else {
-                            pts = (System.nanoTime()) / 1000
-                        }
+                        // [PTS Drift Fix]: Use the total number of samples encoded as a stable clock.
+                        // This prevents drift between audio and video by tying PTS to the actual data volume,
+                        // starting from the synchronized system-time anchor.
+                        val samplesRead = readBytes / 2 // 16-bit Mono = 2 bytes per sample
+                        val pts = (startTimeNs + (totalSamplesEncoded * 1000000000L / audioSampleRate)) / 1000
+                        totalSamplesEncoded += samplesRead
 
                         synchronized(syncLock) {
-                            if (pts <= lastAudioPtsUs) {
-                                pts = lastAudioPtsUs + 10 // enforce monotonic strictness
-                            }
                             lastAudioPtsUs = pts
                         }
 
