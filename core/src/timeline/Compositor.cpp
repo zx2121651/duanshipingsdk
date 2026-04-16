@@ -1,7 +1,10 @@
 #include "../../include/FilterEngine.h"
 #include "../../include/timeline/Compositor.h"
 #include "../../include/GLStateManager.h"
+#define LOG_TAG "Compositor"
+#include "../../include/Log.h"
 #include <iostream>
+#include <chrono>
 
 namespace sdk {
 namespace video {
@@ -29,7 +32,7 @@ static GLuint compileShader(GLenum type, const char* s) {
     if (status != GL_TRUE) {
         char buf[512];
         glGetShaderInfoLog(sh, 512, NULL, buf);
-        std::cerr << "Compositor Shader Compile Error: " << buf << std::endl;
+        LOGE("Compositor Shader Compile Error: %s", buf);
         glDeleteShader(sh);
         return 0;
     }
@@ -43,8 +46,8 @@ static Result linkProgram(GLuint program) {
     if (status != GL_TRUE) {
         char buf[512];
         glGetProgramInfoLog(program, 512, NULL, buf);
-        std::cerr << "Compositor Program Link Error: " << buf << std::endl;
-        return Result::error(ErrorCode::ERR_TIMELINE_COMPOSITOR_INIT_FAILED, "Program link failed");
+        LOGE("Compositor Program Link Error: %s", buf);
+        return Result::error(ErrorCode::ERR_TIMELINE_COMPOSITOR_INIT_FAILED, "Program link failed: " + std::string(buf));
     }
     return Result::ok();
 }
@@ -287,6 +290,8 @@ Result Compositor::renderFrameAtTime(int64_t timelineNs, FrameBufferPtr outputFb
         return Result::error(ErrorCode::ERR_TIMELINE_NULL, "Compositor not properly initialized with Timeline/Engine/FBO");
     }
 
+    auto start_time = std::chrono::high_resolution_clock::now();
+
     Result res = initPrograms();
     if (!res.isOk()) return res;
 
@@ -297,6 +302,10 @@ Result Compositor::renderFrameAtTime(int64_t timelineNs, FrameBufferPtr outputFb
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
         outputFb->unbind();
+
+        auto end_time = std::chrono::high_resolution_clock::now();
+        float duration_ms = std::chrono::duration<float, std::milli>(end_time - start_time).count();
+        m_metricsCollector.recordFrameTime(duration_ms);
         return Result::ok();
     }
 
@@ -314,6 +323,8 @@ Result Compositor::renderFrameAtTime(int64_t timelineNs, FrameBufferPtr outputFb
         return Result::error(ErrorCode::ERR_RENDER_FBO_ALLOC_FAILED, "Failed to allocate ping/pong FBOs");
     }
 
+    LOGD("Compositing %zu clips at %lld", m_activeClips.size(), (long long)timelineNs);
+
     for (const auto& clip : m_activeClips) {
         int64_t clipRelativeNs = timelineNs - clip->getTimelineIn();
         int64_t localTimeNs = static_cast<int64_t>(clipRelativeNs * clip->getSpeed()) + clip->getEffectiveTrimIn();
@@ -323,6 +334,7 @@ Result Compositor::renderFrameAtTime(int64_t timelineNs, FrameBufferPtr outputFb
 
         ResultPayload<Texture> frameRes = m_decoderPool->getFrame(clip->getId(), localTimeNs);
         if (!frameRes.isOk()) {
+            LOGE("Decoder failed for clip %s at %lld: %s", clip->getId().c_str(), (long long)localTimeNs, frameRes.getMessage().c_str());
             return Result::error(frameRes.getErrorCode(), "Decoder failed for clip " + clip->getId() + ": " + frameRes.getMessage());
         }
         Texture fgTex = frameRes.getValue();
@@ -378,11 +390,17 @@ Result Compositor::renderFrameAtTime(int64_t timelineNs, FrameBufferPtr outputFb
 
     auto processResult = m_filterEngine->processFrame(accumulatedTexture, outputFb->width(), outputFb->height());
     if (!processResult.isOk()) {
+        LOGE("FilterEngine processFrame failed: %s", processResult.getMessage().c_str());
         return Result::error(processResult.getErrorCode(), processResult.getMessage());
     }
     Texture finalTex = processResult.getValue();
 
-    return copyTexture(finalTex, outputFb);
+    res = copyTexture(finalTex, outputFb);
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    float duration_ms = std::chrono::duration<float, std::milli>(end_time - start_time).count();
+    m_metricsCollector.recordFrameTime(duration_ms);
+    return res;
 }
 
 } // namespace timeline

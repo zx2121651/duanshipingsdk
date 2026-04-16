@@ -3,6 +3,8 @@
 #ifdef __APPLE__
 #import <AVFoundation/AVFoundation.h>
 #import <CoreVideo/CoreVideo.h>
+#define LOG_TAG "VideoDecoderIOS"
+#include "../../include/Log.h"
 #include <thread>
 #include <mutex>
 #include <condition_variable>
@@ -29,12 +31,14 @@ public:
         NSError* error = nil;
         m_assetReader = [[AVAssetReader alloc] initWithAsset:asset error:&error];
         if (error) {
-            return Result::error(-4001, "Failed to create AVAssetReader");
+            LOGE("Failed to create AVAssetReader for %s, error: %s", filePath.c_str(), [[error localizedDescription] UTF8String]);
+            return Result::error(-4001, "Failed to create AVAssetReader for " + filePath);
         }
 
         NSArray<AVAssetTrack*>* tracks = [asset tracksWithMediaType:AVMediaTypeVideo];
         if (tracks.count == 0) {
-            return Result::error(-4003, "No video track found");
+            LOGE("No video track found in %s", filePath.c_str());
+            return Result::error(-4003, "No video track found in " + filePath);
         }
         AVAssetTrack* videoTrack = tracks.firstObject;
 
@@ -52,16 +56,19 @@ public:
         if ([m_assetReader canAddOutput:m_trackOutput]) {
             [m_assetReader addOutput:m_trackOutput];
         } else {
-            return Result::error(-4004, "Cannot add track output");
+            LOGE("Cannot add track output for %s", filePath.c_str());
+            return Result::error(-4004, "Cannot add track output for " + filePath);
         }
 
         EAGLContext* context = [EAGLContext currentContext];
         if (!context) {
+            LOGE("No EAGLContext available for %s", filePath.c_str());
             return Result::error(-4005, "No EAGLContext available");
         }
 
         CVReturn err = CVOpenGLESTextureCacheCreate(kCFAllocatorDefault, NULL, context, NULL, &m_textureCache);
         if (err != kCVReturnSuccess) {
+            LOGE("Failed to create texture cache for %s, error: %d", filePath.c_str(), err);
             return Result::error(-4006, "Failed to create texture cache");
         }
 
@@ -120,7 +127,8 @@ public:
         // 模拟: iOS AVAssetReader 不能随意 Seek，只能重新实例化并指定 timeRange
         // 因此如果需要精准回退，通常非常昂贵，触发软解降级
         if (timeNs < m_lastSeekTimeNs) {
-            return Result::error(ErrorCode::ERR_DECODER_SEEK_FAILED, "Hardware Decoder failed to seek backward accurately (B-Frame Nightmare). Trigger Software Decoder fallback.");
+            LOGW("Backward seek detected on iOS (last: %lld, target: %lld). HW decoder will fallback.", (long long)m_lastSeekTimeNs, (long long)timeNs);
+            return Result::error(ErrorCode::ERR_DECODER_SEEK_FAILED, "Hardware Decoder failed to seek backward accurately. Trigger Software Decoder fallback.");
         }
 
         flushQueue();
@@ -147,6 +155,7 @@ public:
         if (targetPacket && m_textureCache) {
             CVPixelBufferRef pixelBuffer = (CVPixelBufferRef)targetPacket->nativeBuffer;
             if (!pixelBuffer) {
+                LOGE("Invalid native buffer at %lld", (long long)timeNs);
                 return ResultPayload<Texture>::error(ErrorCode::ERR_DECODER_FRAME_DROP, "Invalid native buffer");
             }
 
@@ -174,10 +183,12 @@ public:
                 GLuint textureId = CVOpenGLESTextureGetName(m_cvTexture);
                 return ResultPayload<Texture>::ok({textureId, (uint32_t)m_width, (uint32_t)m_height});
             } else {
+                LOGE("Failed to create texture from CVPixelBuffer, error: %d", err);
                 return ResultPayload<Texture>::error(ErrorCode::ERR_DECODER_HW_FAILURE, "Failed to create texture from CVPixelBuffer");
             }
         }
 
+        LOGW("Frame not ready or dropped on iOS at %lld", (long long)timeNs);
         return ResultPayload<Texture>::error(ErrorCode::ERR_DECODER_FRAME_DROP, "Frame not ready or dropped");
     }
 

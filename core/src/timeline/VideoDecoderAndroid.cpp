@@ -4,7 +4,8 @@
 #include <media/NdkMediaExtractor.h>
 #include <media/NdkMediaCodec.h>
 #include <media/NdkMediaFormat.h>
-#include <android/log.h>
+#define LOG_TAG "VideoDecoderAndroid"
+#include "../../include/Log.h"
 #include <vector>
 #include <thread>
 #include <mutex>
@@ -12,8 +13,6 @@
 #include <queue>
 #include <atomic>
 #include "../../include/GLStateManager.h"
-
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "VideoDecoderAndroid", __VA_ARGS__)
 
 namespace sdk {
 namespace video {
@@ -31,12 +30,12 @@ public:
 
     Result open(const std::string& filePath) override {
         m_extractor = AMediaExtractor_new();
-        if (!m_extractor) return Result::error(-4001, "Failed to create AMediaExtractor");
+        if (!m_extractor) return Result::error(-4001, "Failed to create AMediaExtractor for " + filePath);
 
         media_status_t err = AMediaExtractor_setDataSource(m_extractor, filePath.c_str());
         if (err != AMEDIA_OK) {
-            LOGE("Failed to set data source: %s", filePath.c_str());
-            return Result::error(-4002, "Failed to set data source");
+            LOGE("Failed to set data source: %s, error: %d", filePath.c_str(), (int)err);
+            return Result::error(-4002, "Failed to set data source for " + filePath);
         }
 
         int numTracks = AMediaExtractor_getTrackCount(m_extractor);
@@ -54,24 +53,34 @@ public:
             format = nullptr;
         }
 
-        if (!format) return Result::error(-4003, "No video track found");
+        if (!format) {
+            LOGE("No video track found in %s", filePath.c_str());
+            return Result::error(-4003, "No video track found in " + filePath);
+        }
 
         AMediaFormat_getInt32(format, AMEDIAFORMAT_KEY_WIDTH, &m_width);
         AMediaFormat_getInt32(format, AMEDIAFORMAT_KEY_HEIGHT, &m_height);
 
         m_codec = AMediaCodec_createDecoderByType(mime);
         if (!m_codec) {
+            LOGE("Failed to create codec for mime %s", mime);
             AMediaFormat_delete(format);
-            return Result::error(-4004, "Failed to create codec");
+            return Result::error(-4004, "Failed to create codec for " + filePath);
         }
 
         err = AMediaCodec_configure(m_codec, format, nullptr, nullptr, 0); // ByteBuffer mode
         AMediaFormat_delete(format);
 
-        if (err != AMEDIA_OK) return Result::error(-4005, "Failed to configure codec");
+        if (err != AMEDIA_OK) {
+            LOGE("Failed to configure codec for %s, error: %d", filePath.c_str(), (int)err);
+            return Result::error(-4005, "Failed to configure codec for " + filePath);
+        }
 
         err = AMediaCodec_start(m_codec);
-        if (err != AMEDIA_OK) return Result::error(-4006, "Failed to start codec");
+        if (err != AMEDIA_OK) {
+            LOGE("Failed to start codec for %s, error: %d", filePath.c_str(), (int)err);
+            return Result::error(-4006, "Failed to start codec for " + filePath);
+        }
 
         m_running = true;
         m_decodeThread = std::thread(&VideoDecoderAndroid::decodeLoop, this);
@@ -222,12 +231,14 @@ public:
         // 模拟：如果是需要倒放或跨越度太大的 Seek，硬件解码器宣布失败，交给软解。
         // （在真正的实现里，判断 timeNs 是否导致解码器丢帧或花屏）
         if (timeNs < m_lastSeekTimeNs) {
-            return Result::error(ErrorCode::ERR_DECODER_SEEK_FAILED, "Hardware Decoder failed to seek backward accurately (B-Frame Nightmare). Trigger Software Decoder fallback.");
+            LOGW("Backward seek detected (last: %lld, target: %lld). HW decoder may jitter.", (long long)m_lastSeekTimeNs, (long long)timeNs);
+            return Result::error(ErrorCode::ERR_DECODER_SEEK_FAILED, "Hardware Decoder failed to seek backward accurately. Trigger Software Decoder fallback.");
         }
 
         flushQueue();
         media_status_t status = AMediaExtractor_seekTo(m_extractor, timeNs / 1000, AMEDIAEXTRACTOR_SEEK_PREVIOUS_SYNC);
         if (status != AMEDIA_OK) {
+            LOGE("AMediaExtractor_seekTo failed, status: %d", (int)status);
             return Result::error(ErrorCode::ERR_DECODER_SEEK_FAILED, "AMediaExtractor_seekTo failed");
         }
 
@@ -258,6 +269,7 @@ public:
             int uvSize = m_width * m_height / 2;
 
             if (targetPacket->data.size() < ySize + uvSize) {
+                LOGE("Invalid frame data size: %zu, expected: %d", targetPacket->data.size(), ySize + uvSize);
                 return ResultPayload<Texture>::error(ErrorCode::ERR_DECODER_HW_FAILURE, "Invalid frame data size");
             }
 
@@ -294,6 +306,7 @@ public:
             return ResultPayload<Texture>::ok({m_textureId, (uint32_t)m_width, (uint32_t)m_height});
         }
 
+        LOGW("Frame not ready or dropped at %lld", (long long)timeNs);
         return ResultPayload<Texture>::error(ErrorCode::ERR_DECODER_FRAME_DROP, "Frame not ready or dropped");
     }
 
