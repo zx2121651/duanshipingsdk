@@ -1,5 +1,8 @@
 #include "../include/FilterEngine.h"
+#define LOG_TAG "FilterEngine"
+#include "../include/Log.h"
 #include <iostream>
+#include <chrono>
 #include <algorithm>
 
 namespace sdk {
@@ -53,6 +56,7 @@ ResultPayload<Texture> FilterEngine::processFrame(const Texture& textureIn, int 
     }
 
     if (m_graph && m_outputNode) {
+        LOGD("Processing frame: input %u, size %dx%d", textureIn.id, width, height);
         if (m_cameraNode) {
             VideoFrame inFrame;
             inFrame.textureId = textureIn.id;
@@ -64,6 +68,7 @@ ResultPayload<Texture> FilterEngine::processFrame(const Texture& textureIn, int 
 
         Result execRes = m_graph->execute(0);
         if (!execRes.isOk()) {
+            LOGE("Graph execution failed: %s", execRes.getMessage().c_str());
             return ResultPayload<Texture>::error(execRes.getErrorCode(), execRes.getMessage());
         }
 
@@ -74,6 +79,7 @@ ResultPayload<Texture> FilterEngine::processFrame(const Texture& textureIn, int 
         m_metricsCollector.recordFrameTime(duration_ms);
 
         if (!outFrame.isValid()) {
+            LOGE("Pipeline produced an invalid output frame (missing texture)");
             return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Pipeline produced an invalid output frame (missing texture)");
         }
         return ResultPayload<Texture>::ok(Texture{outFrame.textureId, outFrame.width, outFrame.height});
@@ -242,9 +248,11 @@ Result FilterEngine::rebuildGraph(std::shared_ptr<PipelineNode> inputNode) {
     // Verify the new topology before committing
     Result res = newGraph->compile();
     if (!res.isOk()) {
-        std::cerr << "Pipeline Compile Failed during rebuild: " << res.getMessage() << std::endl;
+        LOGE("Pipeline Compile Failed during rebuild: %s", res.getMessage().c_str());
         return res;
     }
+
+    LOGI("Pipeline rebuilt successfully with %zu nodes", newGraph->getNodes().size());
 
     // Atomic commit of the new state
     if (m_graph) {

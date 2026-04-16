@@ -1,4 +1,6 @@
 #include "../../include/timeline/DecoderPool.h"
+#define LOG_TAG "DecoderPool"
+#include "../../include/Log.h"
 #include <iostream>
 
 #ifdef __ANDROID__
@@ -49,7 +51,7 @@ void DecoderPool::registerMedia(const std::string& clipId, const std::string& so
     ctx->lastAccessCounter = ++m_accessCounter;
 
     m_decoders[clipId] = ctx;
-    std::cout << "[DecoderPool] Registered media " << clipId << " from " << sourcePath << " (deferred open)" << std::endl;
+    LOGI("Registered media %s from %s (deferred open)", clipId.c_str(), sourcePath.c_str());
 }
 
 void DecoderPool::releaseMedia(const std::string& clipId) {
@@ -70,7 +72,7 @@ void DecoderPool::releaseMedia(const std::string& clipId) {
         it->second->isInitialized = false;
 
         m_decoders.erase(it);
-        std::cout << "[DecoderPool] Released media " << clipId << std::endl;
+        LOGI("Released media %s", clipId.c_str());
     }
 }
 
@@ -91,7 +93,7 @@ void DecoderPool::clear() {
     }
     m_decoders.clear();
     m_activeDecoderCount = 0;
-    std::cout << "[DecoderPool] Cleared all media" << std::endl;
+    LOGI("Cleared all media");
 }
 
 void DecoderPool::evictDecodersIfNeeded() {
@@ -109,7 +111,7 @@ void DecoderPool::evictDecodersIfNeeded() {
         }
 
         if (oldestCtx) {
-            std::cout << "[DecoderPool] Evicting active decoder for clip " << oldestId << " due to concurrency limits." << std::endl;
+            LOGI("Evicting active decoder for clip %s due to concurrency limits.", oldestId.c_str());
             oldestCtx->decoder->close();
             oldestCtx->decoder = nullptr;
             oldestCtx->lastDecodedFrame = {0, 0, 0};
@@ -127,7 +129,7 @@ ResultPayload<Texture> DecoderPool::getFrame(const std::string& clipId, int64_t 
 
     auto it = m_decoders.find(clipId);
     if (it == m_decoders.end()) {
-        std::cerr << "[DecoderPool] Decoder context not found for clip " << clipId << std::endl;
+        LOGE("Decoder context not found for clip %s", clipId.c_str());
         return ResultPayload<Texture>::error(ErrorCode::ERR_TIMELINE_CLIP_NOT_FOUND, "Decoder context not found for clip " + clipId);
     }
 
@@ -142,10 +144,10 @@ ResultPayload<Texture> DecoderPool::getFrame(const std::string& clipId, int64_t 
             ctx->softDecoder = createSoftwareDecoder();
             auto openRes = ctx->softDecoder->open(ctx->sourcePath);
             if (!openRes.isOk()) {
-                std::cerr << "[DecoderPool] Failed to open Software Decoder for clip " << clipId << ": " << openRes.getMessage() << std::endl;
-                return ResultPayload<Texture>::error(ErrorCode::ERR_TIMELINE_DECODER_GET_FRAME_FAILED, "Failed to open software decoder: " + openRes.getMessage());
+                LOGE("Failed to open Software Decoder for clip %s: %s", clipId.c_str(), openRes.getMessage().c_str());
+                return ResultPayload<Texture>::error(ErrorCode::ERR_TIMELINE_DECODER_GET_FRAME_FAILED, "Failed to open software decoder for " + clipId + ": " + openRes.getMessage());
             }
-            std::cout << "[DecoderPool] Falling back to Software Decoder for clip " << clipId << std::endl;
+            LOGI("Falling back to Software Decoder for clip %s (HW failed: %d, Exact seek: %d)", clipId.c_str(), ctx->hwFailed, requiresExactSeek);
         }
         Result seekRes = ctx->softDecoder->seekExact(localTimeNs);
         if (seekRes.isOk()) {
@@ -157,11 +159,11 @@ ResultPayload<Texture> DecoderPool::getFrame(const std::string& clipId, int64_t 
                 ctx->isInitialized = true;
                 return frameRes;
             }
-            std::cerr << "[DecoderPool] Software decoder returned error for clip " << clipId << ": " << frameRes.getMessage() << std::endl;
+            LOGE("Software decoder returned error for clip %s at %lld: %s", clipId.c_str(), (long long)localTimeNs, frameRes.getMessage().c_str());
             return frameRes;
         } else {
-            std::cerr << "[DecoderPool] Software seek failed for clip " << clipId << ": " << seekRes.getMessage() << std::endl;
-            return ResultPayload<Texture>::error(ErrorCode::ERR_DECODER_SEEK_FAILED, "Software seek failed: " + seekRes.getMessage());
+            LOGE("Software seek failed for clip %s to %lld: %s", clipId.c_str(), (long long)localTimeNs, seekRes.getMessage().c_str());
+            return ResultPayload<Texture>::error(ErrorCode::ERR_DECODER_SEEK_FAILED, "Software seek failed for " + clipId + ": " + seekRes.getMessage());
         }
     }
 
@@ -173,14 +175,14 @@ ResultPayload<Texture> DecoderPool::getFrame(const std::string& clipId, int64_t 
             auto res = ctx->decoder->open(ctx->sourcePath);
             if (res.isOk()) {
                 m_activeDecoderCount++;
-                std::cout << "[DecoderPool] Activated decoder for clip " << clipId << std::endl;
+                LOGI("Activated hardware decoder for clip %s", clipId.c_str());
             } else {
-                std::cerr << "[DecoderPool] Failed to activate decoder for clip " << clipId << ": " << res.getMessage() << std::endl;
+                LOGE("Failed to activate hardware decoder for clip %s: %s", clipId.c_str(), res.getMessage().c_str());
                 ctx->decoder = nullptr;
                 ctx->hwFailed = true; // 硬件解码器直接报废，未来全走软解
             }
         } else {
-            std::cerr << "[DecoderPool] createPlatformDecoder returned null for clip " << clipId << std::endl;
+            LOGE("createPlatformDecoder returned null for clip %s", clipId.c_str());
             ctx->hwFailed = true;
         }
     }
@@ -189,7 +191,7 @@ ResultPayload<Texture> DecoderPool::getFrame(const std::string& clipId, int64_t 
         // 先尝试精准 Seek，检查硬件解码器是否支持该跳变
         Result seekRes = ctx->decoder->seekExact(localTimeNs);
         if (!seekRes.isOk()) {
-            std::cerr << "[DecoderPool] Hardware seek failed for clip " << clipId << ": " << seekRes.getMessage() << ". Degrading to software." << std::endl;
+            LOGW("Hardware seek failed for clip %s to %lld: %s. Degrading to software.", clipId.c_str(), (long long)localTimeNs, seekRes.getMessage().c_str());
             // 硬件解码器寻址失败（如 B-Frame 导致花屏），触发当前上下文的硬件降级
             ctx->hwFailed = true;
             ctx->decoder->close();
@@ -212,7 +214,7 @@ ResultPayload<Texture> DecoderPool::getFrame(const std::string& clipId, int64_t 
         } else {
             // 如果硬件解码器返回 Fatal 错误（比如设备丢失、解码器崩溃），触发降级
             if (frameRes.getErrorCode() == ErrorCode::ERR_DECODER_HW_FAILURE) {
-                std::cerr << "[DecoderPool] Hardware decoder fatal failure for clip " << clipId << ": " << frameRes.getMessage() << ". Degrading to software." << std::endl;
+                LOGE("Hardware decoder fatal failure for clip %s at %lld: %s. Degrading to software.", clipId.c_str(), (long long)localTimeNs, frameRes.getMessage().c_str());
                 ctx->hwFailed = true;
                 ctx->decoder->close();
                 ctx->decoder = nullptr;
@@ -223,13 +225,13 @@ ResultPayload<Texture> DecoderPool::getFrame(const std::string& clipId, int64_t 
             }
 
             // 否则可能是暂时性的丢帧 (ERR_DECODER_FRAME_DROP)
-            std::cerr << "[DecoderPool] Hardware decoder returned error for clip " << clipId << ": " << frameRes.getMessage() << std::endl;
+            LOGW("Hardware decoder returned error for clip %s at %lld: %s", clipId.c_str(), (long long)localTimeNs, frameRes.getMessage().c_str());
             return frameRes;
         }
     } else {
         // Both HW and SW (if tried) failed, or we are in a state where we can't decode.
-        std::cerr << "[DecoderPool] Both HW and SW decoding failed or unavailable for clip " << clipId << std::endl;
-        return ResultPayload<Texture>::error(ErrorCode::ERR_TIMELINE_DECODER_GET_FRAME_FAILED, "Decoding failed or unavailable");
+        LOGE("Both HW and SW decoding failed or unavailable for clip %s", clipId.c_str());
+        return ResultPayload<Texture>::error(ErrorCode::ERR_TIMELINE_DECODER_GET_FRAME_FAILED, "Decoding failed or unavailable for " + clipId);
     }
 }
 

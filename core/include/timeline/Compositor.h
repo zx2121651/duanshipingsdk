@@ -3,6 +3,7 @@
 
 #include "../GLTypes.h"
 #include "../FrameBuffer.h"
+#include "../PerformanceMetrics.h"
 #include <memory>
 #include <vector>
 #include <functional>
@@ -29,7 +30,10 @@ public:
 
     Result renderFrameAtTime(int64_t timelineNs, FrameBufferPtr outputFb);
 
+    PerformanceMetrics getMetrics() const { return m_metricsCollector.getMetrics(); }
+
 private:
+    mutable MetricsCollector m_metricsCollector;
     std::shared_ptr<Timeline> m_timeline;
     std::shared_ptr<FilterEngine> m_filterEngine;
     std::shared_ptr<IDecoderPool> m_decoderPool;

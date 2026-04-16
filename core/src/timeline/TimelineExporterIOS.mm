@@ -4,9 +4,12 @@
 #import <AVFoundation/AVFoundation.h>
 #import <CoreVideo/CoreVideo.h>
 #import <OpenGLES/EAGL.h>
+#define LOG_TAG "TimelineExporterIOS"
+#include "../../include/Log.h"
 #import <OpenGLES/ES3/gl.h>
 #include "../../include/GLStateManager.h"
 #include <thread>
+#include <chrono>
 #include <atomic>
 #include <mutex>
 
@@ -29,8 +32,10 @@ public:
 
     Result configure(const std::string& outputPath, int width, int height, int fps, int bitrate) override {
         if (m_state != State::IDLE && m_state != State::COMPLETED && m_state != State::FAILED && m_state != State::CANCELED) {
+            LOGE("Cannot configure while running, current state: %d", (int)m_state.load());
             return Result::error(ErrorCode::ERR_EXPORTER_ALREADY_RUNNING, "Cannot configure while running");
         }
+        LOGI("Configuring exporter: path=%s, size=%dx%d, fps=%d, bitrate=%d", outputPath.c_str(), width, height, fps, bitrate);
         m_outputPath = outputPath;
         m_width = width;
         m_height = height;
@@ -52,10 +57,12 @@ public:
                      CompletionCallback onComplete) override {
 
         if (m_state == State::STARTING || m_state == State::EXPORTING) {
+            LOGE("Export already in progress, current state: %d", (int)m_state.load());
             return Result::error(ErrorCode::ERR_EXPORTER_ALREADY_RUNNING, "Export already in progress");
         }
 
         if (m_outputPath.empty() || m_width <= 0 || m_height <= 0) {
+            LOGE("Exporter not properly configured: path=%s, size=%dx%d", m_outputPath.c_str(), m_width, m_height);
             return Result::error(ErrorCode::ERR_EXPORTER_NOT_CONFIGURED, "Exporter not properly configured");
         }
 
@@ -67,16 +74,23 @@ public:
         }
 
         m_exportThread = std::thread([this, timeline, compositor, onProgress, onComplete]() {
+            auto start_time = std::chrono::high_resolution_clock::now();
+            LOGI("Export thread started (iOS)");
             Result res = runExport(timeline, compositor, onProgress);
+            auto end_time = std::chrono::high_resolution_clock::now();
+            float total_duration_s = std::chrono::duration<float>(end_time - start_time).count();
 
             {
                 std::lock_guard<std::mutex> lock(m_stateMutex);
                 if (res.isOk()) {
                     m_state = State::COMPLETED;
+                    LOGI("Export completed successfully in %.2f seconds", total_duration_s);
                 } else if (res.getErrorCode() == ErrorCode::ERR_EXPORTER_CANCELLED) {
                     m_state = State::CANCELED;
+                    LOGI("Export canceled after %.2f seconds", total_duration_s);
                 } else {
                     m_state = State::FAILED;
+                    LOGE("Export failed after %.2f seconds: %s", total_duration_s, res.getMessage().c_str());
                 }
             }
 
@@ -226,6 +240,7 @@ private:
 
                         Result renderRes = compositor->renderFrameAtTime(currentTimeNs, cvExternalFbWrapper);
                         if (!renderRes.isOk()) {
+                            LOGE("Export render failed at %lld: %s", (long long)currentTimeNs, renderRes.getMessage().c_str());
                             exportResult = renderRes;
                             CFRelease(cvTexture);
                             CVPixelBufferRelease(pixelBuffer);
