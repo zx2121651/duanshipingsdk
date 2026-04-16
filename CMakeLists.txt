@@ -87,6 +87,12 @@ if (NOT WIN32 AND NOT GLES2_LIBRARY)
 endif()
 target_link_libraries(test_timeline video_sdk_core)
 
+add_executable(test_decoder_pool tests/test_decoder_pool.cpp)
+if (NOT WIN32 AND NOT GLES2_LIBRARY)
+    target_include_directories(test_decoder_pool PRIVATE ${CMAKE_SOURCE_DIR}/mock_gl)
+endif()
+target_link_libraries(test_decoder_pool video_sdk_core)
+
 add_executable(test_track_behavior tests/test_track_behavior.cpp)
 if (NOT WIN32 AND NOT GLES2_LIBRARY)
     target_include_directories(test_track_behavior PRIVATE ${CMAKE_SOURCE_DIR}/mock_gl)
