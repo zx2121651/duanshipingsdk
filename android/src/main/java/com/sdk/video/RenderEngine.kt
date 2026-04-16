@@ -32,7 +32,8 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     var lastFrameTimeMs: Long = 0L
 
     private var recordingStartTimeNs: Long = 0L
-    private var lastVideoPtsNs: Long = 0L
+    private var lastVideoPtsNs: Long = -1L
+    private var firstFrameSessionTimestamp: Long = -1L
     private var isRecording: Boolean = false
 
     var onFrameProcessedListener: ((outputTextureId: Int) -> Unit)? = null
@@ -129,18 +130,20 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
             st.getTransformMatrix(transformMatrix)
 
             // Pass timestamp to native layer for MediaCodec EGL presentation time
-            // [PTS Drift Fix]: Use audio master clock to forcefully align video PTS to the
-            // audio crystal if recording is active.
+            // [PTS Anchor Fix]: Use the first frame's SurfaceTexture timestamp as a relative baseline
+            // and offset it by the recording anchor. This maintains the camera's native cadence
+            // while ensuring the track starts exactly at the synchronized anchor.
             var timestampNs = st.timestamp
             if (isRecording && recordingStartTimeNs > 0) {
-                val audioTimeNs = getAudioTimeNs()
-                if (audioTimeNs > 0) {
-                    timestampNs = recordingStartTimeNs + audioTimeNs
-                    if (timestampNs <= lastVideoPtsNs) {
-                        timestampNs = lastVideoPtsNs + 10000 // Ensure strict monotonicity (10us)
-                    }
-                    lastVideoPtsNs = timestampNs
+                if (firstFrameSessionTimestamp == -1L) {
+                    firstFrameSessionTimestamp = timestampNs
                 }
+                timestampNs = recordingStartTimeNs + (timestampNs - firstFrameSessionTimestamp)
+
+                if (lastVideoPtsNs != -1L && timestampNs <= lastVideoPtsNs) {
+                    timestampNs = lastVideoPtsNs + 10000 // Ensure strict monotonicity (10us)
+                }
+                lastVideoPtsNs = timestampNs
             }
 
             val outputTexId = nativeProcessFrame(nativeHandle, oesTextureId, width, height, transformMatrix, timestampNs)
@@ -163,7 +166,8 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     // Recording API
     fun setRecordingAnchor(anchorTimeNs: Long) {
         recordingStartTimeNs = anchorTimeNs
-        lastVideoPtsNs = anchorTimeNs
+        lastVideoPtsNs = -1L
+        firstFrameSessionTimestamp = -1L
     }
 
     fun startRecording(surface: Surface): Result<Unit> {
