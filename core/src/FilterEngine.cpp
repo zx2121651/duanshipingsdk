@@ -195,6 +195,11 @@ Result FilterEngine::rebuildGraph(std::shared_ptr<PipelineNode> inputNode) {
 
     auto newOutputNode = std::make_shared<OutputNode>("Display");
     auto newCameraNode = std::dynamic_pointer_cast<CameraInputNode>(inputNode);
+
+    if (auto timelineNode = std::dynamic_pointer_cast<TimelineNode>(inputNode)) {
+        timelineNode->setFrameBufferPool(&m_frameBufferPool);
+    }
+
     std::shared_ptr<PipelineNode> lastNode = inputNode;
 
     // Create new graph

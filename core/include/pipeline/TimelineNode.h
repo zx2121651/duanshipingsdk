@@ -3,6 +3,8 @@
 #include "PipelineNode.h"
 #include "../timeline/Timeline.h"
 #include "../timeline/Compositor.h"
+#include "../FrameBufferPool.h"
+#include <algorithm>
 
 namespace sdk {
 namespace video {
@@ -23,7 +25,17 @@ public:
         int width = m_timeline->getOutputWidth();
         int height = m_timeline->getOutputHeight();
 
-        FrameBufferPtr fbo = m_frameBufferPool.getFrameBuffer(width, height);
+        // Dimension safety: Ensure at least 1x1 to prevent GLES errors
+        width = std::max(1, width);
+        height = std::max(1, height);
+
+        FrameBufferPtr fbo = nullptr;
+        if (m_pool) {
+            fbo = m_pool->getFrameBuffer(width, height);
+        } else {
+            fbo = m_internalPool.getFrameBuffer(width, height);
+        }
+
         if (!fbo) {
             return ResultPayload<VideoFrame>::error(ErrorCode::ERR_RENDER_FBO_ALLOC_FAILED, "Failed to allocate FBO for TimelineNode");
         }
@@ -43,10 +55,13 @@ public:
         return ResultPayload<VideoFrame>::ok(frame);
     }
 
+    void setFrameBufferPool(FrameBufferPool* pool) { m_pool = pool; }
+
 private:
     std::shared_ptr<timeline::Timeline> m_timeline;
     std::shared_ptr<timeline::Compositor> m_compositor;
-    FrameBufferPool m_frameBufferPool;
+    FrameBufferPool* m_pool = nullptr;
+    FrameBufferPool m_internalPool; // Fallback pool
 };
 
 } // namespace video
