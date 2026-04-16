@@ -13,6 +13,8 @@ typedef NS_ENUM(NSInteger, IOSFilterType) {
 
 @interface FilterEngineWrapper : NSObject
 
+@property (nonatomic, readonly) int lastErrorCode;
+
 - (instancetype)init;
 - (int)initializeWithContext:(EAGLContext *)context;
 - (CVPixelBufferRef)processFrame:(CVPixelBufferRef)pixelBuffer;
