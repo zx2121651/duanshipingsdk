@@ -41,7 +41,7 @@ private:
 
     void initPrograms();
     void initCopyProgram();
-    void copyTexture(const Texture& src, FrameBufferPtr target);
+    void copyTexture(const Texture& src, FrameBufferPtr target, float opacity = 1.0f);
 
     void initBlendProgram();
     void initWipeTransitionProgram();

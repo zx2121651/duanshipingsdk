@@ -58,10 +58,7 @@ void Timeline::getActiveVideoClipsAtTime(int64_t timelineNs, std::vector<ClipPtr
         if (track->getType() == Track::TrackType::MAIN_VIDEO ||
             track->getType() == Track::TrackType::PIP_VIDEO) {
 
-            ClipPtr clip = track->getActiveClipAtTime(timelineNs);
-            if (clip) {
-                outClips.push_back(clip);
-            }
+            track->getActiveClipsAtTime(timelineNs, outClips);
         }
     }
 }
@@ -75,8 +72,10 @@ void Timeline::getActiveAudioClipsAtTime(int64_t timelineNs, std::vector<ClipPtr
         TrackPtr track = pair.second;
         if (!track || track->getTrackVolume() <= 0.0f) continue;
 
-        ClipPtr clip = track->getActiveClipAtTime(timelineNs);
-        if (clip) {
+        std::vector<ClipPtr> trackActiveClips;
+        track->getActiveClipsAtTime(timelineNs, trackActiveClips);
+
+        for (const auto& clip : trackActiveClips) {
             int64_t relativeNs = timelineNs - clip->getTimelineIn();
             if (clip->getVolume(relativeNs) > 0.0f) {
                 outClips.push_back(clip);

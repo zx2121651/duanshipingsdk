@@ -55,6 +55,21 @@ ClipPtr Track::getActiveClipAtTime(int64_t timelineNs) const {
     return nullptr;
 }
 
+void Track::getActiveClipsAtTime(int64_t timelineNs, std::vector<ClipPtr>& outClips) const {
+    for (const auto& clip : m_clips) {
+        int64_t start = clip->getTimelineIn();
+        int64_t end = clip->getTimelineOut();
+
+        if (timelineNs >= start && timelineNs < end) {
+            outClips.push_back(clip);
+        }
+
+        // Clips are sorted by TimelineIn, so we can't break early here
+        // because an earlier-starting clip might still be active if it's very long
+        // and overlaps with later clips.
+    }
+}
+
 
 int64_t Track::getMaxTimelineOut() const {
     int64_t maxOut = 0;
