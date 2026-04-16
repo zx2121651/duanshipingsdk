@@ -8,6 +8,9 @@
 #include <media/NdkMediaFormat.h>
 #include <media/NdkMediaMuxer.h>
 #include <android/log.h>
+#include <android/native_window.h>
+#include <android/native_window_jni.h>
+#include <dlfcn.h>
 #include <thread>
 #include <atomic>
 #include <mutex>
@@ -15,9 +18,17 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "TimelineExporterAndroid", __VA_ARGS__)
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, "TimelineExporterAndroid", __VA_ARGS__)
 
+// NDK constants missing in older headers or different names
+#ifndef AMEDIACODEC_BUFFER_FLAG_KEY_FRAME
+#define AMEDIACODEC_BUFFER_FLAG_KEY_FRAME 1
+#endif
+
 namespace sdk {
 namespace video {
 namespace timeline {
+
+typedef media_status_t (*PFN_AMediaCodec_createInputSurface)(AMediaCodec*, ANativeWindow**);
+typedef media_status_t (*PFN_AMediaCodec_signalEndOfInputStream)(AMediaCodec*);
 
 class TimelineExporterAndroid : public TimelineExporter {
 public:
@@ -114,6 +125,14 @@ private:
 
         m_state = State::EXPORTING;
 
+        // Dynamic link to API 26+ functions
+        PFN_AMediaCodec_createInputSurface p_createInputSurface = (PFN_AMediaCodec_createInputSurface)dlsym(RTLD_DEFAULT, "AMediaCodec_createInputSurface");
+        PFN_AMediaCodec_signalEndOfInputStream p_signalEndOfInputStream = (PFN_AMediaCodec_signalEndOfInputStream)dlsym(RTLD_DEFAULT, "AMediaCodec_signalEndOfInputStream");
+
+        if (!p_createInputSurface) {
+            return Result::error(ErrorCode::ERR_EXPORTER_ENCODER_INIT_FAILED, "AMediaCodec_createInputSurface not available (API 26+ required)");
+        }
+
         // --- 1. Resource Management Helpers (RAII-like) ---
         struct ResourceGuard {
             AMediaCodec* encoder = nullptr;
@@ -165,7 +184,7 @@ private:
         AMediaFormat_delete(format);
         if (status != AMEDIA_OK) return Result::error(ErrorCode::ERR_EXPORTER_ENCODER_INIT_FAILED, "Failed to configure encoder");
 
-        status = AMediaCodec_createInputSurface(g.encoder, &g.surface);
+        status = p_createInputSurface(g.encoder, &g.surface);
         if (status != AMEDIA_OK || !g.surface) return Result::error(ErrorCode::ERR_EXPORTER_ENCODER_INIT_FAILED, "Failed to create input surface");
 
         status = AMediaCodec_start(g.encoder);
@@ -198,6 +217,7 @@ private:
             return Result::error(ErrorCode::ERR_EXPORTER_GL_CONTEXT_FAILED, "Failed to eglMakeCurrent");
         }
 
+        typedef EGLBoolean (EGLAPIENTRYP PFNEGLPRESENTATIONTIMEANDROIDPROC)(EGLDisplay dpy, EGLSurface sur, khronos_stime_nanoseconds_t time);
         auto eglPresentationTimeANDROID = (PFNEGLPRESENTATIONTIMEANDROIDPROC)eglGetProcAddress("eglPresentationTimeANDROID");
 
         // --- 4. Setup Muxer ---
@@ -258,7 +278,9 @@ private:
                 currentTimeNs += frameDurationNs;
 
                 if (currentTimeNs > totalDurationNs) {
-                    AMediaCodec_signalEndOfInputStream(g.encoder);
+                    if (p_signalEndOfInputStream) {
+                        p_signalEndOfInputStream(g.encoder);
+                    }
                     inputEOS = true;
                 }
             }
@@ -318,7 +340,7 @@ private:
             }
         }
 
-        if (m_chunkDurationNs > 0 && !m_canceled && m_onChunkReady) {
+        if (m_chunkDurationNs > 0 && m_state != State::CANCELED && m_onChunkReady) {
             m_onChunkReady(currentChunkPath, chunkIndex);
         }
 
