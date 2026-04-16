@@ -142,7 +142,13 @@ public class VideoEncoder {
         if audioInput.isReadyForMoreMediaData {
             var sbuf: CMSampleBuffer?
             var timing = CMSampleTimingInfo(duration: CMSampleBufferGetDuration(sampleBuffer), presentationTimeStamp: lastAudioPts, decodeTimeStamp: .invalid)
-            CMSampleBufferCreateCopyWithNewTiming(kCFAllocatorDefault, sampleBuffer, 1, &timing, &sbuf)
+            CMSampleBufferCreateCopyWithNewTiming(
+                allocator: kCFAllocatorDefault,
+                sampleBuffer: sampleBuffer,
+                sampleTimingEntryCount: 1,
+                sampleTimingArray: &timing,
+                sampleBufferOut: &sbuf
+            )
 
             if let sbuf = sbuf {
                 audioInput.append(sbuf)
