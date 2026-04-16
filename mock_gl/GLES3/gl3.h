@@ -83,8 +83,8 @@ inline void glEnable(GLenum) {}
 inline void glDisable(GLenum) {}
 
 // For FrameBuffer.cpp
-inline void glGenFramebuffers(GLsizei, GLuint*) {}
-inline void glGenTextures(GLsizei, GLuint*) {}
+inline void glGenFramebuffers(GLsizei n, GLuint* ids) { for(int i=0; i<n; ++i) ids[i] = 100 + i; }
+inline void glGenTextures(GLsizei n, GLuint* ids) { for(int i=0; i<n; ++i) ids[i] = 200 + i; }
 inline void glTexParameteri(GLenum, GLenum, GLint) {}
 inline void glTexImage2D(GLenum, GLint, GLint, GLsizei, GLsizei, GLint, GLenum, GLenum, const void*) {}
 inline void glFramebufferTexture2D(GLenum, GLenum, GLenum, GLuint, GLint) {}
