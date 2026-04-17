@@ -21,8 +21,13 @@ jobs:
           xcode-version: latest-stable
 
       - name: Build Framework (xcodebuild)
+        # Explicitly define entry points to ensure CI remains synchronized with the project structure.
+        # - Project Path: ios/VideoSDK.xcodeproj
+        # - Scheme: VideoSDK
+        # - Destination: generic/platform=iOS Simulator (chosen for compatibility with code-signing-free builds)
         run: |
-          xcodebuild clean build -project ios/VideoSDK.xcodeproj \
+          xcodebuild clean build \
+            -project ios/VideoSDK.xcodeproj \
             -scheme "VideoSDK" \
             -destination "generic/platform=iOS Simulator" \
             CODE_SIGN_IDENTITY="" \
