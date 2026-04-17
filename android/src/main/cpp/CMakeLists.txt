@@ -30,6 +30,8 @@ set(CORE_SRC
         ../../../../core/src/timeline/DecoderPool.cpp
         ../../../../core/src/timeline/VideoDecoderAndroid.cpp
         ../../../../core/src/timeline/TimelineExporterAndroid.cpp
+        ../../../../core/src/rhi/GLTexture.cpp
+        ../../../../core/src/rhi/GLRenderDevice.cpp
 )
 
 add_library(video-sdk SHARED
