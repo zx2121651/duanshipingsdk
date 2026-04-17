@@ -29,8 +29,12 @@ set(CORE_SOURCES
 # Core engine build
 add_library(video_sdk_core STATIC ${CORE_SOURCES})
 
+enable_testing()
+
 # Basic API logic test (no GL windowing dependencies)
 add_executable(test_filter_graph tests/test_filter_graph.cpp tests/mocks/MockCompositor.cpp)
+add_test(NAME test_filter_graph COMMAND test_filter_graph)
+
 target_link_libraries(test_filter_graph video_sdk_core)
 
 add_executable(test_execute_stability_repro tests/test_execute_stability_repro.cpp tests/mocks/MockCompositor.cpp)
@@ -44,6 +48,7 @@ if (NOT WIN32 AND NOT GLES2_LIBRARY)
     target_include_directories(test_lifecycle PRIVATE ${CMAKE_SOURCE_DIR}/mock_gl)
 endif()
 target_link_libraries(test_lifecycle video_sdk_core)
+add_test(NAME test_lifecycle COMMAND test_lifecycle)
 
 # If we are on Windows and using vcpkg, configure ANGLE (GLES implementation)
 if(WIN32 AND DEFINED CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES "vcpkg.cmake")
@@ -88,18 +93,21 @@ if (NOT WIN32 AND NOT GLES2_LIBRARY)
     target_include_directories(test_timeline PRIVATE ${CMAKE_SOURCE_DIR}/mock_gl)
 endif()
 target_link_libraries(test_timeline video_sdk_core)
+add_test(NAME test_timeline COMMAND test_timeline)
 
 add_executable(test_decoder_pool tests/test_decoder_pool.cpp)
 if (NOT WIN32 AND NOT GLES2_LIBRARY)
     target_include_directories(test_decoder_pool PRIVATE ${CMAKE_SOURCE_DIR}/mock_gl)
 endif()
 target_link_libraries(test_decoder_pool video_sdk_core)
+add_test(NAME test_decoder_pool COMMAND test_decoder_pool)
 
 add_executable(test_track_behavior tests/test_track_behavior.cpp)
 if (NOT WIN32 AND NOT GLES2_LIBRARY)
     target_include_directories(test_track_behavior PRIVATE ${CMAKE_SOURCE_DIR}/mock_gl)
 endif()
 target_link_libraries(test_track_behavior video_sdk_core)
+add_test(NAME test_track_behavior COMMAND test_track_behavior)
 
 add_executable(test_rebuild_harden tests/test_rebuild_harden.cpp tests/mocks/MockCompositor.cpp)
 if (NOT WIN32 AND NOT GLES2_LIBRARY)
