@@ -36,6 +36,15 @@ jobs:
         working-directory: ./
         run: ./gradlew :android:testDebugUnitTest --stacktrace
 
+      - name: "SDK Library: Upload Test Report"
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-test-reports
+          path: |
+            android/build/reports/tests/testDebugUnitTest/
+            android/build/test-results/testDebugUnitTest/
+
       # Step 3: Build the Sample App (Integration Verification)
       # This verifies that the SDK can be correctly integrated into a host application.
       # This step depends on the success of the SDK Library build.

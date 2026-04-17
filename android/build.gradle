@@ -56,6 +56,18 @@ android {
 
         viewBinding true
     }
+
+    testOptions {
+        unitTests.all {
+            testLogging {
+                events "passed", "skipped", "failed", "standardOut", "standardError"
+                exceptionFormat "full"
+                showCauses true
+                showExceptions true
+                showStackTraces true
+            }
+        }
+    }
 }
 
 dependencies {
