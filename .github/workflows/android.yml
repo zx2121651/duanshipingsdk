@@ -23,14 +23,22 @@ jobs:
           cache: gradle
 
       # Use the committed Gradle Wrapper to ensure consistency between local and CI environments.
-      - name: Build Android Library
+
+      # Step 1: Build the SDK Library (Primary Product)
+      # This ensures the core SDK code is valid and can be compiled independently.
+      - name: "SDK Library: Build (Primary Product)"
         working-directory: ./
         run: ./gradlew :android:assembleDebug --stacktrace
 
-      - name: Run Android Unit Tests
+      # Step 2: Run SDK Unit Tests
+      # Verify the core logic of the SDK.
+      - name: "SDK Library: Run Unit Tests"
         working-directory: ./
         run: ./gradlew :android:testDebugUnitTest --stacktrace
 
-      - name: Build Sample App
+      # Step 3: Build the Sample App (Integration Verification)
+      # This verifies that the SDK can be correctly integrated into a host application.
+      # This step depends on the success of the SDK Library build.
+      - name: "Sample App: Build (Integration Verification)"
         working-directory: ./
         run: ./gradlew :sample-android:assembleDebug --stacktrace
