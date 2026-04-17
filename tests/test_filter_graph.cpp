@@ -52,11 +52,18 @@ void test_graph_cycle_detection() {
 void test_graph_invalid_inputs() {
     PipelineGraph graph;
     // Null node adding
-    assert(!graph.addNode(nullptr).isOk());
+    Result res = graph.addNode(nullptr);
+    assert(!res.isOk());
+    assert(res.getErrorCode() == ErrorCode::ERR_RENDER_INVALID_STATE);
+    assert(res.getMessage() == "Null node");
 
     // Null node connection
     auto nodeA = std::make_shared<CameraInputNode>("NodeA");
-    assert(!graph.connect(nullptr, nodeA).isOk());
+    res = graph.connect(nullptr, nodeA);
+    assert(!res.isOk());
+    assert(res.getErrorCode() == ErrorCode::ERR_RENDER_INVALID_STATE);
+    assert(res.getMessage() == "Null node connect");
+
     assert(!graph.connect(nodeA, nullptr).isOk());
     assert(!graph.connect(nullptr, nullptr).isOk());
 
@@ -80,19 +87,33 @@ void test_graph_uncompiled_execution() {
 }
 
 void test_graph_no_sink_nodes() {
-    PipelineGraph graph;
-    auto nodeA = std::make_shared<CameraInputNode>("NodeA");
-    graph.addNode(nodeA);
-    // nodeA has no outputs, so it IS a sink.
-    // To have no sinks, we need all nodes to have at least one output, which implies a cycle in a finite graph.
-    // But if we just have nodes and no connections? The current logic says if node->getOutputs().empty(), it's a sink.
-    // So if we have nodeA with no outputs, it's a sink.
+    // Case 1: Empty graph
+    {
+        PipelineGraph graph;
+        Result res = graph.compile();
+        assert(!res.isOk());
+        assert(res.getErrorCode() == ErrorCode::ERR_GRAPH_NO_SINK);
+        assert(res.getMessage().find("No nodes added") != std::string::npos);
+    }
 
-    // Wait, the only way to have no sink and not be empty is if every node has an output.
-    // In a finite graph, that means there MUST be a cycle.
+    // Case 2: Graph with nodes but no sinks (implies cycle)
+    {
+        PipelineGraph graph;
+        auto nodeA = std::make_shared<CameraInputNode>("NodeA");
+        auto nodeB = std::make_shared<OutputNode>("NodeB");
 
-    // Let's try to bypass cycle detection and hit no sink?
-    // Actually, compile() checks cycle for EACH node.
+        graph.addNode(nodeA);
+        graph.addNode(nodeB);
+        graph.connect(nodeA, nodeB);
+        graph.connect(nodeB, nodeA); // Cycle
+
+        // Cycle detection happens before sink check
+        Result res = graph.compile();
+        assert(!res.isOk());
+        assert(res.getErrorCode() == ErrorCode::ERR_GRAPH_CYCLE_DETECTED);
+    }
+
+    std::cout << "test_graph_no_sink_nodes passed" << std::endl;
 }
 
 class FailureFilter : public Filter {
@@ -105,6 +126,69 @@ protected:
     void onDraw(const Texture&, FrameBufferPtr) override {}
     std::string getFragmentShaderSource() const override { return ""; }
 };
+
+class MockPullFailureNode : public PipelineNode {
+public:
+    MockPullFailureNode(const std::string& name) : PipelineNode(name) {}
+    ResultPayload<VideoFrame> pullFrame(int64_t timestampNs) override {
+        return ResultPayload<VideoFrame>::error(ErrorCode::ERR_TIMELINE_DECODER_GET_FRAME_FAILED, "Mock pull failure");
+    }
+};
+
+void test_graph_execute_pull_failure() {
+    PipelineGraph graph;
+    auto node = std::make_shared<MockPullFailureNode>("FailureNode");
+    graph.addNode(node);
+
+    Result res = graph.compile();
+    assert(res.isOk());
+
+    Result execRes = graph.execute(1000);
+    assert(!execRes.isOk());
+    assert(execRes.getErrorCode() == ErrorCode::ERR_TIMELINE_DECODER_GET_FRAME_FAILED);
+    assert(execRes.getMessage() == "Mock pull failure");
+
+    std::cout << "test_graph_execute_pull_failure passed" << std::endl;
+}
+
+void test_graph_compile_idempotency() {
+    PipelineGraph graph;
+    auto nodeA = std::make_shared<CameraInputNode>("NodeA");
+    auto nodeB = std::make_shared<OutputNode>("NodeB");
+    graph.addNode(nodeA);
+    graph.addNode(nodeB);
+    graph.connect(nodeA, nodeB);
+
+    assert(graph.compile().isOk());
+
+    // Modification 1: addNode
+    auto nodeC = std::make_shared<CameraInputNode>("NodeC");
+    graph.addNode(nodeC);
+
+    Result execRes = graph.execute(100);
+    assert(!execRes.isOk());
+    assert(execRes.getErrorCode() == ErrorCode::ERR_RENDER_INVALID_STATE);
+
+    assert(graph.compile().isOk());
+
+    // Modification 2: connect
+    graph.connect(nodeC, nodeB);
+    execRes = graph.execute(100);
+    assert(!execRes.isOk());
+    assert(execRes.getErrorCode() == ErrorCode::ERR_RENDER_INVALID_STATE);
+
+    assert(graph.compile().isOk());
+
+    // Push a frame to make execution successful
+    VideoFrame frame;
+    frame.textureId = 1; frame.width = 100; frame.height = 100;
+    nodeA->pushFrame(frame);
+    nodeC->pushFrame(frame);
+
+    assert(graph.execute(100).isOk());
+
+    std::cout << "test_graph_compile_idempotency passed" << std::endl;
+}
 
 void test_graph_node_init_failure() {
     PipelineGraph graph;
@@ -138,5 +222,8 @@ int main() {
     test_graph_invalid_inputs();
     test_graph_uncompiled_execution();
     test_graph_node_init_failure();
+    test_graph_no_sink_nodes();
+    test_graph_execute_pull_failure();
+    test_graph_compile_idempotency();
     return 0;
 }

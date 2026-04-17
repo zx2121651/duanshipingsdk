@@ -11,11 +11,11 @@ Result PipelineGraph::addNode(NodePtr node) {
         m_isCompiled = false;
         return Result::ok();
     }
-    return Result::error(-2002, "Null node");
+    return Result::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Null node");
 }
 
 Result PipelineGraph::connect(NodePtr from, NodePtr to) {
-    if (!from || !to) return Result::error(-2002, "Null node connect");
+    if (!from || !to) return Result::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Null node connect");
     from->addOutput(to);
     m_isCompiled = false;
     return Result::ok();
