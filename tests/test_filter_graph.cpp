@@ -2,12 +2,58 @@
 #include <iostream>
 #include <cassert>
 #include <memory>
+#include <thread>
 #include "../core/include/FilterEngine.h"
 #include "../core/include/Filters.h"
 #include "../core/include/pipeline/PipelineGraph.h"
 #include "../core/include/pipeline/Nodes.h"
 
 using namespace sdk::video;
+
+namespace sdk {
+namespace video {
+class FilterEngineTestAccessor {
+public:
+    static void setOutputNode(FilterEngine& engine, std::shared_ptr<OutputNode> node) {
+        engine.m_outputNode = node;
+    }
+    static void setInitialized(FilterEngine& engine, bool initialized) {
+        engine.m_initialized = initialized;
+    }
+    static void setGraphDirty(FilterEngine& engine, bool dirty) {
+        engine.m_isGraphDirty = dirty;
+    }
+};
+}
+}
+
+class FailureFilter : public Filter {
+public:
+    std::string getFragmentShaderName() const override { return "failure.frag"; }
+    Result initialize() override {
+        return Result::error(ErrorCode::ERR_INIT_SHADER_FAILED, "Intentional failure");
+    }
+protected:
+    void onDraw(const Texture&, FrameBufferPtr) override {}
+    std::string getFragmentShaderSource() const override { return ""; }
+};
+
+class MockPullFailureNode : public PipelineNode {
+public:
+    MockPullFailureNode(const std::string& name) : PipelineNode(name) {}
+    ResultPayload<VideoFrame> pullFrame(int64_t timestampNs) override {
+        return ResultPayload<VideoFrame>::error(ErrorCode::ERR_TIMELINE_DECODER_GET_FRAME_FAILED, "Mock pull failure");
+    }
+};
+
+class MockInvalidOutputNode : public OutputNode {
+public:
+    MockInvalidOutputNode() : OutputNode("InvalidOutput") {}
+    ResultPayload<VideoFrame> pullFrame(int64_t timestampNs) override {
+        // Return success but with an invalid frame (texture 0)
+        return ResultPayload<VideoFrame>::ok(VideoFrame{0, 0, 0});
+    }
+};
 
 void test_filter_graph_creation() {
     FilterEngine engine;
@@ -29,6 +75,77 @@ void test_filter_graph_creation() {
     assert(!outRes.isOk() && "Should fail gracefully because GL context is not bound/mocked here");
 
     std::cout << "test_filter_graph_creation passed" << std::endl;
+}
+
+void test_filter_engine_uninitialized() {
+    FilterEngine engine;
+    Texture inTex{1, 100, 100};
+    auto res = engine.processFrame(inTex, 100, 100);
+    assert(!res.isOk());
+    assert(res.getErrorCode() == ErrorCode::ERR_RENDER_INVALID_STATE);
+    assert(res.getMessage().find("not initialized") != std::string::npos);
+
+    std::cout << "test_filter_engine_uninitialized passed" << std::endl;
+}
+
+void test_filter_engine_thread_violation() {
+    FilterEngine engine;
+    engine.initialize(); // Binds to current thread
+
+    ResultPayload<Texture> res = ResultPayload<Texture>::error("Initial");
+    std::thread t([&]() {
+        Texture inTex{1, 100, 100};
+        res = engine.processFrame(inTex, 100, 100);
+    });
+    t.join();
+
+    assert(!res.isOk());
+    assert(res.getErrorCode() == ErrorCode::ERR_RENDER_INVALID_STATE);
+    assert(res.getMessage().find("Thread violation") != std::string::npos);
+
+    std::cout << "test_filter_engine_thread_violation passed" << std::endl;
+}
+
+void test_filter_engine_build_failure() {
+    FilterEngine engine;
+    engine.initialize();
+
+    // addFilterRaw doesn't trigger rebuildGraph immediately, it sets m_isGraphDirty = true.
+    // The next processFrame will call buildCameraPipeline() -> rebuildGraph().
+    auto failureFilter = std::make_shared<FailureFilter>();
+    engine.addFilterRaw(failureFilter);
+
+    Texture inTex{1, 100, 100};
+    auto res = engine.processFrame(inTex, 100, 100);
+
+    assert(!res.isOk());
+    // In rebuildGraph, newGraph->compile() fails if a node init fails.
+    // It returns ERR_GRAPH_NODE_INIT_FAILED.
+    assert(res.getErrorCode() == ErrorCode::ERR_GRAPH_NODE_INIT_FAILED);
+    assert(res.getMessage().find("Intentional failure") != std::string::npos);
+
+    std::cout << "test_filter_engine_build_failure passed" << std::endl;
+}
+
+void test_filter_engine_invalid_output() {
+    FilterEngine engine;
+    engine.initialize();
+    engine.buildCameraPipeline(); // Initial build
+
+    // Inject invalid output node
+    auto invalidNode = std::make_shared<MockInvalidOutputNode>();
+    FilterEngineTestAccessor::setOutputNode(engine, invalidNode);
+    // Crucial: Prevent processFrame from rebuilding the graph and overwriting our injected node
+    FilterEngineTestAccessor::setGraphDirty(engine, false);
+
+    Texture inTex{1, 100, 100};
+    auto res = engine.processFrame(inTex, 100, 100);
+
+    assert(!res.isOk());
+    assert(res.getErrorCode() == ErrorCode::ERR_RENDER_INVALID_STATE);
+    assert(res.getMessage().find("invalid output frame") != std::string::npos);
+
+    std::cout << "test_filter_engine_invalid_output passed" << std::endl;
 }
 
 void test_graph_cycle_detection() {
@@ -116,25 +233,6 @@ void test_graph_no_sink_nodes() {
     std::cout << "test_graph_no_sink_nodes passed" << std::endl;
 }
 
-class FailureFilter : public Filter {
-public:
-    std::string getFragmentShaderName() const override { return "failure.frag"; }
-    Result initialize() override {
-        return Result::error(ErrorCode::ERR_INIT_SHADER_FAILED, "Intentional failure");
-    }
-protected:
-    void onDraw(const Texture&, FrameBufferPtr) override {}
-    std::string getFragmentShaderSource() const override { return ""; }
-};
-
-class MockPullFailureNode : public PipelineNode {
-public:
-    MockPullFailureNode(const std::string& name) : PipelineNode(name) {}
-    ResultPayload<VideoFrame> pullFrame(int64_t timestampNs) override {
-        return ResultPayload<VideoFrame>::error(ErrorCode::ERR_TIMELINE_DECODER_GET_FRAME_FAILED, "Mock pull failure");
-    }
-};
-
 void test_graph_execute_pull_failure() {
     PipelineGraph graph;
     auto node = std::make_shared<MockPullFailureNode>("FailureNode");
@@ -218,6 +316,10 @@ void test_graph_node_init_failure() {
 
 int main() {
     test_filter_graph_creation();
+    test_filter_engine_uninitialized();
+    test_filter_engine_thread_violation();
+    test_filter_engine_build_failure();
+    test_filter_engine_invalid_output();
     test_graph_cycle_detection();
     test_graph_invalid_inputs();
     test_graph_uncompiled_execution();
