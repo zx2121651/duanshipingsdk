@@ -1,5 +1,6 @@
 #include "../../include/timeline/Clip.h"
 #include <algorithm>
+#include <cmath>
 
 namespace sdk {
 namespace video {
@@ -9,18 +10,19 @@ Clip::Clip(const std::string& id, const std::string& sourcePath, MediaType type)
     : m_id(id), m_sourcePath(sourcePath), m_type(type) {}
 
 int64_t Clip::getTimelineOut() const {
-    if (m_speed <= 0.0f) return m_timelineIn;
+    if (m_speed <= 0.00001f) return m_timelineIn; // Protect against speed <= 0 and near-zero
     int64_t duration = getEffectiveTrimOut() - getEffectiveTrimIn();
-    return m_timelineIn + static_cast<int64_t>(duration / static_cast<double>(m_speed));
+    return m_timelineIn + static_cast<int64_t>(std::round(duration / static_cast<long double>(m_speed)));
 }
 
 int64_t Clip::getEffectiveTrimIn() const {
-    return std::min(m_trimIn, getEffectiveTrimOut());
+    int64_t trimIn = std::max(static_cast<int64_t>(0), m_trimIn);
+    return std::min(trimIn, getEffectiveTrimOut());
 }
 
 int64_t Clip::getEffectiveTrimOut() const {
     int64_t effectiveOut = (m_trimOut > 0) ? m_trimOut : m_sourceDuration;
-    return std::min(effectiveOut, m_sourceDuration);
+    return std::clamp(effectiveOut, static_cast<int64_t>(0), m_sourceDuration);
 }
 
 void Clip::setTransform(float scale, float rotation, float transX, float transY) {
