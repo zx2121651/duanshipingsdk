@@ -241,8 +241,122 @@ void test_keyframe_interpolation() {
     std::cout << "test_keyframe_interpolation passed" << std::endl;
 }
 
+void test_clip_boundary_trim() {
+    auto clip = std::make_shared<Clip>("clip", "v.mp4", Clip::MediaType::VIDEO);
+    clip->setSourceDuration(5000000000); // 5s
+    clip->setTimelineIn(1000000000); // 1s
+
+    // Case 1: trimIn == trimOut
+    clip->setTrimIn(2000000000);
+    clip->setTrimOut(2000000000);
+    assert(clip->getTimelineOut() == 1000000000); // Duration 0
+
+    // Case 2: trimIn > trimOut
+    clip->setTrimIn(3000000000);
+    clip->setTrimOut(2000000000);
+    assert(clip->getEffectiveTrimIn() == 2000000000);
+    assert(clip->getTimelineOut() == 1000000000); // Duration 0
+
+    // Case 3: trimOut > sourceDuration
+    clip->setTrimIn(0);
+    clip->setTrimOut(10000000000); // 10s, but source is 5s
+    assert(clip->getEffectiveTrimOut() == 5000000000);
+    assert(clip->getTimelineOut() == 6000000000); // 1s + 5s = 6s
+
+    // Case 4: negative trimIn
+    clip->setTrimIn(-1000);
+    assert(clip->getEffectiveTrimIn() == 0);
+
+    std::cout << "test_clip_boundary_trim passed" << std::endl;
+}
+
+void test_clip_speed_limits() {
+    auto clip = std::make_shared<Clip>("clip", "v.mp4", Clip::MediaType::VIDEO);
+    clip->setSourceDuration(5000000000); // 5s
+    clip->setTimelineIn(0);
+    clip->setTrimOut(1000000000); // 1s
+
+    // Speed 0
+    clip->setSpeed(0.0f);
+    assert(clip->getTimelineOut() == 0);
+
+    // Speed negative
+    clip->setSpeed(-1.0f);
+    assert(clip->getTimelineOut() == 0);
+
+    // Very small speed (above threshold 0.00001f)
+    clip->setSpeed(0.1f);
+    // 1s / 0.1 = 10s = 10,000,000,000 ns
+    int64_t expectedOut = 10000000000LL;
+    assert(std::abs(clip->getTimelineOut() - expectedOut) < 1000);
+
+    // Below threshold
+    clip->setSpeed(0.000001f);
+    assert(clip->getTimelineOut() == 0);
+
+    std::cout << "test_clip_speed_limits passed" << std::endl;
+}
+
+void test_transition_boundary() {
+    auto clip = std::make_shared<Clip>("clip", "v.mp4", Clip::MediaType::VIDEO);
+    clip->setSourceDuration(5000000000); // 5s
+    clip->setTimelineIn(0);
+    clip->setTrimOut(1000000000); // 1s
+
+    // Transition duration (2s) > Clip duration (1s)
+    // This is a semantic boundary. The engine should probably clamp it during rendering,
+    // but here we just check if it allows setting it.
+    clip->setInTransition(TransitionType::CROSSFADE, 2000000000);
+    assert(clip->getInTransitionDurationNs() == 2000000000);
+
+    std::cout << "test_transition_boundary passed" << std::endl;
+}
+
+void test_sparse_keyframes() {
+    auto clip = std::make_shared<Clip>("clip", "v.mp4", Clip::MediaType::VIDEO);
+
+    // Case 1: No keyframes, return default
+    assert(std::abs(clip->getOpacity(100) - 1.0f) < EPSILON);
+
+    // Case 2: Single keyframe
+    clip->addKeyframe("opacity", 1000, 0.5f);
+    assert(std::abs(clip->getOpacity(0) - 0.5f) < EPSILON);
+    assert(std::abs(clip->getOpacity(1000) - 0.5f) < EPSILON);
+    assert(std::abs(clip->getOpacity(2000) - 0.5f) < EPSILON);
+
+    std::cout << "test_sparse_keyframes passed" << std::endl;
+}
+
+void test_timeline_time_semantics() {
+    auto timeline = std::make_shared<Timeline>(1920, 1080, 30);
+    auto track = timeline->addTrack(0, Track::TrackType::MAIN_VIDEO);
+
+    auto clip = std::make_shared<Clip>("c1", "v1.mp4", Clip::MediaType::VIDEO);
+    clip->setSourceDuration(1000000000);
+    clip->setTimelineIn(1000000000); // starts at 1s
+    clip->setTrimOut(1000000000);    // duration 1s, ends at 2s
+    track->addClip(clip);
+
+    // Start inclusive: at 1s, clip should be active
+    assert(track->getActiveClipAtTime(1000000000) != nullptr);
+    assert(track->getActiveClipAtTime(1000000000)->getId() == "c1");
+
+    // End exclusive: at 2s, clip should NOT be active
+    assert(track->getActiveClipAtTime(2000000000) == nullptr);
+
+    // Just before end
+    assert(track->getActiveClipAtTime(1999999999) != nullptr);
+
+    std::cout << "test_timeline_time_semantics passed" << std::endl;
+}
+
 int main() {
     test_timeline_basic_properties();
+    test_clip_boundary_trim();
+    test_clip_speed_limits();
+    test_transition_boundary();
+    test_sparse_keyframes();
+    test_timeline_time_semantics();
     test_sequential_clips_and_gaps();
     test_multi_track_activation();
     test_transition_properties();
