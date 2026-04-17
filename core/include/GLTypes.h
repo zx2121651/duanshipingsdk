@@ -15,6 +15,10 @@
 namespace sdk {
 namespace video {
 
+namespace rhi {
+    class ITexture;
+}
+
 struct Texture {
     uint32_t id;
     uint32_t width;

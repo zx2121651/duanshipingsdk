@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.*
 
 // 定义支持的视频滤镜类型枚举
 enum class VideoFilterType {
-    BRIGHTNESS, GAUSSIAN_BLUR, LOOKUP, BILATERAL, CINEMATIC_LOOKUP, COMPUTE_BLUR
+    BRIGHTNESS, GAUSSIAN_BLUR, LOOKUP, BILATERAL, CINEMATIC_LOOKUP, COMPUTE_BLUR, NIGHT_VISION
 }
 
 // 引擎运行状态，供上层 UI 监听，以便在发生错误或退化渲染时给出提示
@@ -200,6 +200,7 @@ class VideoFilterManager(private val context: android.content.Context,
                 VideoFilterType.BILATERAL -> RenderEngine.FILTER_TYPE_BILATERAL
                 VideoFilterType.CINEMATIC_LOOKUP -> 4
                 VideoFilterType.COMPUTE_BLUR -> 5
+                VideoFilterType.NIGHT_VISION -> RenderEngine.FILTER_TYPE_NIGHT_VISION
             }
             renderEngine.addFilter(typeInt)
         }

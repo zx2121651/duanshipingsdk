@@ -9,6 +9,7 @@ import OpenGLES
     case bilateral = 3
     case cinematicLookup = 4
     case computeBlur = 5
+    case nightVision = 6
 }
 
 @objc public class FilterEngine: NSObject {

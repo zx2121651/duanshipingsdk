@@ -15,12 +15,13 @@ enum class FilterType {
     LOOKUP = 2,
     BILATERAL = 3,
     CINEMATIC_LOOKUP = 4,
-    COMPUTE_BLUR = 5
+    COMPUTE_BLUR = 5,
+    NIGHT_VISION = 6
 };
 
 class FilterFactory {
 public:
-    static FilterPtr createFilter(FilterType type, const GLContextManager& contextManager, FrameBufferPool* pool) {
+    static FilterPtr createFilter(FilterType type, const GLContextManager& contextManager, FrameBufferPool* pool, std::shared_ptr<rhi::IRenderDevice> device = nullptr) {
         switch (type) {
             case FilterType::BRIGHTNESS:
                 return std::make_shared<BrightnessFilter>();
@@ -46,6 +47,12 @@ public:
 
             case FilterType::CINEMATIC_LOOKUP:
                 return std::make_shared<CinematicLookupFilter>();
+
+            case FilterType::NIGHT_VISION: {
+                auto filter = std::make_shared<NightVisionFilter>();
+                filter->setRenderDevice(device);
+                return filter;
+            }
 
             default:
                 return nullptr;

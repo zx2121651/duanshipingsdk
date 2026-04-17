@@ -1,6 +1,7 @@
 #include <array>
 #include "../include/Filters.h"
 #include "../include/GLStateManager.h"
+#include "rhi/GLTexture.h"
 #include <iostream>
 #include <vector>
 
@@ -474,6 +475,98 @@ void CinematicLookupFilter::onProgramRecompiled() {
 }
 std::string CinematicLookupFilter::getFragmentShaderSource() const {
     return "";
+}
+
+
+// --- NightVisionFilter Implementation ---
+Result NightVisionFilter::initialize() {
+    return Filter::initialize();
+}
+
+void NightVisionFilter::onProgramRecompiled() {
+    // Nothing to do for dummy
+}
+
+void NightVisionFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {
+    // Phase 1 Transition: We wrap the legacy Texture into an RHI ITexture
+    // to pass into our new ICommandBuffer abstraction, proving out the pattern.
+
+    if (m_device) {
+        auto cmd = m_device->createCommandBuffer();
+
+        // Wrap for command buffer usage
+        rhi::GLTexture wrappedInput(inputTexture.id, inputTexture.width, inputTexture.height);
+
+        // 1. Begin Pass (Legacy FrameBuffer already bounds outputFb before this method in processFrame,
+        // so this is a semantic pass-through right now, to be expanded later).
+        cmd->beginRenderPass(nullptr);
+
+        // 2. Bind Pipeline state (Legacy GL requires explicit GLStateManager program use)
+        GLStateManager::getInstance().useProgram(m_programId);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        // 3. Bind Textures via Command Buffer
+        cmd->bindTexture(0, &wrappedInput);
+        glUniform1i(m_inputImageTextureHandle, 0); // Still relying on legacy uniform bind
+
+        // 4. Draw Call
+        static const GLfloat squareVertices[] = {
+            -1.0f, -1.0f,  1.0f, -1.0f,
+            -1.0f,  1.0f,  1.0f,  1.0f,
+        };
+        static const GLfloat textureVertices[] = {
+            0.0f, 0.0f,  1.0f, 0.0f,
+            0.0f, 1.0f,  1.0f, 1.0f,
+        };
+        glVertexAttribPointer(m_positionHandle, 2, GL_FLOAT, GL_FALSE, 0, squareVertices);
+        glEnableVertexAttribArray(m_positionHandle);
+        glVertexAttribPointer(m_texCoordHandle, 2, GL_FLOAT, GL_FALSE, 0, textureVertices);
+        glEnableVertexAttribArray(m_texCoordHandle);
+
+        cmd->drawPrimitives(4); // Abstracts glDrawArrays(GL_TRIANGLE_STRIP, 0, 4)
+
+        // 5. End Pass
+        cmd->endRenderPass();
+        m_device->submit(cmd.get());
+
+        glDisableVertexAttribArray(m_positionHandle);
+        glDisableVertexAttribArray(m_texCoordHandle);
+    } else {
+        // Fallback to purely raw GL if no device was injected
+        outputFb->bind();
+        GLStateManager::getInstance().useProgram(m_programId);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
+        GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, inputTexture.id);
+        glUniform1i(m_inputImageTextureHandle, 0);
+        static const GLfloat squareVertices[] = {-1.0f, -1.0f, 1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f};
+        static const GLfloat textureVertices[] = {0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f};
+        glVertexAttribPointer(m_positionHandle, 2, GL_FLOAT, GL_FALSE, 0, squareVertices);
+        glEnableVertexAttribArray(m_positionHandle);
+        glVertexAttribPointer(m_texCoordHandle, 2, GL_FLOAT, GL_FALSE, 0, textureVertices);
+        glEnableVertexAttribArray(m_texCoordHandle);
+        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+        glDisableVertexAttribArray(m_positionHandle);
+        glDisableVertexAttribArray(m_texCoordHandle);
+    }
+}
+
+std::string NightVisionFilter::getFragmentShaderSource() const {
+    return R"(
+#version 300 es
+precision mediump float;
+in vec2 vTextureCoord;
+out vec4 fragColor;
+uniform sampler2D sTexture;
+
+void main() {
+    vec4 color = texture(sTexture, vTextureCoord);
+    float luminance = dot(color.rgb, vec3(0.299, 0.587, 0.114));
+    fragColor = vec4(0.0, luminance, 0.0, color.a);
+}
+)";
 }
 
 #ifdef __ANDROID__

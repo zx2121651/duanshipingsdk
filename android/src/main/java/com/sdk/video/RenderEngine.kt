@@ -19,6 +19,7 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
         const val FILTER_TYPE_GAUSSIAN_BLUR = 1
         const val FILTER_TYPE_LOOKUP = 2
         const val FILTER_TYPE_BILATERAL = 3 // Skin Smoothing
+        const val FILTER_TYPE_NIGHT_VISION = 6
     }
 
     private var nativeHandle: Long = 0

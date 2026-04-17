@@ -8,7 +8,8 @@ typedef NS_ENUM(NSInteger, IOSFilterType) {
     IOSFilterTypeLookup = 2,
     IOSFilterTypeBilateral = 3,
     IOSFilterTypeCinematicLookup = 4,
-    IOSFilterTypeComputeBlur = 5
+    IOSFilterTypeComputeBlur = 5,
+    IOSFilterTypeNightVision = 6
 };
 
 @interface FilterEngineWrapper : NSObject

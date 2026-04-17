@@ -1,6 +1,7 @@
 #pragma once
 #include "Filter.h"
 #include "FrameBufferPool.h"
+#include "rhi/IRenderDevice.h"
 #include <string>
 
 #ifdef __APPLE__
@@ -131,6 +132,26 @@ private:
     GLuint m_lookupTextureHandle;
     GLuint m_intensityHandle;
     GLuint m_lookupTextureId;
+};
+
+class NightVisionFilter : public Filter {
+public:
+    std::string getVertexShaderName() const override { return "default.vert"; }
+    std::string getFragmentShaderName() const override { return "night_vision.frag"; }
+    NightVisionFilter() = default;
+    ~NightVisionFilter() override = default;
+    Result initialize() override;
+    void onProgramRecompiled() override;
+
+    // Phase 1 RHI Transition method
+    void setRenderDevice(std::shared_ptr<rhi::IRenderDevice> device) { m_device = device; }
+
+protected:
+    void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
+    std::string getFragmentShaderSource() const override;
+
+private:
+    std::shared_ptr<rhi::IRenderDevice> m_device;
 };
 
 } // namespace video

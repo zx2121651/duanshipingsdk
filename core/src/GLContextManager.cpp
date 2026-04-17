@@ -73,7 +73,24 @@ void GLContextManager::sniffCapabilities() {
     }
 
     // ========================================================================
-    // [检查点 C]：Compute Shader 算力底线验证 (这是防崩溃的重中之重)
+    // [检查点 C]：Vulkan 和 Metal 后端探测
+    // ========================================================================
+#ifdef __ANDROID__
+    // 模拟检测 Vulkan (可以检测 VK_KHR_surface 等，此处为了结构完整只做一个标称判断)
+    m_supportVulkan = true; // Placeholder for Vulkan backend availability
+    LOGI("=> Feature Vulkan Backend: SUPPORTED (Stub)");
+    m_supportMetal = false;
+#elif defined(__APPLE__)
+    m_supportVulkan = false;
+    m_supportMetal = true; // iOS always supports Metal on Apple Silicon
+    LOGI("=> Feature Metal Backend: SUPPORTED (Stub)");
+#else
+    m_supportVulkan = false;
+    m_supportMetal = false;
+#endif
+
+    // ========================================================================
+    // [检查点 D]：Compute Shader 算力底线验证 (这是防崩溃的重中之重)
     // 很多廉价芯片的 GLES 3.1 驱动写得很烂，声称支持计算着色器，但它能分配的并发线程极小。
     // 如果我们不探测而直接用 local_size_x=16 (需要 256 个 invocations) 去 glDispatchCompute，
     // 廉价芯片的驱动内核会直接 Panic 导致 App 闪退。
