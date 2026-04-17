@@ -22,10 +22,7 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: Generate Gradle Wrapper
-        working-directory: ./
-        run: gradle wrapper --gradle-version 8.8
-
+      # Use the committed Gradle Wrapper to ensure consistency between local and CI environments.
       - name: Build Android Library
         working-directory: ./
         run: ./gradlew :android:assembleDebug --stacktrace
