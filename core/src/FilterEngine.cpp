@@ -187,8 +187,8 @@ Result FilterEngine::updateShaderSource(const std::string& name, const std::stri
 }
 
 Result FilterEngine::buildCameraPipeline() {
-    m_cameraNode = std::make_shared<CameraInputNode>("Camera");
-    return rebuildGraph(m_cameraNode);
+    auto cameraNode = std::make_shared<CameraInputNode>("Camera");
+    return rebuildGraph(cameraNode);
 }
 
 Result FilterEngine::buildTimelinePipeline(std::shared_ptr<timeline::Timeline> timeline, std::shared_ptr<timeline::Compositor> compositor) {
