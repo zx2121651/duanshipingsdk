@@ -476,6 +476,69 @@ std::string CinematicLookupFilter::getFragmentShaderSource() const {
     return "";
 }
 
+
+// --- NightVisionFilter Implementation ---
+Result NightVisionFilter::initialize() {
+    return Filter::initialize();
+}
+
+void NightVisionFilter::onProgramRecompiled() {
+    // Nothing to do for dummy
+}
+
+void NightVisionFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {
+    outputFb->bind();
+    GLStateManager::getInstance().useProgram(m_programId);
+
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
+    GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, inputTexture.id);
+    glUniform1i(m_inputImageTextureHandle, 0);
+
+    // TODO: bind attributes correctly (assuming standard base class handles)
+    static const GLfloat squareVertices[] = {
+        -1.0f, -1.0f,
+         1.0f, -1.0f,
+        -1.0f,  1.0f,
+         1.0f,  1.0f,
+    };
+    static const GLfloat textureVertices[] = {
+        0.0f, 0.0f,
+        1.0f, 0.0f,
+        0.0f, 1.0f,
+        1.0f, 1.0f,
+    };
+
+    glVertexAttribPointer(m_positionHandle, 2, GL_FLOAT, GL_FALSE, 0, squareVertices);
+    glEnableVertexAttribArray(m_positionHandle);
+
+    glVertexAttribPointer(m_texCoordHandle, 2, GL_FLOAT, GL_FALSE, 0, textureVertices);
+    glEnableVertexAttribArray(m_texCoordHandle);
+
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+    glDisableVertexAttribArray(m_positionHandle);
+    glDisableVertexAttribArray(m_texCoordHandle);
+}
+
+std::string NightVisionFilter::getFragmentShaderSource() const {
+    return R"(
+#version 300 es
+precision mediump float;
+in vec2 vTextureCoord;
+out vec4 fragColor;
+uniform sampler2D sTexture;
+
+void main() {
+    vec4 color = texture(sTexture, vTextureCoord);
+    float luminance = dot(color.rgb, vec3(0.299, 0.587, 0.114));
+    fragColor = vec4(0.0, luminance, 0.0, color.a);
+}
+)";
+}
+
 #ifdef __ANDROID__
 // --- 高性能 Compute Shader 计算模糊 (ComputeBlurFilter) ---
 

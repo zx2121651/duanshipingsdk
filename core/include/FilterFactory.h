@@ -15,7 +15,8 @@ enum class FilterType {
     LOOKUP = 2,
     BILATERAL = 3,
     CINEMATIC_LOOKUP = 4,
-    COMPUTE_BLUR = 5
+    COMPUTE_BLUR = 5,
+    NIGHT_VISION = 6
 };
 
 class FilterFactory {
@@ -46,6 +47,9 @@ public:
 
             case FilterType::CINEMATIC_LOOKUP:
                 return std::make_shared<CinematicLookupFilter>();
+
+            case FilterType::NIGHT_VISION:
+                return std::make_shared<NightVisionFilter>();
 
             default:
                 return nullptr;

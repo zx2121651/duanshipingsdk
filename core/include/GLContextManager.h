@@ -39,6 +39,12 @@ public:
     /// 这决定了我们加载 3D LUT 等巨大资源时，能不能将显存占用压榨到 1/4 甚至 1/10。
     bool isASTCSupported() const { return m_supportASTC; }
 
+    /// @brief 是否支持 Vulkan
+    bool isVulkanSupported() const { return m_supportVulkan; }
+
+    /// @brief 是否支持 Metal
+    bool isMetalSupported() const { return m_supportMetal; }
+
     // ------------------------------------------------------------------------
 
 private:
@@ -49,6 +55,8 @@ private:
     bool m_supportComputeShader = false;
     bool m_supportFP16RenderTarget = false;
     bool m_supportASTC = false;
+    bool m_supportVulkan = false;
+    bool m_supportMetal = false;
 
 };
 

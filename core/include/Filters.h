@@ -133,6 +133,20 @@ private:
     GLuint m_lookupTextureId;
 };
 
+class NightVisionFilter : public Filter {
+public:
+    std::string getVertexShaderName() const override { return "default.vert"; }
+    std::string getFragmentShaderName() const override { return "night_vision.frag"; }
+    NightVisionFilter() = default;
+    ~NightVisionFilter() override = default;
+    Result initialize() override;
+    void onProgramRecompiled() override;
+
+protected:
+    void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
+    std::string getFragmentShaderSource() const override;
+};
+
 } // namespace video
 } // namespace sdk
 
