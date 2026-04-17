@@ -1,5 +1,6 @@
 android/build/
 build/
+build_*/
 .gradle/
 ios/build/
 android/.cxx/
