@@ -4,8 +4,53 @@
 #include <memory>
 #include "../core/include/FilterEngine.h"
 #include "../core/include/Filters.h"
+#include "FilterEngineTestAccessor.h"
 
 using namespace sdk::video;
+
+void test_reinitialize_regression() {
+    FilterEngine engine;
+
+    std::cout << "1. Initial state check..." << std::endl;
+    assert(!FilterEngineTestAccessor::isInitialized(engine));
+    assert(FilterEngineTestAccessor::isGraphDirty(engine));
+
+    std::cout << "2. Initialize and build pipeline..." << std::endl;
+    Result res = engine.initialize();
+    assert(res.isOk());
+    assert(FilterEngineTestAccessor::isInitialized(engine));
+
+    res = engine.buildCameraPipeline();
+    assert(res.isOk());
+    assert(FilterEngineTestAccessor::getGraph(engine) != nullptr);
+    assert(FilterEngineTestAccessor::getCameraNode(engine) != nullptr);
+    assert(FilterEngineTestAccessor::getOutputNode(engine) != nullptr);
+
+    std::cout << "3. Record metrics..." << std::endl;
+    FilterEngineTestAccessor::getMetricsCollector(engine).recordFrameTime(16.6f);
+    assert(engine.getPerformanceMetrics().averageFrameTimeMs > 0);
+
+    std::cout << "4. Release and check state reset..." << std::endl;
+    engine.release();
+
+    assert(!FilterEngineTestAccessor::isInitialized(engine));
+    assert(FilterEngineTestAccessor::getGraph(engine) == nullptr);
+    assert(FilterEngineTestAccessor::getCameraNode(engine) == nullptr);
+    assert(FilterEngineTestAccessor::getOutputNode(engine) == nullptr);
+    assert(FilterEngineTestAccessor::isGraphDirty(engine));
+    assert(engine.getPerformanceMetrics().averageFrameTimeMs == 0.0f);
+
+    std::cout << "5. Re-initialize and rebuild..." << std::endl;
+    res = engine.initialize();
+    assert(res.isOk());
+    assert(FilterEngineTestAccessor::isInitialized(engine));
+
+    res = engine.buildCameraPipeline();
+    assert(res.isOk());
+    assert(FilterEngineTestAccessor::getGraph(engine) != nullptr);
+
+    std::cout << "test_reinitialize_regression passed" << std::endl;
+}
 
 void test_repeated_init_release() {
     FilterEngine engine;
@@ -69,6 +114,7 @@ void test_lifecycle_functionality() {
 }
 
 int main() {
+    test_reinitialize_regression();
     test_repeated_init_release();
     test_lifecycle_functionality();
     return 0;

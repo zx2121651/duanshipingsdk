@@ -7,25 +7,9 @@
 #include "../core/include/Filters.h"
 #include "../core/include/pipeline/PipelineGraph.h"
 #include "../core/include/pipeline/Nodes.h"
+#include "FilterEngineTestAccessor.h"
 
 using namespace sdk::video;
-
-namespace sdk {
-namespace video {
-class FilterEngineTestAccessor {
-public:
-    static void setOutputNode(FilterEngine& engine, std::shared_ptr<OutputNode> node) {
-        engine.m_outputNode = node;
-    }
-    static void setInitialized(FilterEngine& engine, bool initialized) {
-        engine.m_initialized = initialized;
-    }
-    static void setGraphDirty(FilterEngine& engine, bool dirty) {
-        engine.m_isGraphDirty = dirty;
-    }
-};
-}
-}
 
 class FailureFilter : public Filter {
 public:
