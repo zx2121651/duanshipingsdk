@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 #include <any>
+#include "rhi/IRenderDevice.h"
 
 namespace sdk {
 namespace video {
@@ -81,6 +82,9 @@ private:
 
     // 【三级防线】特征级嗅探器
     GLContextManager m_contextManager;
+
+    // RHI 设备实例
+    std::shared_ptr<rhi::IRenderDevice> m_renderDevice;
 
     Result rebuildGraph(std::shared_ptr<PipelineNode> inputNode);
 };

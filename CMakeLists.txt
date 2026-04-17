@@ -22,6 +22,8 @@ set(CORE_SOURCES
     core/src/timeline/Compositor.cpp
     core/src/timeline/DecoderPool.cpp
     core/src/timeline/AudioMixer.cpp
+    core/src/rhi/GLTexture.cpp
+    core/src/rhi/GLRenderDevice.cpp
 )
 
 # Core engine build

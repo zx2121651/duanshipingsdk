@@ -1,6 +1,7 @@
 #include <array>
 #include "../include/Filters.h"
 #include "../include/GLStateManager.h"
+#include "rhi/GLTexture.h"
 #include <iostream>
 #include <vector>
 
@@ -487,40 +488,69 @@ void NightVisionFilter::onProgramRecompiled() {
 }
 
 void NightVisionFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {
-    outputFb->bind();
-    GLStateManager::getInstance().useProgram(m_programId);
+    // Phase 1 Transition: We wrap the legacy Texture into an RHI ITexture
+    // to pass into our new ICommandBuffer abstraction, proving out the pattern.
 
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
+    if (m_device) {
+        auto cmd = m_device->createCommandBuffer();
 
-    GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
-    GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, inputTexture.id);
-    glUniform1i(m_inputImageTextureHandle, 0);
+        // Wrap for command buffer usage
+        rhi::GLTexture wrappedInput(inputTexture.id, inputTexture.width, inputTexture.height);
 
-    // TODO: bind attributes correctly (assuming standard base class handles)
-    static const GLfloat squareVertices[] = {
-        -1.0f, -1.0f,
-         1.0f, -1.0f,
-        -1.0f,  1.0f,
-         1.0f,  1.0f,
-    };
-    static const GLfloat textureVertices[] = {
-        0.0f, 0.0f,
-        1.0f, 0.0f,
-        0.0f, 1.0f,
-        1.0f, 1.0f,
-    };
+        // 1. Begin Pass (Legacy FrameBuffer already bounds outputFb before this method in processFrame,
+        // so this is a semantic pass-through right now, to be expanded later).
+        cmd->beginRenderPass(nullptr);
 
-    glVertexAttribPointer(m_positionHandle, 2, GL_FLOAT, GL_FALSE, 0, squareVertices);
-    glEnableVertexAttribArray(m_positionHandle);
+        // 2. Bind Pipeline state (Legacy GL requires explicit GLStateManager program use)
+        GLStateManager::getInstance().useProgram(m_programId);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
 
-    glVertexAttribPointer(m_texCoordHandle, 2, GL_FLOAT, GL_FALSE, 0, textureVertices);
-    glEnableVertexAttribArray(m_texCoordHandle);
+        // 3. Bind Textures via Command Buffer
+        cmd->bindTexture(0, &wrappedInput);
+        glUniform1i(m_inputImageTextureHandle, 0); // Still relying on legacy uniform bind
 
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+        // 4. Draw Call
+        static const GLfloat squareVertices[] = {
+            -1.0f, -1.0f,  1.0f, -1.0f,
+            -1.0f,  1.0f,  1.0f,  1.0f,
+        };
+        static const GLfloat textureVertices[] = {
+            0.0f, 0.0f,  1.0f, 0.0f,
+            0.0f, 1.0f,  1.0f, 1.0f,
+        };
+        glVertexAttribPointer(m_positionHandle, 2, GL_FLOAT, GL_FALSE, 0, squareVertices);
+        glEnableVertexAttribArray(m_positionHandle);
+        glVertexAttribPointer(m_texCoordHandle, 2, GL_FLOAT, GL_FALSE, 0, textureVertices);
+        glEnableVertexAttribArray(m_texCoordHandle);
 
-    glDisableVertexAttribArray(m_positionHandle);
-    glDisableVertexAttribArray(m_texCoordHandle);
+        cmd->drawPrimitives(4); // Abstracts glDrawArrays(GL_TRIANGLE_STRIP, 0, 4)
+
+        // 5. End Pass
+        cmd->endRenderPass();
+        m_device->submit(cmd.get());
+
+        glDisableVertexAttribArray(m_positionHandle);
+        glDisableVertexAttribArray(m_texCoordHandle);
+    } else {
+        // Fallback to purely raw GL if no device was injected
+        outputFb->bind();
+        GLStateManager::getInstance().useProgram(m_programId);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
+        GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, inputTexture.id);
+        glUniform1i(m_inputImageTextureHandle, 0);
+        static const GLfloat squareVertices[] = {-1.0f, -1.0f, 1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f};
+        static const GLfloat textureVertices[] = {0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f};
+        glVertexAttribPointer(m_positionHandle, 2, GL_FLOAT, GL_FALSE, 0, squareVertices);
+        glEnableVertexAttribArray(m_positionHandle);
+        glVertexAttribPointer(m_texCoordHandle, 2, GL_FLOAT, GL_FALSE, 0, textureVertices);
+        glEnableVertexAttribArray(m_texCoordHandle);
+        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+        glDisableVertexAttribArray(m_positionHandle);
+        glDisableVertexAttribArray(m_texCoordHandle);
+    }
 }
 
 std::string NightVisionFilter::getFragmentShaderSource() const {

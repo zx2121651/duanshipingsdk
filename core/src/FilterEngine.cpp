@@ -1,6 +1,7 @@
 #include "../include/FilterEngine.h"
 #define LOG_TAG "FilterEngine"
 #include "../include/Log.h"
+#include "rhi/GLRenderDevice.h"
 #include <iostream>
 #include <chrono>
 #include <algorithm>
@@ -23,6 +24,9 @@ Result FilterEngine::initialize() {
 
     // 初始化前首先唤醒嗅探器，对底层硬件进行深度体检
     m_contextManager.sniffCapabilities();
+
+    // 实例化 RHI 后端设备 (当前过渡阶段始终使用 GLRenderDevice)
+    m_renderDevice = std::make_shared<rhi::GLRenderDevice>();
 
     if (m_graph) {
         for (const auto& node : m_graph->getNodes()) {
@@ -146,7 +150,7 @@ Result FilterEngine::addFilterRaw(FilterPtr filter) {
     return Result::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Filter is null");
 }
 Result FilterEngine::addFilter(FilterType type) {
-    FilterPtr filter = FilterFactory::createFilter(type, m_contextManager, &m_frameBufferPool);
+    FilterPtr filter = FilterFactory::createFilter(type, m_contextManager, &m_frameBufferPool, m_renderDevice);
     if (filter) {
         return addFilterRaw(filter);
     }
