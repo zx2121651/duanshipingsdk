@@ -117,6 +117,7 @@ add_test(NAME test_track_behavior COMMAND test_track_behavior)
 
 add_executable(test_rebuild_harden tests/test_rebuild_harden.cpp tests/mocks/MockCompositor.cpp)
 target_link_libraries(test_rebuild_harden video_sdk_core)
+add_test(NAME test_rebuild_harden COMMAND test_rebuild_harden)
 
 add_executable(test_timeline_node_harden tests/test_timeline_node_harden.cpp tests/mocks/MockCompositor.cpp)
 target_link_libraries(test_timeline_node_harden video_sdk_core)
