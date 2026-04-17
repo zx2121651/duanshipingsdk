@@ -1,3 +1,5 @@
+// Module: sample-android (Host Sample App)
+// Role: Integration verification host used to test the SDK library.
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'

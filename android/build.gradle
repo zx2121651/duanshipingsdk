@@ -1,3 +1,5 @@
+// Module: android (SDK Library)
+// Role: The primary SDK product containing the core video processing logic.
 plugins {
     id 'com.android.library'
     id 'org.jetbrains.kotlin.android'

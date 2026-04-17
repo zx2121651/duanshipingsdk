@@ -13,6 +13,9 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "ShortVideoSDK"
+
+// SDK Library: The core product of this repository
 include ':android'
 
+// Sample App: Integration verification host for the SDK
 include ':sample-android'
