@@ -3,6 +3,36 @@ project("video-sdk-core")
 
 set(CMAKE_CXX_STANDARD 17)
 
+# --- GLES / Mock GL Strategy ---
+# By default, we try to find a real GLESv2 implementation.
+# If not found (e.g., in pure Linux CI or non-vcpkg Windows), we fallback to mock_gl.
+# You can force mock_gl with -DUSE_MOCK_GL=ON.
+option(USE_MOCK_GL "Use mock GLES headers for non-GPU environments" OFF)
+
+if(NOT USE_MOCK_GL)
+    if(WIN32)
+        if(DEFINED CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES "vcpkg.cmake")
+            find_package(unofficial-angle CONFIG QUIET)
+            if(NOT unofficial-angle_FOUND)
+                set(USE_MOCK_GL ON)
+            endif()
+        else()
+            set(USE_MOCK_GL ON)
+        endif()
+    else()
+        find_library(GLES2_LIBRARY GLESv2)
+        if(NOT GLES2_LIBRARY)
+            set(USE_MOCK_GL ON)
+        endif()
+    endif()
+endif()
+
+if(USE_MOCK_GL)
+    message(STATUS "Build Strategy: Using MOCK_GL (Headless/No-GPU)")
+else()
+    message(STATUS "Build Strategy: Using Real GLESv2")
+endif()
+
 include_directories(${CMAKE_SOURCE_DIR}/core/include)
 
 set(CORE_SOURCES
@@ -29,6 +59,10 @@ set(CORE_SOURCES
 # Core engine build
 add_library(video_sdk_core STATIC ${CORE_SOURCES})
 
+if(USE_MOCK_GL)
+    target_include_directories(video_sdk_core PUBLIC ${CMAKE_SOURCE_DIR}/mock_gl)
+endif()
+
 enable_testing()
 
 # Basic API logic test (no GL windowing dependencies)
@@ -38,91 +72,54 @@ add_test(NAME test_filter_graph COMMAND test_filter_graph)
 target_link_libraries(test_filter_graph video_sdk_core)
 
 add_executable(test_execute_stability_repro tests/test_execute_stability_repro.cpp tests/mocks/MockCompositor.cpp)
-if (NOT WIN32 AND NOT GLES2_LIBRARY)
-    target_include_directories(test_execute_stability_repro PRIVATE ${CMAKE_SOURCE_DIR}/mock_gl)
-endif()
 target_link_libraries(test_execute_stability_repro video_sdk_core)
 
 add_executable(test_lifecycle tests/test_lifecycle.cpp tests/mocks/MockCompositor.cpp)
-if (NOT WIN32 AND NOT GLES2_LIBRARY)
-    target_include_directories(test_lifecycle PRIVATE ${CMAKE_SOURCE_DIR}/mock_gl)
-endif()
 target_link_libraries(test_lifecycle video_sdk_core)
 add_test(NAME test_lifecycle COMMAND test_lifecycle)
 
-# If we are on Windows and using vcpkg, configure ANGLE (GLES implementation)
-if(WIN32 AND DEFINED CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES "vcpkg.cmake")
-    find_package(unofficial-angle CONFIG REQUIRED)
+# --- Real Rendering Tests / Linking ---
+if(NOT USE_MOCK_GL)
+    if(WIN32)
+        # Using ANGLE on Windows (configured via vcpkg)
+        find_package(unofficial-angle CONFIG REQUIRED)
+        target_link_libraries(video_sdk_core unofficial::angle::libGLESv2)
 
-    # Real rendering test that relies on EGL/GLES context (Replaced by SSIM assertion)
-    add_executable(test_headless_ssim tests/test_headless_ssim.cpp tests/mocks/MockCompositor.cpp)
-    target_link_libraries(test_headless_ssim
-        video_sdk_core
-        unofficial::angle::libGLESv2
-        unofficial::angle::libEGL
-    )
+        add_executable(test_headless_ssim tests/test_headless_ssim.cpp tests/mocks/MockCompositor.cpp)
+        target_link_libraries(test_headless_ssim
+            video_sdk_core
+            unofficial::angle::libGLESv2
+            unofficial::angle::libEGL
+        )
+    else()
+        # On Linux/Other, we found GLES2_LIBRARY earlier
+        target_link_libraries(video_sdk_core ${GLES2_LIBRARY})
 
-    # Since video_sdk_core uses gl* functions internally, it needs linking to GLES
-    target_link_libraries(video_sdk_core unofficial::angle::libGLESv2)
-
-    message(STATUS "Configured test_headless_ssim with ANGLE for Windows testing.")
-else()
-    # On Android NDK, linking is handled by Android Studio / ndk-build
-    # On iOS/macOS, it's typically handled by Xcode frameworks.
-    # For local Linux tests, we can find system GLESv2
-    if (NOT WIN32)
-        find_library(GLES2_LIBRARY GLESv2)
-        if(GLES2_LIBRARY)
-            target_link_libraries(video_sdk_core ${GLES2_LIBRARY})
-            # Also build a mock render test if on linux and GLES/EGL are found
-            find_library(EGL_LIBRARY EGL)
-            if(EGL_LIBRARY)
-                add_executable(test_headless_ssim tests/test_headless_ssim.cpp tests/mocks/MockCompositor.cpp)
-                target_link_libraries(test_headless_ssim video_sdk_core ${GLES2_LIBRARY} ${EGL_LIBRARY})
-            endif()
-        else()
-            message(WARNING "GLESv2 not found. Using mock GL headers for compilation.")
-            target_include_directories(video_sdk_core PRIVATE ${CMAKE_SOURCE_DIR}/mock_gl)
-            target_include_directories(test_filter_graph PRIVATE ${CMAKE_SOURCE_DIR}/mock_gl)
+        find_library(EGL_LIBRARY EGL)
+        if(EGL_LIBRARY)
+            add_executable(test_headless_ssim tests/test_headless_ssim.cpp tests/mocks/MockCompositor.cpp)
+            target_link_libraries(test_headless_ssim video_sdk_core ${GLES2_LIBRARY} ${EGL_LIBRARY})
         endif()
     endif()
 endif()
 
 add_executable(test_timeline tests/test_timeline.cpp)
-if (NOT WIN32 AND NOT GLES2_LIBRARY)
-    target_include_directories(test_timeline PRIVATE ${CMAKE_SOURCE_DIR}/mock_gl)
-endif()
 target_link_libraries(test_timeline video_sdk_core)
 add_test(NAME test_timeline COMMAND test_timeline)
 
 add_executable(test_decoder_pool tests/test_decoder_pool.cpp)
-if (NOT WIN32 AND NOT GLES2_LIBRARY)
-    target_include_directories(test_decoder_pool PRIVATE ${CMAKE_SOURCE_DIR}/mock_gl)
-endif()
 target_link_libraries(test_decoder_pool video_sdk_core)
 add_test(NAME test_decoder_pool COMMAND test_decoder_pool)
 
 add_executable(test_track_behavior tests/test_track_behavior.cpp)
-if (NOT WIN32 AND NOT GLES2_LIBRARY)
-    target_include_directories(test_track_behavior PRIVATE ${CMAKE_SOURCE_DIR}/mock_gl)
-endif()
 target_link_libraries(test_track_behavior video_sdk_core)
 add_test(NAME test_track_behavior COMMAND test_track_behavior)
 
 add_executable(test_rebuild_harden tests/test_rebuild_harden.cpp tests/mocks/MockCompositor.cpp)
-if (NOT WIN32 AND NOT GLES2_LIBRARY)
-    target_include_directories(test_rebuild_harden PRIVATE ${CMAKE_SOURCE_DIR}/mock_gl)
-endif()
 target_link_libraries(test_rebuild_harden video_sdk_core)
 
 add_executable(test_timeline_node_harden tests/test_timeline_node_harden.cpp tests/mocks/MockCompositor.cpp)
-if (NOT WIN32 AND NOT GLES2_LIBRARY)
-    target_include_directories(test_timeline_node_harden PRIVATE ${CMAKE_SOURCE_DIR}/mock_gl)
-endif()
 target_link_libraries(test_timeline_node_harden video_sdk_core)
 
 add_executable(test_exporter_logic tests/test_exporter_logic.cpp tests/mocks/MockCompositor.cpp)
-if (NOT WIN32 AND NOT GLES2_LIBRARY)
-    target_include_directories(test_exporter_logic PRIVATE ${CMAKE_SOURCE_DIR}/mock_gl)
-endif()
 target_link_libraries(test_exporter_logic video_sdk_core)
