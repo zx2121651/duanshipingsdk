@@ -39,14 +39,12 @@ Result FilterEngine::initialize() {
 }
 
 ResultPayload<Texture> FilterEngine::processFrame(const Texture& textureIn, int width, int height) {
-    if (!m_threadCheck.check("processFrame must be called on the render thread")) {
-        return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "GL Thread violation detected during processFrame");
-    }
-
-
-
     if (!m_initialized) {
         return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "FilterEngine not initialized before processing frame");
+    }
+
+    if (!m_threadCheck.check("processFrame must be called on the render thread")) {
+        return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "GL Thread violation detected during processFrame");
     }
 
     auto start_time = std::chrono::high_resolution_clock::now();
