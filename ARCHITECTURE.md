@@ -47,9 +47,13 @@
 
 - **PipelineNode**: 所有处理节点的基类，定义了 `pullFrame(timestamp)` 接口。
 - **PipelineGraph**: 管理节点拓扑、循环检测、拓扑排序及执行驱动。
+  - `compile()`: 执行循环检测与拓扑排序，初始化所有节点。
+  - `execute(timestamp)`: 驱动所有 **Sink 节点**调用 `pullFrame`，触发整条管线的递归拉取。
 - **节点类型**:
   - `CameraInputNode`: 作为 Source，接收平台层推送的 OES/RGB 纹理。
   - `TimelineNode`: 将 Timeline/Compositor 接入管线作为输入源。
+    - **FBO 注入**: 在 `FilterEngine` 构建管线时，会将全局 `FrameBufferPool` 注入 `TimelineNode`。
+    - **尺寸安全**: 在 `pullFrame` 时强制对输出尺寸进行 `max(1, width/height)` 钳位，防止 OpenGL 报错。
   - `FilterNode`: 包装 `Filter` 对象，负责具体的纹理处理。
   - `OutputNode`: 作为 Sink，收集最终渲染结果。
 
@@ -58,16 +62,24 @@
 职责：
 1. **初始化**: 绑定渲染线程、触发 `GLContextManager` 能力嗅探。
 2. **动态构建**: 根据业务场景（预览/时间线编辑）动态组装 `PipelineGraph`。
+   - **事务性重构 (rebuildGraph)**: 采用事务机制，仅在管线成功 `compile()` 后才更新引擎状态（`m_graph`, `m_outputNode` 等），确保失败时不破坏当前运行状态。
 3. **参数广播**: 遍历管线节点，将全局参数（如滤镜强度）下发给对应的 `FilterNode`。
 
-#### 2.1.3 GLContextManager（硬件能力探测）
+#### 2.1.3 RHI (Rendering Hardware Interface)
+
+为了支持未来向 Vulkan/Metal 迁移，项目引入了 RHI 抽象层：
+- **`IRenderDevice`**: 定义了基本的渲染设备接口（如资源创建、管线状态设置）。
+- **`GLRenderDevice`**: 当前主力的 OpenGL ES 实现。
+- `FilterEngine` 在初始化时实例化具体的 RHI 后端，并将其透传给各滤镜节点。
+
+#### 2.1.4 GLContextManager（硬件能力探测）
 
 在 GL Context 就绪后执行 capability sniffing：
 - FP16 Render Target 支持。
 - Compute Shader 支持（校验 `GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS`）。
 - 根据探测结果自动配置 `FilterNode` 的中间 FBO 精度（`FP16 / RGB565 / RGBA8888`）。
 
-#### 2.1.4 FrameBufferPool
+#### 2.1.5 FrameBufferPool
 
 - 实现**全局显存预算管理**（默认 256MB）。
 - 采用 **LRU 淘汰策略**，按 `(width, height, precision)` 复用 FBO。
@@ -81,8 +93,12 @@
 
 职责：
 - 封装 `RenderEngine` (JNI) 并提供协程友好的 API。
-- **线程模型**: 使用 `glThreadDispatcher` 确保所有 GL 操作收敛到单一渲染线程。
-- **背压控制**: `SharedFlow` 采用 `DROP_OLDEST` 策略防止渲染积压。
+- **线程模型**:
+  - 使用 `glThreadDispatcher` 确保所有 GL 操作收敛到单一渲染线程。
+  - 通过 `runOnGLThread` 挂起协程并同步等待 GL 任务返回结果。
+- **背压控制与 frame delivery**:
+  - `processedFrames`: 使用 `SharedFlow` 向外发射处理后的纹理 ID。
+  - 采用 `onBufferOverflow = BufferOverflow.SUSPEND` 并配合 `tryEmit` 探测丢帧，实现生产与消费的平衡。
 
 #### 2.2.2 NativeBridge (JNI)
 
@@ -117,20 +133,23 @@
 ### 3.1 渲染管线执行流 (Pull Model)
 
 ```text
-OutputNode::pullFrame(t)
-    -> FilterNode::pullFrame(t)
-        -> upstreamNode::pullFrame(t) (Recursively)
-            -> CameraInputNode / TimelineNode (Provide Source Frame)
-        -> Filter::processFrame (Draw to FBO)
-    -> Final Texture Output
+FilterEngine::processFrame(t) 或 PipelineGraph::execute(t)
+    -> OutputNode::pullFrame(t)
+        -> FilterNode::pullFrame(t)
+            -> upstreamNode::pullFrame(t) (Recursively until source)
+                -> CameraInputNode / TimelineNode (Provide Source Frame)
+            -> Filter::processFrame (Draw to FBO using FrameBufferPool)
+        -> Final Texture result collected by OutputNode
 ```
 
 ### 3.2 Android 导出/录制链
 
 ```text
-PipelineGraph Output
-    -> Blit to MediaCodec Input Surface
-    -> MediaMuxer (AAC + AVC)
+Compositor::renderFrameAtTime(t, fbo)
+    -> PipelineGraph Output (if filters active)
+    -> eglSwapBuffers to MediaCodec Input Surface
+    -> AMediaCodec (Drain Output Buffers)
+    -> AMediaMuxer (Write Sample Data)
 ```
 
 ---
@@ -164,14 +183,21 @@ C++ 层统一返回 `ResultPayload<T>`，包含：
 - **初始化错误 (-1001 ~ -1999)**: 如上下文创建失败、Shader 编译失败。
 - **渲染错误 (-2001 ~ -2999)**: 如 FBO 分配失败、不支持 Compute Shader。
 - **Timeline 错误 (-3001 ~ -3999)**: 如剪辑未找到、解码器崩溃。
+  - **解码器硬核降级**: 如 `ERR_DECODER_SEEK_FAILED` (-3007) 表示硬解无法精确定位，将触发 `DEGRADED` 状态，由 SDK 层逻辑决定是否切换软解或跳帧。
 
 ---
 
 ## 6. 并发与线程模型
 
-- **C++ Core**: 严格的 `ThreadCheck`。`FilterEngine` 操作必须在绑定线程执行。
-- **Android**: 依赖 `glThreadDispatcher` 执行渲染，协程处理非 GL 任务。
-- **iOS**: 依赖 Swift `actor` 实现 API 调用的线性化。
+- **C++ Core**:
+  - 核心逻辑基于单一渲染线程。
+  - **`ThreadCheck`**: 每个 `FilterEngine` 实例会绑定初始化时的线程 ID，所有关键调用（如 `processFrame`）均会校验调用线程，防止跨线程操作导致的显存损坏。
+- **Android**:
+  - 渲染：依赖 `glThreadDispatcher` 在特定的 GL 线程顺序执行。
+  - 业务：协程在 `Dispatchers.Default` 执行非 GL 任务。
+- **iOS**:
+  - 使用 Swift `actor` (VideoFilterManager) 确保外部 API 调用串行化。
+  - `FilterEngineWrapper` 负责进入 EAGL 线程上下文并进行资源清理。
 
 ---
 
