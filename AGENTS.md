@@ -22,3 +22,7 @@
 ## 5. 交互指令集 (Agent Commands)
 * 当我说 "@Jules: NewFilter [Name]"：请在 C++ 层创建一个新的 Shader 类，并在 UI 层生成对应的控制滑块。
 * 当我说 "@Jules: Optimize"：请检查当前的渲染循环，寻找内存抖动点。
+
+## 6. 验证规范 (Verification Standards)
+* 在提交任何更改之前，必须遵循 `VERIFICATION.md` 中的“最小本地验证指南”。
+* 必须运行受影响模块的 MVP 验证项。
