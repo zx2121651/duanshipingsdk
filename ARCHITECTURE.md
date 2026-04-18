@@ -14,15 +14,26 @@
 
 ---
 
-## 1. 项目概览
+## 1. 项目概览与目录结构
 
-本项目采用「**C++ Core + 平台桥接层**」架构：
+本项目采用「**C++ Core + 平台桥接层**」架构，实现了算法核心与平台能力的解耦。
 
-- `core/`：跨平台渲染管线、滤镜引擎、帧缓冲池、OpenGL 能力探测、Timeline/Compositor。
-- `android/`：CameraX 采集、Kotlin Facade、JNI Bridge、MediaCodec 编码与封装。
-- `ios/`：Swift Facade + Objective-C++ Wrapper，连接 C++ 核心与 AVFoundation。
+### 1.1 核心目录与模块定位
 
-该模式实现了平台能力和算法核心的分离：渲染与流水线逻辑集中在 `core`，平台层负责采集/展示/硬件编解码与线程调度。
+- **`core/` (C++ Core)**: 跨平台引擎核心。包含渲染管线 (PipelineGraph)、滤镜引擎 (FilterEngine)、帧缓冲池 (FrameBufferPool)、OpenGL 能力探测、Timeline 编辑子系统。
+- **`android/` (Android SDK Library)**: Android 端的 SDK 库实现。包含 CameraX 采集封装、Kotlin Facade、JNI Bridge、MediaCodec 硬件编解码。该目录输出 `aar` 供集成使用。
+- **`sample-android/` (Android Sample Host)**: Android 示例宿主 App。用于演示 SDK 的集成方式（`:android` 模块的消费者），并作为日常开发的集成验证环境。
+- **`ios/` (iOS SDK Library)**: iOS 端的 SDK 实现。基于 Swift Facade 和 Objective-C++ Wrapper，连接 C++ 核心与 AVFoundation。
+- **`tests/`**: 核心引擎的 C++ 单元测试与回归测试用例，确保跨平台逻辑的稳定性。
+- **`mock_gl/`**: 为 headless 环境（如 CI 容器）提供的 Mock OpenGL 接口，支持在无 GPU 环境下编译核心代码。
+- **Gradle Wrapper (`gradle/`, `gradlew`, `gradlew.bat`)**: 统一的 Android 构建环境版本管理，确保本地与 CI 构建的一致性。
+
+### 1.2 设计哲学
+
+该架构将渲染与流水线逻辑集中在 `core`，而平台层负责：
+1. **采集与展示**: 处理系统级 Camera/Display 回调。
+2. **硬件编解码**: 调度 MediaCodec (Android) 或 AVFoundation (iOS)。
+3. **线程调度**: 管理平台特定的渲染线程与后台任务。
 
 ---
 

@@ -16,13 +16,13 @@ rootProject.name = "ShortVideoSDK"
 
 /**
  * Project Structure:
- * - :android -> Core SDK library
- * - :sample-android -> Integration verification host
+ * - :android -> Android SDK Library (Outputs AAR)
+ * - :sample-android -> Android Sample Host (Integration Verification)
  * For build prerequisites, see BUILD.md in the root directory.
  */
 
-// SDK Library: The core product of this repository
+// SDK Library: The primary product of this repository
 include ':android'
 
-// Sample App: Integration verification host for the SDK
+// Sample Host: Verification app that consumes the SDK library
 include ':sample-android'
