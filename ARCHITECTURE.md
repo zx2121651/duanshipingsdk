@@ -4,6 +4,16 @@
 
 ---
 
+## 0. 快速上手 (Getting Started)
+
+对于新开发者或 Agent，请首先查阅 [BUILD.md](./BUILD.md) 以获取完整的**本地构建前置条件说明**。
+
+- **Android**: 确保安装 JDK 17 和 Android SDK/NDK。
+- **iOS**: 需要 macOS 和 Xcode 环境。
+- **Core C++**: 依赖 CMake 3.10.2+。
+
+---
+
 ## 1. 项目概览
 
 本项目采用「**C++ Core + 平台桥接层**」架构：

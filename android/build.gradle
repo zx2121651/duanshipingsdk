@@ -1,5 +1,6 @@
 // Module: android (SDK Library)
 // Role: The primary SDK product containing the core video processing logic.
+// Prerequisites: Android SDK 34, Android NDK 25.1.8937393, CMake 3.22.1
 plugins {
     id 'com.android.library'
     id 'org.jetbrains.kotlin.android'

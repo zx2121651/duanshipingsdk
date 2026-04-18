@@ -14,6 +14,13 @@ dependencyResolutionManagement {
 }
 rootProject.name = "ShortVideoSDK"
 
+/**
+ * Project Structure:
+ * - :android -> Core SDK library
+ * - :sample-android -> Integration verification host
+ * For build prerequisites, see BUILD.md in the root directory.
+ */
+
 // SDK Library: The core product of this repository
 include ':android'
 
