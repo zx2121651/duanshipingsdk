@@ -73,6 +73,7 @@ target_link_libraries(test_filter_graph video_sdk_core)
 
 add_executable(test_execute_stability_repro tests/test_execute_stability_repro.cpp tests/mocks/MockCompositor.cpp)
 target_link_libraries(test_execute_stability_repro video_sdk_core)
+add_test(NAME test_execute_stability_repro COMMAND test_execute_stability_repro)
 
 add_executable(test_lifecycle tests/test_lifecycle.cpp tests/mocks/MockCompositor.cpp)
 target_link_libraries(test_lifecycle video_sdk_core)
@@ -121,6 +122,8 @@ add_test(NAME test_rebuild_harden COMMAND test_rebuild_harden)
 
 add_executable(test_timeline_node_harden tests/test_timeline_node_harden.cpp tests/mocks/MockCompositor.cpp)
 target_link_libraries(test_timeline_node_harden video_sdk_core)
+add_test(NAME test_timeline_node_harden COMMAND test_timeline_node_harden)
 
 add_executable(test_exporter_logic tests/test_exporter_logic.cpp tests/mocks/MockCompositor.cpp)
 target_link_libraries(test_exporter_logic video_sdk_core)
+add_test(NAME test_exporter_logic COMMAND test_exporter_logic)
