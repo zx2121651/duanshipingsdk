@@ -21,7 +21,7 @@ jobs:
           sudo apt-get install -y libgles2-mesa-dev libegl1-mesa-dev g++ cmake make
 
       - name: Configure CMake
-        run: cmake -B build -S .
+        run: cmake -B build -S . -DUSE_MOCK_GL=ON
 
       - name: Build Core
         run: cmake --build build --config Release
