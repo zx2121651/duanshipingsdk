@@ -20,7 +20,9 @@ Result FilterEngine::initialize() {
         return Result::ok();
     }
 
-    m_threadCheck.bind(); // Bind to current (GL) thread.
+    // Thread Safety: Bind this engine instance to the caller's thread (Render Thread).
+    // All subsequent GPU-related calls must originate from this thread.
+    m_threadCheck.bind();
 
     // 初始化前首先唤醒嗅探器，对底层硬件进行深度体检
     m_contextManager.sniffCapabilities();
@@ -43,6 +45,7 @@ ResultPayload<Texture> FilterEngine::processFrame(const Texture& textureIn, int 
         return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "FilterEngine not initialized before processing frame");
     }
 
+    // Thread Safety: Verify that we are still on the Render Thread.
     if (!m_threadCheck.check("processFrame must be called on the render thread")) {
         return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "GL Thread violation detected during processFrame");
     }
