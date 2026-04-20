@@ -24,5 +24,9 @@
 * 当我说 "@Jules: Optimize"：请检查当前的渲染循环，寻找内存抖动点。
 
 ## 6. 验证规范 (Verification Standards)
-* 在提交任何更改之前，必须遵循 `VERIFICATION.md` 中的“最小本地验证指南”。
-* 必须运行受影响模块的 MVP 验证项。
+* **强制核对**: 在提交任何更改之前，Agent 必须完成 [VERIFICATION.md](./VERIFICATION.md) 中的“Phase-1 最小验证检查清单”。
+* **最小提交检查清单 (Agent Pre-submission Checklist)**:
+    - [ ] **Core**: `ctest` 必须全绿（Headless 模式）。
+    - [ ] **Android**: `:android:testDebugUnitTest` 必须通过，`:android:assembleDebug` 成功。
+    - [ ] **iOS**: `VideoSDK` Scheme 模拟器编译成功。
+    - [ ] **Hygiene**: 检查 `ARCHITECTURE.md` 是否需要同步，是否有新的 `MEMORY` 需要记录。

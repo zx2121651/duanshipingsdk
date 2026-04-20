@@ -56,7 +56,7 @@ set(CORE_SOURCES
     core/src/rhi/GLRenderDevice.cpp
 )
 
-# Core engine build
+# Phase-1 Verification Target: Core engine build
 add_library(video_sdk_core STATIC ${CORE_SOURCES})
 
 if(USE_MOCK_GL)
@@ -65,6 +65,7 @@ endif()
 
 enable_testing()
 
+# Phase-1 Verification: Core Unit Tests
 # Basic API logic test (no GL windowing dependencies)
 add_executable(test_filter_graph tests/test_filter_graph.cpp tests/mocks/MockCompositor.cpp)
 add_test(NAME test_filter_graph COMMAND test_filter_graph)
