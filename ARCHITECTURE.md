@@ -60,7 +60,7 @@
 #### 2.1.2 FilterEngine（管线总控）
 
 职责：
-1. **初始化**: 绑定渲染线程、触发 `GLContextManager` 能力嗅探。
+1. **初始化**: 绑定渲染线程、触发 `GLContextManager` 能力嗅探。支持幂等调用，但重复调用必须在同一个绑定线程，否则返回错误。
 2. **动态构建**: 根据业务场景（预览/时间线编辑）动态组装 `PipelineGraph`。
    - **事务性重构 (rebuildGraph)**: 采用事务机制，仅在管线成功 `compile()` 后才更新引擎状态（`m_graph`, `m_outputNode` 等），确保失败时不破坏当前运行状态。
 3. **参数广播**: 遍历管线节点，将全局参数（如滤镜强度）下发给对应的 `FilterNode`。
@@ -228,7 +228,7 @@ SDK 错误码采用负值表示，定义在 `core/include/GLTypes.h`。按照 **
 
 ### 6.1 Core C++ 约束
 
-- **线程绑定**: `FilterEngine::initialize()` 被调用时，会通过 `ThreadCheck::bind()` 将当前线程标记为该实例的 Render Thread。
+- **线程绑定**: `FilterEngine::initialize()` 被调用时，会通过 `ThreadCheck::bind()` 将当前线程标记为该实例的 Render Thread。该方法支持幂等性，后续重复调用会校验线程一致性。
 - **调用约束**:
   - `processFrame()`: **必须**在 Render Thread 调用。
   - `addFilter()` / `removeAllFilters()`: **必须**在 Render Thread 调用。

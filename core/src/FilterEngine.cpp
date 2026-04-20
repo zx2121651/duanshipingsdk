@@ -17,6 +17,12 @@ FilterEngine::~FilterEngine() {
 
 Result FilterEngine::initialize() {
     if (m_initialized) {
+        // Idempotent Path: Ensure we are still on the same thread that first initialized the engine.
+        // This maintains the "binding" semantics.
+        if (!m_threadCheck.check("Repeated initialize() must be called on the same thread")) {
+            return Result::error(ErrorCode::ERR_RENDER_INVALID_STATE, "FilterEngine already initialized on another thread");
+        }
+        LOGI("FilterEngine::initialize() - Already initialized, skipping.");
         return Result::ok();
     }
 
@@ -128,6 +134,7 @@ void FilterEngine::release() {
     m_cameraNode = nullptr;
     m_outputNode = nullptr;
     m_isGraphDirty = true;
+    m_renderDevice = nullptr;
 
     m_metricsCollector.clear();
     m_frameBufferPool.clear();
