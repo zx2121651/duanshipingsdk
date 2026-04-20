@@ -23,9 +23,11 @@ jobs:
       - name: Configure CMake
         run: cmake -B build -S . -DUSE_MOCK_GL=ON
 
+      # Phase-1 Verification Step: Build Core Engine
       - name: Build Core
         run: cmake --build build --config Release
 
+      # Phase-1 Verification Step: Run Core Unit Tests
       - name: Run Tests
         run: |
           cd build

@@ -24,13 +24,13 @@ jobs:
 
       # Use the committed Gradle Wrapper to ensure consistency between local and CI environments.
 
-      # Step 1: Build the SDK Library (Primary Product)
+      # Phase-1 Verification Step: Build the SDK Library (Primary Product)
       # This ensures the core SDK code is valid and can be compiled independently.
       - name: "SDK Library: Build (Primary Product)"
         working-directory: ./
         run: ./gradlew :android:assembleDebug --stacktrace
 
-      # Step 2: Run SDK Unit Tests
+      # Phase-1 Verification Step: Run SDK Unit Tests
       # Verify the core logic of the SDK.
       - name: "SDK Library: Run Unit Tests"
         working-directory: ./

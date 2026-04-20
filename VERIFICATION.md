@@ -1,33 +1,23 @@
-# Phase-1 Minimum Local Verification Guide
+# Phase-1 Minimum Verification Checklist
 
-This guide defines the mandatory minimum verification steps required before submitting any code changes.
+This checklist defines the **mandatory** minimum verification steps required for every contributor (Human or Agent) before submitting any code changes.
 
-## 1. Core C++ Engine (MVP)
-**Mandatory** for any changes affecting `core/` or `tests/`.
+## 1. Core C++ Engine (Mandatory)
+Required for any changes affecting `core/`, `tests/`, or build configurations.
 
-- [ ] **Build & Run Core Tests (Headless)**
-  ```bash
-  cmake -B build -S . -DUSE_MOCK_GL=ON
-  cmake --build build
-  cd build && ctest --output-on-failure
-  ```
+- [ ] **Build Core (Headless)**: `cmake -B build -S . -DUSE_MOCK_GL=ON && cmake --build build`
+- [ ] **Run Core Tests**: `cd build && ctest --output-on-failure` (Must pass all 9+ suites)
 
-## 2. Android (MVP)
-**Mandatory** for any changes affecting `android/`, JNI, or core logic.
+## 2. Android SDK (Mandatory)
+Required for any changes affecting `android/`, JNI, or core logic.
 
-- [ ] **Run SDK Unit Tests**
-  ```bash
-  ./gradlew :android:testDebugUnitTest
-  ```
-- [ ] **Assemble SDK Library**
-  ```bash
-  ./gradlew :android:assembleDebug
-  ```
+- [ ] **Run Unit Tests**: `./gradlew :android:testDebugUnitTest`
+- [ ] **Assemble SDK**: `./gradlew :android:assembleDebug` (Verifies library build)
 
-## 3. iOS (MVP)
-**Mandatory** for any changes affecting `ios/` or core logic.
+## 3. iOS SDK (Mandatory)
+Required for any changes affecting `ios/` or core logic.
 
-- [ ] **Build Framework**
+- [ ] **Build Framework**:
   ```bash
   xcodebuild clean build \
     -project ios/VideoSDK.xcodeproj \
@@ -37,15 +27,16 @@ This guide defines the mandatory minimum verification steps required before subm
     CODE_SIGNING_ALLOWED=NO
   ```
 
-## 4. Environment-Dependent Verification
-Recommended if the specific environment is available.
+## 4. Documentation & Hygiene (Mandatory)
+- [ ] **Update ARCHITECTURE.md**: If adding/changing major modules or flows.
+- [ ] **Update MEMORY**: If the change introduces new critical context for future tasks.
+- [ ] **Branch Naming**: Use descriptive branch names (e.g., `feature/xxx`, `fix/xxx`).
 
-- **Rendering Tests (Linux/Windows with GPU/ANGLE):**
-  ```bash
-  # Ensure USE_MOCK_GL=OFF
-  ./build/test_headless_ssim
-  ```
-- **Android Integration Check:**
-  ```bash
-  ./gradlew :sample-android:assembleDebug
-  ```
+## 5. Environment-Dependent Verification (Recommended)
+Perform these if your local environment supports it.
+
+- [ ] **Android Integration**: `./gradlew :sample-android:assembleDebug` (Verifies Sample App)
+- [ ] **Real GL Tests**: `./build/test_headless_ssim` (Requires GPU/Mesa/ANGLE)
+
+---
+*Note: This checklist is enforced by the project's Phase-1 quality standards. For environment setup instructions, refer to [BUILD.md](./BUILD.md).*
