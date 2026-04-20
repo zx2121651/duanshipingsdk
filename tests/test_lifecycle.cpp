@@ -2,6 +2,8 @@
 #include <iostream>
 #include <cassert>
 #include <memory>
+#include <thread>
+#include <future>
 #include "../core/include/FilterEngine.h"
 #include "../core/include/Filters.h"
 #include "FilterEngineTestAccessor.h"
@@ -55,12 +57,33 @@ void test_reinitialize_regression() {
 void test_repeated_init_release() {
     FilterEngine engine;
 
-    std::cout << "Testing repeated initialize..." << std::endl;
-    // 1. Double init
+    std::cout << "Testing repeated initialize on same thread..." << std::endl;
+    // 1. Double init on same thread
     Result res = engine.initialize();
     assert(res.isOk());
+    auto device1 = FilterEngineTestAccessor::getRenderDevice(engine);
+    assert(device1 != nullptr);
+
     res = engine.initialize();
     assert(res.isOk());
+    auto device2 = FilterEngineTestAccessor::getRenderDevice(engine);
+    assert(device1 == device2); // Idempotent: should NOT re-create device
+
+    std::cout << "Testing repeated initialize on different thread..." << std::endl;
+    // 2. Double init on different thread - should FAIL because binding is to first thread
+    std::promise<Result> promise;
+    std::future<Result> future = promise.get_future();
+    std::thread t([&engine, &promise]() {
+        promise.set_value(engine.initialize());
+    });
+    t.join();
+    Result threadRes = future.get();
+    // After my changes, this should fail. Currently it returns OK.
+    // I will update the test to expect FAILURE after I implement the check.
+    // But wait, if I run the test NOW it will fail if I assert it fails.
+    // TDD style: expect failure now.
+    assert(!threadRes.isOk());
+    assert(threadRes.getErrorCode() == ErrorCode::ERR_RENDER_INVALID_STATE);
 
     std::cout << "Testing repeated release..." << std::endl;
     // 2. Double release
@@ -71,9 +94,17 @@ void test_repeated_init_release() {
     // 3. Init -> Release -> Init
     res = engine.initialize();
     assert(res.isOk());
+    auto device3 = FilterEngineTestAccessor::getRenderDevice(engine);
+    assert(device3 != nullptr);
+
     engine.release();
+    assert(FilterEngineTestAccessor::getRenderDevice(engine) == nullptr);
+
     res = engine.initialize();
     assert(res.isOk());
+    auto device4 = FilterEngineTestAccessor::getRenderDevice(engine);
+    assert(device4 != nullptr);
+    assert(device3 != device4); // Should be a new device instance
 
     std::cout << "test_repeated_init_release passed" << std::endl;
 }

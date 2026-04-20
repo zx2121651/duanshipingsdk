@@ -25,6 +25,10 @@ public:
         return engine.m_metricsCollector;
     }
 
+    static std::shared_ptr<rhi::IRenderDevice> getRenderDevice(const FilterEngine& engine) {
+        return engine.m_renderDevice;
+    }
+
     // Setters used by existing tests
     static void setOutputNode(FilterEngine& engine, std::shared_ptr<OutputNode> node) {
         engine.m_outputNode = node;
