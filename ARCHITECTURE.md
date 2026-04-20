@@ -176,14 +176,49 @@ Compositor::renderFrameAtTime(t, fbo)
 C++ 层统一返回 `ResultPayload<T>`，包含：
 - `isOk()`: 执行是否成功。
 - `getErrorCode()`: 详细错误码。
-- `getValue()`: 成功时的有效负载。
+- `getMessage()`: 错误描述信息。
+- `getValue()`: 成功时的有效负载（仅限于 `ResultPayload<T>` 模板类）。
 
-### 5.2 错误码范围
+### 5.2 错误码分类与模块边界
 
-- **初始化错误 (-1001 ~ -1999)**: 如上下文创建失败、Shader 编译失败。
-- **渲染错误 (-2001 ~ -2999)**: 如 FBO 分配失败、不支持 Compute Shader。
-- **Timeline 错误 (-3001 ~ -3999)**: 如剪辑未找到、解码器崩溃。
-  - **解码器硬核降级**: 如 `ERR_DECODER_SEEK_FAILED` (-3007) 表示硬解无法精确定位，将触发 `DEGRADED` 状态，由 SDK 层逻辑决定是否切换软解或跳帧。
+SDK 错误码采用负值表示，定义在 `core/include/GLTypes.h`。按照 **「严重程度」** 与 **「归属模块」** 进行分层。
+
+#### 5.2.1 严重程度分类 (Fatal vs. Recoverable)
+
+| 类别 | 范围 | 说明 | 处理建议 |
+| :--- | :--- | :--- | :--- |
+| **FATAL** | -1000 ~ -1999 | **致命错误**。通常发生在初始化阶段（Context/Shader/Hardware Check）。 | 引擎不可用，需提示用户或重启 Engine 实例。 |
+| **DEGRADED** | -2000 ~ -4999 | **可恢复/降级错误**。运行期异常，不影响管线生命周期。 | 建议进入“降级模式”（如旁路滤镜、回退软解）。 |
+| **EXPORTER** | -5000 ~ -5999 | **导出任务错误**。仅影响当前的离线导出任务。 | 终止导出任务，清理临时文件。 |
+
+#### 5.2.2 模块边界说明
+
+| 模块 | 错误范围 | 核心职责 | 典型错误示例 |
+| :--- | :--- | :--- | :--- |
+| **Initialization** | -1000 ~ -1999 | 基础环境搭建、硬件能力嗅探。 | `ERR_INIT_CONTEXT_FAILED`: GPU 上下文无法创建。 |
+| **Rendering** | -2000 ~ -2999 | 滤镜执行、FBO 管理、RHI 交互。 | `ERR_RENDER_INVALID_STATE`: 跨线程调用渲染 API。 |
+| **Timeline/Decoder** | -3000 ~ -3999 | 视频解码、多轨合成、时间轴逻辑。 | `ERR_DECODER_SEEK_FAILED`: 硬解定位失败，触发软解。 |
+| **Graph** | -4000 ~ -4999 | 渲染图拓扑校验、编译。 | `ERR_GRAPH_CYCLE_DETECTED`: 滤镜连接形成死循环。 |
+| **Exporter** | -5000 ~ -5999 | 离线录制、封装、编码。 | `ERR_EXPORTER_IO_ERROR`: 磁盘空间不足或无写入权限。 |
+
+### 5.3 宿主状态机集成建议
+
+宿主（Android/iOS/App）应根据错误码范围建立状态机：
+
+1. **ERROR 状态 (Fatal Range)**:
+   - 当收到 `-1xxx` 错误时，`VideoFilterManager` 应回调 `onError` 并将状态切换至 `ERROR`。
+   - 此时 `processFrame` 将不再尝试执行任何 GL 指令，直到 `release()` 后重新 `initialize()`。
+
+2. **DEGRADED 状态 (Recoverable Range)**:
+   - 当收到 `-2xxx` 或 `-3xxx` 错误时（如 `ERR_DECODER_SEEK_FAILED`），引擎自动切换至 `DEGRADED` 模式。
+   - 在此模式下，SDK 可能会：
+     - 跳过当前帧的滤镜处理（Bypass）。
+     - 将硬解码器池切换为软件解码模式。
+     - 继续向 UI 交付原始帧或降级帧，确保预览不黑屏。
+
+3. **典型场景触发流程**:
+   - **FBO 耗尽**: `ERR_RENDER_FBO_ALLOC_FAILED` (-2001) -> 自动清理 LRU 缓存 -> 若仍失败，则 Bypass 滤镜并记录埋点。
+   - **跨线程错误**: `ERR_RENDER_INVALID_STATE` (-2002) -> 触发断言或抛出 Java/Swift 异常，警示开发者调用逻辑错误。
 
 ---
 
