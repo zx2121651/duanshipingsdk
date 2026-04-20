@@ -28,44 +28,54 @@ struct Texture {
 
 // ----------------------------------------------------------------------------
 // SDK 统一错误码字典 (Unified Error Code Dictionary)
+//
+// 错误码分类原则：
+// 1. FATAL (致命错误): -1000 到 -1999。通常指初始化失败，引擎无法启动，需重启 App 或重建 Engine。
+// 2. RECOVERABLE/DEGRADED (可恢复/降级错误): -2000 到 -4999。指运行期异常，可通过降级逻辑（如绕过滤镜、切换软解）继续运行。
+// 3. EXPORTER (导出错误): -5000 到 -5999。专门针对离线导出任务。
 // ----------------------------------------------------------------------------
 enum ErrorCode {
     SUCCESS = 0,
 
-    // 初始化错误 (1000 - 1999)
-    ERR_INIT_CONTEXT_FAILED = -1001,
-    ERR_INIT_SHADER_FAILED = -1002,
-    ERR_INIT_OBOE_FAILED = -1003,
+    // --- [Category: Initialization] (Fatal) Range: -1000 ~ -1999 ---
+    // 这些错误通常意味着基础环境不满足要求
+    ERR_INIT_CONTEXT_FAILED = -1001,    // EGL/EAGL 上下文创建失败
+    ERR_INIT_SHADER_FAILED = -1002,     // 基础系统 Shader 编译失败
+    ERR_INIT_OBOE_FAILED = -1003,       // Android Oboe 音频引擎初始化失败
 
-    // 渲染错误 (2000 - 2999)
-    ERR_RENDER_FBO_ALLOC_FAILED = -2001,
-    ERR_RENDER_INVALID_STATE = -2002,
-    ERR_RENDER_COMPUTE_NOT_SUPPORTED = -2003,
+    // --- [Category: Rendering] (Recoverable) Range: -2000 ~ -2999 ---
+    // 渲染管线内部错误，建议进入 DEGRADED 模式（跳过滤镜）
+    ERR_RENDER_FBO_ALLOC_FAILED = -2001,       // 显存不足，无法分配帧缓冲
+    ERR_RENDER_INVALID_STATE = -2002,          // 状态异常（如在非渲染线程调用，或管线未编译）
+    ERR_RENDER_COMPUTE_NOT_SUPPORTED = -2003,  // 当前硬件不支持 Compute Shader
 
-    // 时间线错误 (3000 - 3999)
-    ERR_TIMELINE_NULL = -3001,
-    ERR_TIMELINE_TRACK_NOT_FOUND = -3002,
-    ERR_TIMELINE_CLIP_NOT_FOUND = -3003,
-    ERR_TIMELINE_DECODER_POOL_NULL = -3004,
-    ERR_TIMELINE_DECODER_GET_FRAME_FAILED = -3005,
-    ERR_TIMELINE_COMPOSITOR_INIT_FAILED = -3006,
-    ERR_DECODER_SEEK_FAILED = -3007,
-    ERR_DECODER_FRAME_DROP = -3008,
-    ERR_DECODER_HW_FAILURE = -3009,
+    // --- [Category: Timeline & Decoder] (Recoverable) Range: -3000 ~ -3999 ---
+    // 编辑、解码相关错误，建议触发重试或软解回退
+    ERR_TIMELINE_NULL = -3001,               // Timeline 实例为空
+    ERR_TIMELINE_TRACK_NOT_FOUND = -3002,    // 找不到指定的轨道
+    ERR_TIMELINE_CLIP_NOT_FOUND = -3003,     // 找不到指定的剪辑
+    ERR_TIMELINE_DECODER_POOL_NULL = -3004,  // 解码池未初始化
+    ERR_TIMELINE_DECODER_GET_FRAME_FAILED = -3005, // 解码器获取帧失败
+    ERR_TIMELINE_COMPOSITOR_INIT_FAILED = -3006,   // 渲染合成器初始化失败
+    ERR_DECODER_SEEK_FAILED = -3007,         // 定位失败（通常触发硬解转软解）
+    ERR_DECODER_FRAME_DROP = -3008,          // 解码掉帧
+    ERR_DECODER_HW_FAILURE = -3009,          // 硬件解码器崩溃
 
-    // 图编译错误 (4000 - 4999)
-    ERR_GRAPH_CYCLE_DETECTED = -4001,
-    ERR_GRAPH_NO_SINK = -4002,
-    ERR_GRAPH_NODE_INIT_FAILED = -4003,
+    // --- [Category: Graph Compilation] (Recoverable) Range: -4000 ~ -4999 ---
+    // 滤镜图构建错误，建议回滚到上一个有效图状态
+    ERR_GRAPH_CYCLE_DETECTED = -4001,   // 渲染图中存在环路
+    ERR_GRAPH_NO_SINK = -4002,          // 图中没有输出节点
+    ERR_GRAPH_NODE_INIT_FAILED = -4003, // 节点内部初始化（如私有 Shader）失败
 
-    // 导出错误 (5000 - 5999)
-    ERR_EXPORTER_ALREADY_RUNNING = -5001,
-    ERR_EXPORTER_NOT_CONFIGURED = -5002,
-    ERR_EXPORTER_ENCODER_INIT_FAILED = -5003,
-    ERR_EXPORTER_MUXER_INIT_FAILED = -5004,
-    ERR_EXPORTER_GL_CONTEXT_FAILED = -5005,
-    ERR_EXPORTER_CANCELLED = -5006,
-    ERR_EXPORTER_IO_ERROR = -5007
+    // --- [Category: Exporter] Range: -5000 ~ -5999 ---
+    // 专门用于离线导出任务的错误
+    ERR_EXPORTER_ALREADY_RUNNING = -5001,   // 导出任务已在运行
+    ERR_EXPORTER_NOT_CONFIGURED = -5002,    // 导出参数未配置
+    ERR_EXPORTER_ENCODER_INIT_FAILED = -5003, // 编码器初始化失败
+    ERR_EXPORTER_MUXER_INIT_FAILED = -5004,   // 封装器初始化失败
+    ERR_EXPORTER_GL_CONTEXT_FAILED = -5005,   // 导出专用 GL 上下文创建失败
+    ERR_EXPORTER_CANCELLED = -5006,           // 用户主动取消导出
+    ERR_EXPORTER_IO_ERROR = -5007             // 文件读写 I/O 错误
 };
 
 
