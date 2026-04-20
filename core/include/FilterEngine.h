@@ -29,26 +29,46 @@ public:
     FilterEngine();
     ~FilterEngine();
 
-    // Init context and setup standard filters. Call this on the GL thread.
+    /**
+     * @brief Initialize the engine.
+     * @note MUST be called on the GL/Render thread. This call binds the engine to the current thread.
+     */
     Result initialize();
 
-    // Process a frame through the pipeline
+    /**
+     * @brief Process an input texture through the filter pipeline.
+     * @note MUST be called on the Render thread bound during initialize().
+     */
     ResultPayload<Texture> processFrame(const Texture& textureIn, int width, int height);
 
-    // Update filter parameters
+    /**
+     * @brief Update filter parameters.
+     * @note Thread-safe if called on Render thread.
+     */
     void updateParameter(const std::string& key, const std::any& value);
     void updateParameterMat4(const std::string& key, const float* matrix);
 
-    // Release resources
+    /**
+     * @brief Release all GPU resources.
+     * @note MUST be called on the Render thread to ensure proper OpenGL resource cleanup.
+     */
     void release();
 
-    // Graph Builder APIs
+    // Graph Builder APIs (Internal use, should be called on Render thread)
     Result buildCameraPipeline();
     Result buildTimelinePipeline(std::shared_ptr<timeline::Timeline> timeline, std::shared_ptr<timeline::Compositor> compositor);
 
-    // Pipeline manipulation
-        Result addFilter(FilterType type);
-    Result addFilterRaw(FilterPtr filter); // Expose for internal nodes like OES2RGB
+    /**
+     * @brief Add a filter to the pipeline.
+     * @note MUST be called on the Render thread as it triggers filter initialization.
+     */
+    Result addFilter(FilterType type);
+    Result addFilterRaw(FilterPtr filter);
+
+    /**
+     * @brief Remove all filters and reset the pipeline.
+     * @note MUST be called on the Render thread.
+     */
     Result removeAllFilters();
 
     PerformanceMetrics getPerformanceMetrics() const { return m_metricsCollector.getMetrics(); }

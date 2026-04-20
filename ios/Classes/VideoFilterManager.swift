@@ -22,10 +22,14 @@ public enum FilterEngineState {
 
 /**
  * 跨平台实时视频滤镜的 iOS 端门面类 (Facade)。
- * 核心设计：
- * 1. 使用 Swift `actor`。在 iOS 的 OpenGL/EAGLContext 编程中，跨线程访问 Context 是极其危险的。
- *    Actor 可以确保内部所有的滤镜添加、销毁和状态修改都在一个串行的执行上下文中，完美解决了线程安全问题。
- * 2. 引入 `AsyncStream` 供上层消费者（SwiftUI 视图）非阻塞地获取最新帧。
+ *
+ * Threading Model:
+ * 1. Swift `actor`: The use of `actor` ensures that all calls to this class (and thus to the
+ *    underlying C++ engine) are serialized. This prevents race conditions on the non-thread-safe
+ *    OpenGL/EAGLContext.
+ * 2. Serial Access: Methods like `addFilter`, `processFrame`, and `release` are guaranteed to
+ *    execute one at a time, fulfilling the Core Engine's single-thread constraint.
+ * 3. AsyncStream: Provides a non-blocking way for UI layers to consume processed frames.
  */
 
 public struct PerformanceMetrics {
@@ -78,8 +82,10 @@ public actor VideoFilterManager {
     }
 
     /**
-     * 视频帧处理的核心入口。通常由 AVCaptureVideoDataOutput 的 delegate 回调。
-     * - Parameter pixelBuffer: 相机硬件直出的原始视频帧
+     * Primary entry point for frame processing.
+     * @note Serialized by the Actor. This method triggers the underlying C++ processFrame.
+     *
+     * - Parameter pixelBuffer: Raw frame from camera (e.g. AVCaptureVideoDataOutput).
      */
     public func processFrame(_ pixelBuffer: CVPixelBuffer, timestamp: CMTime? = nil) {
         let finalTimestamp = timestamp ?? CMClockGetTime(CMClockGetHostTimeClock())

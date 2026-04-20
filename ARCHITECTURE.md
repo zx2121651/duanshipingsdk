@@ -187,17 +187,41 @@ C++ 层统一返回 `ResultPayload<T>`，包含：
 
 ---
 
-## 6. 并发与线程模型
+## 6. 线程模型 (Threading Model)
 
-- **C++ Core**:
-  - 核心逻辑基于单一渲染线程。
-  - **`ThreadCheck`**: 每个 `FilterEngine` 实例会绑定初始化时的线程 ID，所有关键调用（如 `processFrame`）均会校验调用线程，防止跨线程操作导致的显存损坏。
-- **Android**:
-  - 渲染：依赖 `glThreadDispatcher` 在特定的 GL 线程顺序执行。
-  - 业务：协程在 `Dispatchers.Default` 执行非 GL 任务。
-- **iOS**:
-  - 使用 Swift `actor` (VideoFilterManager) 确保外部 API 调用串行化。
-  - `FilterEngineWrapper` 负责进入 EAGL 线程上下文并进行资源清理。
+本 SDK 采用 **「单线程渲染模型」**。由于 OpenGL ES 的上下文 (Context) 与线程强绑定，所有涉及 GPU 资源的操作必须在同一个指定的线程（以下简称为 **Render Thread** 或 **GL Thread**）中执行。
+
+### 6.1 Core C++ 约束
+
+- **线程绑定**: `FilterEngine::initialize()` 被调用时，会通过 `ThreadCheck::bind()` 将当前线程标记为该实例的 Render Thread。
+- **调用约束**:
+  - `processFrame()`: **必须**在 Render Thread 调用。
+  - `addFilter()` / `removeAllFilters()`: **必须**在 Render Thread 调用。
+  - `release()`: **必须**在 Render Thread 调用，以确保显存资源同步释放。
+- **防御机制**: 核心 API 内部集成了 `ThreadCheck`。若发生跨线程调用，API 将返回 `ERR_RENDER_INVALID_STATE` (-2002)，并在 `stderr` 打印：`ThreadCheck Error: processFrame must be called on the render thread`。
+
+### 6.2 Android 平台适配 (Facade)
+
+Android 端通过 `VideoFilterManager` 实现了线程安全的派发机制：
+
+- **`glThreadDispatcher`**: 宿主 App 必须在初始化时注入该分发器。它通常连接到 `GLSurfaceView` 的渲染线程或一个自定义的 `HandlerThread`。
+- **`runOnGLThread`**: 内部私有辅助方法。它使用 Kotlin 协程的 `suspendCancellableCoroutine` 将业务线程的操作（如添加滤镜）挂起并派发到 Render Thread 执行，执行完毕后再将结果切回原线程。
+- **外部建议**: 所有的 `suspend` API（如 `addFilter`）都是线程安全的，可以在任意协程上下文调用。
+
+### 6.3 iOS 平台适配 (Facade)
+
+iOS 端利用 Swift 的现代并发特性进行约束：
+
+- **Swift Actor**: `VideoFilterManager` 被定义为一个 `actor`。这意味着所有对它的方法调用（如 `processFrame`, `addFilter`）都会被 Swift 运行时自动串行化（Serial Execution）。
+- **EAGLContext 管理**: 虽然 Actor 保证了串行，但 `FilterEngineWrapper` 仍需确保在 `processFrame` 开始时调用 `[EAGLContext setCurrentContext:]` 以维持正确的上下文环境。
+
+### 6.4 典型线程错误表现
+
+1. **画面冻结/黑屏**: 往往是因为 `processFrame` 在非渲染线程调用，导致 OpenGL 指令无效。
+2. **Crash (Access Violation)**: 两个线程同时操作同一个 `FrameBufferPool` 或 `ShaderManager`。
+3. **日志特征**:
+   - `GL Thread violation detected during processFrame`
+   - `EGL_BAD_ACCESS` (Android) 或 `EXC_BAD_ACCESS` (iOS) 在 OpenGL 调用栈。
 
 ---
 

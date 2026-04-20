@@ -42,15 +42,22 @@ class VideoFilterManager(private val context: android.content.Context,
     // 在 OpenGL 中，所有的 Context 和 Texture ID 都绑定在特定的线程上。
     // 必须确保所有对 renderEngine 的调用都在这个单线程中进行。
 
-    // GL 线程分发器：为了消除对具体 UI 控件 (GLSurfaceView) 的直接依赖，
-    // 我们强制外部消费者在创建引擎时提供一个回调，用于将任务派发给 EGL 绑定的渲染线程。
-    // 这解决了之前 "依靠约定保证单线程" 带来的巨大维护隐患。
+    /**
+     * GL Thread Dispatcher: External consumers (like GLSurfaceView or a custom HandlerThread)
+     * must provide this callback to route tasks into the correct EGL context thread.
+     */
     var glThreadDispatcher: ((Runnable) -> Unit)? = null
 
     @Volatile
     private var glThreadId: Long = -1
 
-    // 将所有的配置更新请求统一收敛并安全分发给 GL 线程，并挂起等待执行结果
+    /**
+     * Internal helper to dispatch GL tasks and suspend the caller until completion.
+     * This enforces the single-threaded rendering constraint of the Core C++ engine.
+     *
+     * @param action The GL task to execute.
+     * @return Result of the task.
+     */
     @OptIn(ExperimentalCoroutinesApi::class)
     private suspend fun <T> runOnGLThread(action: () -> Result<T>): Result<T> {
         // [Optimization]: If already on GL thread, execute immediately to reduce latency
