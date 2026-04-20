@@ -100,6 +100,7 @@ ResultPayload<Texture> FilterEngine::processFrame(const Texture& textureIn, int 
 }
 
 void FilterEngine::updateParameter(const std::string& key, const std::any& value) {
+    if (!m_initialized) return;
     if (m_graph) {
         for (const auto& node : m_graph->getNodes()) {
             auto filterNode = std::dynamic_pointer_cast<FilterNode>(node);
@@ -111,6 +112,7 @@ void FilterEngine::updateParameter(const std::string& key, const std::any& value
 }
 
 void FilterEngine::updateParameterMat4(const std::string& key, const float* matrix) {
+    if (!m_initialized) return;
     if (m_graph) {
         for (const auto& node : m_graph->getNodes()) {
             auto filterNode = std::dynamic_pointer_cast<FilterNode>(node);
@@ -126,23 +128,35 @@ void FilterEngine::release() {
         return;
     }
 
+    // 1. Graph release and reset
     if (m_graph) {
         m_graph->release();
-        m_graph.reset();
+        m_graph = nullptr;
     }
 
+    // 2. Node reference nullification
     m_cameraNode = nullptr;
     m_outputNode = nullptr;
-    m_isGraphDirty = true;
+
+    // 3. RHI device nullification
     m_renderDevice = nullptr;
 
-    m_metricsCollector.clear();
+    // 4. FrameBufferPool and MetricsCollector clearing
     m_frameBufferPool.clear();
+    m_metricsCollector.clear();
 
+    // 5. State flags reset
+    m_isGraphDirty = true;
     m_initialized = false;
+
+    // 6. ThreadCheck unbinding
+    m_threadCheck.unbind();
 }
 
 Result FilterEngine::addFilterRaw(FilterPtr filter) {
+    if (!m_initialized) {
+        return Result::error(ErrorCode::ERR_RENDER_INVALID_STATE, "FilterEngine not initialized");
+    }
     if (filter) {
         filter->setShaderManager(m_shaderManager);
         if (!m_graph) { m_graph = std::make_shared<PipelineGraph>(); }
@@ -158,6 +172,13 @@ Result FilterEngine::addFilterRaw(FilterPtr filter) {
     return Result::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Filter is null");
 }
 Result FilterEngine::addFilter(FilterType type) {
+    if (!m_initialized) {
+        return Result::error(ErrorCode::ERR_RENDER_INVALID_STATE, "FilterEngine not initialized");
+    }
+    // We must have a render device to create filters
+    if (!m_renderDevice) {
+        return Result::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Render device is null");
+    }
     FilterPtr filter = FilterFactory::createFilter(type, m_contextManager, &m_frameBufferPool, m_renderDevice);
     if (filter) {
         return addFilterRaw(filter);
@@ -166,6 +187,9 @@ Result FilterEngine::addFilter(FilterType type) {
 }
 
 Result FilterEngine::removeAllFilters() {
+    if (!m_initialized) {
+        return Result::error(ErrorCode::ERR_RENDER_INVALID_STATE, "FilterEngine not initialized");
+    }
     if (m_graph) {
         m_graph->release();
         m_graph = std::make_shared<PipelineGraph>();
@@ -177,6 +201,9 @@ Result FilterEngine::removeAllFilters() {
 
 
 Result FilterEngine::updateShaderSource(const std::string& name, const std::string& source) {
+    if (!m_initialized) {
+        return Result::error(ErrorCode::ERR_RENDER_INVALID_STATE, "FilterEngine not initialized");
+    }
     if (!m_shaderManager) return Result::error("ShaderManager is null");
 
     m_shaderManager->updateShaderSource(name, source);
@@ -197,11 +224,17 @@ Result FilterEngine::updateShaderSource(const std::string& name, const std::stri
 }
 
 Result FilterEngine::buildCameraPipeline() {
+    if (!m_initialized) {
+        return Result::error(ErrorCode::ERR_RENDER_INVALID_STATE, "FilterEngine not initialized");
+    }
     auto cameraNode = std::make_shared<CameraInputNode>("Camera");
     return rebuildGraph(cameraNode);
 }
 
 Result FilterEngine::buildTimelinePipeline(std::shared_ptr<timeline::Timeline> timeline, std::shared_ptr<timeline::Compositor> compositor) {
+    if (!m_initialized) {
+        return Result::error(ErrorCode::ERR_RENDER_INVALID_STATE, "FilterEngine not initialized");
+    }
     auto timelineNode = std::make_shared<TimelineNode>("Timeline", timeline, compositor);
     return rebuildGraph(timelineNode);
 }

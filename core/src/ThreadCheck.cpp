@@ -11,6 +11,10 @@ void ThreadCheck::bind() {
     m_bound = true;
 }
 
+void ThreadCheck::unbind() {
+    m_bound = false;
+}
+
 bool ThreadCheck::check(const std::string& msg) const {
     if (!m_bound) {
         std::cerr << "ThreadCheck Error: Not bound yet! " << msg << std::endl;

@@ -72,7 +72,7 @@ public:
     Result removeAllFilters();
 
     PerformanceMetrics getPerformanceMetrics() const { return m_metricsCollector.getMetrics(); }
-    void recordDroppedFrame() { m_metricsCollector.recordDroppedFrame(); }
+    void recordDroppedFrame() { if (m_initialized) m_metricsCollector.recordDroppedFrame(); }
     Result updateShaderSource(const std::string& name, const std::string& source);
 
 

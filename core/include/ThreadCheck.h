@@ -10,6 +10,7 @@ public:
     ThreadCheck();
 
     void bind();
+    void unbind();
     bool check(const std::string& msg = "Called on incorrect thread") const;
 
 private:

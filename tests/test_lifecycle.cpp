@@ -144,9 +144,28 @@ void test_lifecycle_functionality() {
     std::cout << "test_lifecycle_functionality passed" << std::endl;
 }
 
+void test_post_release_api_behavior() {
+    FilterEngine engine;
+    engine.initialize();
+    engine.release();
+
+    std::cout << "Testing API behavior after release..." << std::endl;
+
+    assert(engine.addFilter(FilterType::BRIGHTNESS).getErrorCode() == ErrorCode::ERR_RENDER_INVALID_STATE);
+    assert(engine.removeAllFilters().getErrorCode() == ErrorCode::ERR_RENDER_INVALID_STATE);
+    assert(engine.buildCameraPipeline().getErrorCode() == ErrorCode::ERR_RENDER_INVALID_STATE);
+    assert(engine.updateShaderSource("test", "void main() {}").getErrorCode() == ErrorCode::ERR_RENDER_INVALID_STATE);
+
+    Texture tex{1, 1920, 1080};
+    assert(engine.processFrame(tex, 1920, 1080).getErrorCode() == ErrorCode::ERR_RENDER_INVALID_STATE);
+
+    std::cout << "test_post_release_api_behavior passed" << std::endl;
+}
+
 int main() {
     test_reinitialize_regression();
     test_repeated_init_release();
     test_lifecycle_functionality();
+    test_post_release_api_behavior();
     return 0;
 }
