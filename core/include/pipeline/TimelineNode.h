@@ -16,7 +16,7 @@ public:
 
     ResultPayload<VideoFrame> pullFrame(int64_t timestampNs) override {
         if (!m_timeline || !m_compositor) {
-            return ResultPayload<VideoFrame>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "TimelineNode not properly initialized");
+            return ResultPayload<VideoFrame>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "[Node: " + m_name + "] TimelineNode not properly initialized");
         }
 
         // Convert ns to ms or internal timeline units
@@ -37,12 +37,12 @@ public:
         }
 
         if (!fbo) {
-            return ResultPayload<VideoFrame>::error(ErrorCode::ERR_RENDER_FBO_ALLOC_FAILED, "Failed to allocate FBO for TimelineNode");
+            return ResultPayload<VideoFrame>::error(ErrorCode::ERR_RENDER_FBO_ALLOC_FAILED, "[Node: " + m_name + "] Failed to allocate FBO for TimelineNode");
         }
 
         Result res = m_compositor->renderFrameAtTime(timeNs, fbo);
         if (!res.isOk()) {
-            return ResultPayload<VideoFrame>::error(res.getErrorCode(), res.getMessage());
+            return ResultPayload<VideoFrame>::error(res.getErrorCode(), "[Node: " + m_name + "] " + res.getMessage());
         }
 
         VideoFrame frame;

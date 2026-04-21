@@ -39,6 +39,9 @@ public:
     static void setGraphDirty(FilterEngine& engine, bool dirty) {
         engine.m_isGraphDirty = dirty;
     }
+    static void setGraph(FilterEngine& engine, std::shared_ptr<PipelineGraph> graph) {
+        engine.m_graph = graph;
+    }
 };
 
 } // namespace video
