@@ -48,6 +48,7 @@ enum ErrorCode {
     ERR_RENDER_FBO_ALLOC_FAILED = -2001,       // 显存不足，无法分配帧缓冲
     ERR_RENDER_INVALID_STATE = -2002,          // 状态异常（如在非渲染线程调用，或管线未编译）
     ERR_RENDER_COMPUTE_NOT_SUPPORTED = -2003,  // 当前硬件不支持 Compute Shader
+    ERR_RENDER_THREAD_VIOLATION = -2004,       // 线程违规（在非绑定渲染线程调用渲染 API）
 
     // --- [Category: Timeline & Decoder] (Recoverable) Range: -3000 ~ -3999 ---
     // 编辑、解码相关错误，建议触发重试或软解回退

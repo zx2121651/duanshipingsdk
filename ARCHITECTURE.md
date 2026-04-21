@@ -196,7 +196,7 @@ SDK 错误码采用负值表示，定义在 `core/include/GLTypes.h`。按照 **
 | 模块 | 错误范围 | 核心职责 | 典型错误示例 |
 | :--- | :--- | :--- | :--- |
 | **Initialization** | -1000 ~ -1999 | 基础环境搭建、硬件能力嗅探。 | `ERR_INIT_CONTEXT_FAILED`: GPU 上下文无法创建。 |
-| **Rendering** | -2000 ~ -2999 | 滤镜执行、FBO 管理、RHI 交互。 | `ERR_RENDER_INVALID_STATE`: 跨线程调用渲染 API。 |
+| **Rendering** | -2000 ~ -2999 | 滤镜执行、FBO 管理、RHI 交互。 | `ERR_RENDER_THREAD_VIOLATION`: 跨线程调用渲染 API。 |
 | **Timeline/Decoder** | -3000 ~ -3999 | 视频解码、多轨合成、时间轴逻辑。 | `ERR_DECODER_SEEK_FAILED`: 硬解定位失败，触发软解。 |
 | **Graph** | -4000 ~ -4999 | 渲染图拓扑校验、编译。 | `ERR_GRAPH_CYCLE_DETECTED`: 滤镜连接形成死循环。 |
 | **Exporter** | -5000 ~ -5999 | 离线录制、封装、编码。 | `ERR_EXPORTER_IO_ERROR`: 磁盘空间不足或无写入权限。 |
@@ -218,7 +218,7 @@ SDK 错误码采用负值表示，定义在 `core/include/GLTypes.h`。按照 **
 
 3. **典型场景触发流程**:
    - **FBO 耗尽**: `ERR_RENDER_FBO_ALLOC_FAILED` (-2001) -> 自动清理 LRU 缓存 -> 若仍失败，则 Bypass 滤镜并记录埋点。
-   - **跨线程错误**: `ERR_RENDER_INVALID_STATE` (-2002) -> 触发断言或抛出 Java/Swift 异常，警示开发者调用逻辑错误。
+   - **跨线程错误**: `ERR_RENDER_THREAD_VIOLATION` (-2004) -> 触发断言或抛出 Java/Swift 异常，警示开发者调用逻辑错误。
 
 ---
 
@@ -233,7 +233,7 @@ SDK 错误码采用负值表示，定义在 `core/include/GLTypes.h`。按照 **
   - `processFrame()`: **必须**在 Render Thread 调用。
   - `addFilter()` / `removeAllFilters()`: **必须**在 Render Thread 调用。
   - `release()`: **必须**在 Render Thread 调用，以确保显存资源同步释放。
-- **防御机制**: 核心 API 内部集成了 `ThreadCheck`。若发生跨线程调用，API 将返回 `ERR_RENDER_INVALID_STATE` (-2002)，并在 `stderr` 打印：`ThreadCheck Error: processFrame must be called on the render thread`。
+- **防御机制**: 核心 API 内部集成了 `ThreadCheck`。若发生跨线程调用，API 将返回 `ERR_RENDER_THREAD_VIOLATION` (-2004)，并在日志中输出带 `[ThreadViolation]` 前缀的错误信息。
 
 ### 6.2 Android 平台适配 (Facade)
 

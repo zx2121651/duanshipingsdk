@@ -1,5 +1,6 @@
 #include "../include/ThreadCheck.h"
-#include <iostream>
+#define LOG_TAG "ThreadCheck"
+#include "../include/Log.h"
 
 namespace sdk {
 namespace video {
@@ -17,11 +18,11 @@ void ThreadCheck::unbind() {
 
 bool ThreadCheck::check(const std::string& msg) const {
     if (!m_bound) {
-        std::cerr << "ThreadCheck Error: Not bound yet! " << msg << std::endl;
+        LOGE("[ThreadViolation] Not bound yet! %s", msg.c_str());
         return false;
     }
     if (std::this_thread::get_id() != m_threadId) {
-        std::cerr << "ThreadCheck Error: " << msg << std::endl;
+        LOGE("[ThreadViolation] %s", msg.c_str());
         return false;
     }
     return true;

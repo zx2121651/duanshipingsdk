@@ -78,12 +78,9 @@ void test_repeated_init_release() {
     });
     t.join();
     Result threadRes = future.get();
-    // After my changes, this should fail. Currently it returns OK.
-    // I will update the test to expect FAILURE after I implement the check.
-    // But wait, if I run the test NOW it will fail if I assert it fails.
-    // TDD style: expect failure now.
+    // Expect failure with specific thread violation code
     assert(!threadRes.isOk());
-    assert(threadRes.getErrorCode() == ErrorCode::ERR_RENDER_INVALID_STATE);
+    assert(threadRes.getErrorCode() == ErrorCode::ERR_RENDER_THREAD_VIOLATION);
 
     std::cout << "Testing repeated release..." << std::endl;
     // 2. Double release
@@ -144,6 +141,26 @@ void test_lifecycle_functionality() {
     std::cout << "test_lifecycle_functionality passed" << std::endl;
 }
 
+void test_process_frame_thread_violation() {
+    FilterEngine engine;
+    engine.initialize();
+
+    std::cout << "Testing processFrame thread violation..." << std::endl;
+    Texture tex{1, 1920, 1080};
+
+    std::promise<ResultPayload<Texture>> promise;
+    std::future<ResultPayload<Texture>> future = promise.get_future();
+    std::thread t([&engine, &promise, tex]() {
+        promise.set_value(engine.processFrame(tex, 1920, 1080));
+    });
+    t.join();
+
+    auto res = future.get();
+    assert(!res.isOk());
+    assert(res.getErrorCode() == ErrorCode::ERR_RENDER_THREAD_VIOLATION);
+    std::cout << "test_process_frame_thread_violation passed" << std::endl;
+}
+
 void test_post_release_api_behavior() {
     FilterEngine engine;
     engine.initialize();
@@ -165,6 +182,7 @@ void test_post_release_api_behavior() {
 int main() {
     test_reinitialize_regression();
     test_repeated_init_release();
+    test_process_frame_thread_violation();
     test_lifecycle_functionality();
     test_post_release_api_behavior();
     return 0;

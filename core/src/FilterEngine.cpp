@@ -20,7 +20,7 @@ Result FilterEngine::initialize() {
         // Idempotent Path: Ensure we are still on the same thread that first initialized the engine.
         // This maintains the "binding" semantics.
         if (!m_threadCheck.check("Repeated initialize() must be called on the same thread")) {
-            return Result::error(ErrorCode::ERR_RENDER_INVALID_STATE, "FilterEngine already initialized on another thread");
+            return Result::error(ErrorCode::ERR_RENDER_THREAD_VIOLATION, "FilterEngine already initialized on another thread");
         }
         LOGI("FilterEngine::initialize() - Already initialized, skipping.");
         return Result::ok();
@@ -53,7 +53,7 @@ ResultPayload<Texture> FilterEngine::processFrame(const Texture& textureIn, int 
 
     // Thread Safety: Verify that we are still on the Render Thread.
     if (!m_threadCheck.check("processFrame must be called on the render thread")) {
-        return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "GL Thread violation detected during processFrame");
+        return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_THREAD_VIOLATION, "GL Thread violation detected during processFrame");
     }
 
     auto start_time = std::chrono::high_resolution_clock::now();
