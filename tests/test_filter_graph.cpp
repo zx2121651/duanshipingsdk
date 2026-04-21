@@ -84,7 +84,7 @@ void test_filter_engine_thread_violation() {
     t.join();
 
     assert(!res.isOk());
-    assert(res.getErrorCode() == ErrorCode::ERR_RENDER_INVALID_STATE);
+    assert(res.getErrorCode() == ErrorCode::ERR_RENDER_THREAD_VIOLATION);
     assert(res.getMessage().find("Thread violation") != std::string::npos);
 
     std::cout << "test_filter_engine_thread_violation passed" << std::endl;
