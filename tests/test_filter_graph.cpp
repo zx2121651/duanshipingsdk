@@ -41,6 +41,8 @@ public:
 
 void test_filter_graph_creation() {
     FilterEngine engine;
+    engine.initialize();
+    engine.buildCameraPipeline();
 
     // Add multiple filters
     engine.addFilter(FilterType::BRIGHTNESS);
@@ -93,9 +95,10 @@ void test_filter_engine_thread_violation() {
 void test_filter_engine_build_failure() {
     FilterEngine engine;
     engine.initialize();
+    engine.buildCameraPipeline();
 
     // addFilterRaw doesn't trigger rebuildGraph immediately, it sets m_isGraphDirty = true.
-    // The next processFrame will call buildCameraPipeline() -> rebuildGraph().
+    // The next processFrame will call auto-rebuild.
     auto failureFilter = std::make_shared<FailureFilter>();
     engine.addFilterRaw(failureFilter);
 

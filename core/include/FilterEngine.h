@@ -85,6 +85,12 @@ public:
     // Test access
     friend class FilterEngineTestAccessor;
 
+    enum class PipelineMode {
+        UNDEFINED,
+        CAMERA,
+        TIMELINE
+    };
+
 private:
     FrameBufferPool m_frameBufferPool;
     std::shared_ptr<ShaderManager> m_shaderManager;
@@ -98,6 +104,10 @@ private:
     ThreadCheck m_threadCheck;
     bool m_initialized;
     mutable MetricsCollector m_metricsCollector;
+
+    PipelineMode m_currentMode = PipelineMode::UNDEFINED;
+    std::shared_ptr<timeline::Timeline> m_timeline;
+    std::weak_ptr<timeline::Compositor> m_compositor;
 
 
     // 【三级防线】特征级嗅探器
