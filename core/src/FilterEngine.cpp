@@ -60,9 +60,24 @@ ResultPayload<Texture> FilterEngine::processFrame(const Texture& textureIn, int 
     auto start_time = std::chrono::high_resolution_clock::now();
 
     if (m_isGraphDirty) {
-        Result res = buildCameraPipeline();
+        Result res = Result::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Pipeline not configured");
+        if (m_currentMode == PipelineMode::CAMERA) {
+            LOGI("Auto-rebuilding Camera pipeline...");
+            res = buildCameraPipeline();
+        } else if (m_currentMode == PipelineMode::TIMELINE) {
+            LOGI("Auto-rebuilding Timeline pipeline...");
+            if (auto compositor = m_compositor.lock()) {
+                auto timelineNode = std::make_shared<TimelineNode>("Timeline", m_timeline, compositor);
+                res = rebuildGraph(timelineNode);
+            } else {
+                res = Result::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Compositor already released");
+            }
+        } else {
+            LOGE("processFrame() failed: No pipeline mode established. Call buildCameraPipeline() or buildTimelinePipeline() first.");
+        }
+
         if (!res.isOk()) {
-            return ResultPayload<Texture>::error(res.getErrorCode(), "Pipeline build failed: " + res.getMessage());
+            return ResultPayload<Texture>::error(res.getErrorCode(), "Pipeline auto-rebuild failed: " + res.getMessage());
         }
         m_isGraphDirty = false;
     }
@@ -149,6 +164,9 @@ void FilterEngine::release() {
     // 5. State flags reset
     m_isGraphDirty = true;
     m_initialized = false;
+    m_currentMode = PipelineMode::UNDEFINED;
+    m_timeline = nullptr;
+    m_compositor.reset();
 
     // 6. ThreadCheck unbinding
     m_threadCheck.unbind();
@@ -234,7 +252,13 @@ Result FilterEngine::buildCameraPipeline() {
         return Result::error(ErrorCode::ERR_RENDER_NOT_INITIALIZED, "FilterEngine not initialized");
     }
     auto cameraNode = std::make_shared<CameraInputNode>("Camera");
-    return rebuildGraph(cameraNode);
+    Result res = rebuildGraph(cameraNode);
+    if (res.isOk()) {
+        m_currentMode = PipelineMode::CAMERA;
+        m_timeline = nullptr;
+        m_compositor.reset();
+    }
+    return res;
 }
 
 Result FilterEngine::buildTimelinePipeline(std::shared_ptr<timeline::Timeline> timeline, std::shared_ptr<timeline::Compositor> compositor) {
@@ -243,7 +267,13 @@ Result FilterEngine::buildTimelinePipeline(std::shared_ptr<timeline::Timeline> t
         return Result::error(ErrorCode::ERR_RENDER_NOT_INITIALIZED, "FilterEngine not initialized");
     }
     auto timelineNode = std::make_shared<TimelineNode>("Timeline", timeline, compositor);
-    return rebuildGraph(timelineNode);
+    Result res = rebuildGraph(timelineNode);
+    if (res.isOk()) {
+        m_currentMode = PipelineMode::TIMELINE;
+        m_timeline = timeline;
+        m_compositor = compositor;
+    }
+    return res;
 }
 
 Result FilterEngine::rebuildGraph(std::shared_ptr<PipelineNode> inputNode) {
