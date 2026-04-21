@@ -161,6 +161,25 @@ void test_process_frame_thread_violation() {
     std::cout << "test_process_frame_thread_violation passed" << std::endl;
 }
 
+void test_uninitialized_call_order() {
+    FilterEngine engine;
+
+    std::cout << "Testing API behavior before first initialization..." << std::endl;
+
+    // These should all fail with ERR_RENDER_NOT_INITIALIZED
+    assert(engine.addFilter(FilterType::BRIGHTNESS).getErrorCode() == ErrorCode::ERR_RENDER_NOT_INITIALIZED);
+    assert(engine.removeAllFilters().getErrorCode() == ErrorCode::ERR_RENDER_NOT_INITIALIZED);
+    assert(engine.buildCameraPipeline().getErrorCode() == ErrorCode::ERR_RENDER_NOT_INITIALIZED);
+    assert(engine.updateShaderSource("test", "void main() {}").getErrorCode() == ErrorCode::ERR_RENDER_NOT_INITIALIZED);
+
+    Texture tex{1, 1920, 1080};
+    auto res = engine.processFrame(tex, 1920, 1080);
+    assert(res.getErrorCode() == ErrorCode::ERR_RENDER_NOT_INITIALIZED);
+    assert(res.getMessage().find("not initialized") != std::string::npos);
+
+    std::cout << "test_uninitialized_call_order passed" << std::endl;
+}
+
 void test_post_release_api_behavior() {
     FilterEngine engine;
     engine.initialize();
@@ -168,18 +187,19 @@ void test_post_release_api_behavior() {
 
     std::cout << "Testing API behavior after release..." << std::endl;
 
-    assert(engine.addFilter(FilterType::BRIGHTNESS).getErrorCode() == ErrorCode::ERR_RENDER_INVALID_STATE);
-    assert(engine.removeAllFilters().getErrorCode() == ErrorCode::ERR_RENDER_INVALID_STATE);
-    assert(engine.buildCameraPipeline().getErrorCode() == ErrorCode::ERR_RENDER_INVALID_STATE);
-    assert(engine.updateShaderSource("test", "void main() {}").getErrorCode() == ErrorCode::ERR_RENDER_INVALID_STATE);
+    assert(engine.addFilter(FilterType::BRIGHTNESS).getErrorCode() == ErrorCode::ERR_RENDER_NOT_INITIALIZED);
+    assert(engine.removeAllFilters().getErrorCode() == ErrorCode::ERR_RENDER_NOT_INITIALIZED);
+    assert(engine.buildCameraPipeline().getErrorCode() == ErrorCode::ERR_RENDER_NOT_INITIALIZED);
+    assert(engine.updateShaderSource("test", "void main() {}").getErrorCode() == ErrorCode::ERR_RENDER_NOT_INITIALIZED);
 
     Texture tex{1, 1920, 1080};
-    assert(engine.processFrame(tex, 1920, 1080).getErrorCode() == ErrorCode::ERR_RENDER_INVALID_STATE);
+    assert(engine.processFrame(tex, 1920, 1080).getErrorCode() == ErrorCode::ERR_RENDER_NOT_INITIALIZED);
 
     std::cout << "test_post_release_api_behavior passed" << std::endl;
 }
 
 int main() {
+    test_uninitialized_call_order();
     test_reinitialize_regression();
     test_repeated_init_release();
     test_process_frame_thread_violation();
