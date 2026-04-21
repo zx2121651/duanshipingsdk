@@ -66,7 +66,7 @@ void test_filter_engine_uninitialized() {
     Texture inTex{1, 100, 100};
     auto res = engine.processFrame(inTex, 100, 100);
     assert(!res.isOk());
-    assert(res.getErrorCode() == ErrorCode::ERR_RENDER_INVALID_STATE);
+    assert(res.getErrorCode() == ErrorCode::ERR_RENDER_NOT_INITIALIZED);
     assert(res.getMessage().find("not initialized") != std::string::npos);
 
     std::cout << "test_filter_engine_uninitialized passed" << std::endl;

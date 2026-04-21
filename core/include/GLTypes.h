@@ -49,6 +49,7 @@ enum ErrorCode {
     ERR_RENDER_INVALID_STATE = -2002,          // 状态异常（如在非渲染线程调用，或管线未编译）
     ERR_RENDER_COMPUTE_NOT_SUPPORTED = -2003,  // 当前硬件不支持 Compute Shader
     ERR_RENDER_THREAD_VIOLATION = -2004,       // 线程违规（在非绑定渲染线程调用渲染 API）
+    ERR_RENDER_NOT_INITIALIZED = -2005,        // 引擎未初始化（调用 processFrame 前必须先调用 initialize）
 
     // --- [Category: Timeline & Decoder] (Recoverable) Range: -3000 ~ -3999 ---
     // 编辑、解码相关错误，建议触发重试或软解回退

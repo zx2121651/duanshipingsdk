@@ -48,7 +48,8 @@ Result FilterEngine::initialize() {
 
 ResultPayload<Texture> FilterEngine::processFrame(const Texture& textureIn, int width, int height) {
     if (!m_initialized) {
-        return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "FilterEngine not initialized before processing frame");
+        LOGE("processFrame() called before initialize(). Did you forget to call initialize()?");
+        return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_NOT_INITIALIZED, "FilterEngine not initialized before processing frame");
     }
 
     // Thread Safety: Verify that we are still on the Render Thread.
@@ -155,7 +156,8 @@ void FilterEngine::release() {
 
 Result FilterEngine::addFilterRaw(FilterPtr filter) {
     if (!m_initialized) {
-        return Result::error(ErrorCode::ERR_RENDER_INVALID_STATE, "FilterEngine not initialized");
+        LOGE("addFilterRaw() called before initialize()");
+        return Result::error(ErrorCode::ERR_RENDER_NOT_INITIALIZED, "FilterEngine not initialized");
     }
     if (filter) {
         filter->setShaderManager(m_shaderManager);
@@ -173,7 +175,8 @@ Result FilterEngine::addFilterRaw(FilterPtr filter) {
 }
 Result FilterEngine::addFilter(FilterType type) {
     if (!m_initialized) {
-        return Result::error(ErrorCode::ERR_RENDER_INVALID_STATE, "FilterEngine not initialized");
+        LOGE("addFilter() called before initialize()");
+        return Result::error(ErrorCode::ERR_RENDER_NOT_INITIALIZED, "FilterEngine not initialized");
     }
     // We must have a render device to create filters
     if (!m_renderDevice) {
@@ -188,7 +191,8 @@ Result FilterEngine::addFilter(FilterType type) {
 
 Result FilterEngine::removeAllFilters() {
     if (!m_initialized) {
-        return Result::error(ErrorCode::ERR_RENDER_INVALID_STATE, "FilterEngine not initialized");
+        LOGE("removeAllFilters() called before initialize()");
+        return Result::error(ErrorCode::ERR_RENDER_NOT_INITIALIZED, "FilterEngine not initialized");
     }
     if (m_graph) {
         m_graph->release();
@@ -202,7 +206,8 @@ Result FilterEngine::removeAllFilters() {
 
 Result FilterEngine::updateShaderSource(const std::string& name, const std::string& source) {
     if (!m_initialized) {
-        return Result::error(ErrorCode::ERR_RENDER_INVALID_STATE, "FilterEngine not initialized");
+        LOGE("updateShaderSource() called before initialize()");
+        return Result::error(ErrorCode::ERR_RENDER_NOT_INITIALIZED, "FilterEngine not initialized");
     }
     if (!m_shaderManager) return Result::error("ShaderManager is null");
 
@@ -225,7 +230,8 @@ Result FilterEngine::updateShaderSource(const std::string& name, const std::stri
 
 Result FilterEngine::buildCameraPipeline() {
     if (!m_initialized) {
-        return Result::error(ErrorCode::ERR_RENDER_INVALID_STATE, "FilterEngine not initialized");
+        LOGE("buildCameraPipeline() called before initialize()");
+        return Result::error(ErrorCode::ERR_RENDER_NOT_INITIALIZED, "FilterEngine not initialized");
     }
     auto cameraNode = std::make_shared<CameraInputNode>("Camera");
     return rebuildGraph(cameraNode);
@@ -233,7 +239,8 @@ Result FilterEngine::buildCameraPipeline() {
 
 Result FilterEngine::buildTimelinePipeline(std::shared_ptr<timeline::Timeline> timeline, std::shared_ptr<timeline::Compositor> compositor) {
     if (!m_initialized) {
-        return Result::error(ErrorCode::ERR_RENDER_INVALID_STATE, "FilterEngine not initialized");
+        LOGE("buildTimelinePipeline() called before initialize()");
+        return Result::error(ErrorCode::ERR_RENDER_NOT_INITIALIZED, "FilterEngine not initialized");
     }
     auto timelineNode = std::make_shared<TimelineNode>("Timeline", timeline, compositor);
     return rebuildGraph(timelineNode);
