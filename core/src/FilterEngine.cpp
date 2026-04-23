@@ -95,7 +95,7 @@ ResultPayload<Texture> FilterEngine::processFrame(const Texture& textureIn, int 
 
         Result execRes = m_graph->execute(0);
         if (!execRes.isOk()) {
-            LOGE("Graph execution failed: %s", execRes.getMessage().c_str());
+            LOGE("Graph execution failed [Error: %d]: %s", execRes.getErrorCode(), execRes.getMessage().c_str());
             return ResultPayload<Texture>::error(execRes.getErrorCode(), execRes.getMessage());
         }
 

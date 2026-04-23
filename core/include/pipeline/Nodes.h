@@ -51,19 +51,21 @@ public:
 
     ResultPayload<VideoFrame> pullFrame(int64_t timestampNs) override {
         if (m_inputs.empty()) {
-            return ResultPayload<VideoFrame>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "FilterNode has no input");
+            return ResultPayload<VideoFrame>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "[Node: " + m_name + "] FilterNode has no input");
         }
         if (!m_filter) {
-            return ResultPayload<VideoFrame>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "FilterNode has no filter");
+            return ResultPayload<VideoFrame>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "[Node: " + m_name + "] FilterNode has no filter");
         }
 
         // Pull from upstream
         auto upstreamRes = m_inputs[0]->pullFrame(timestampNs);
-        if (!upstreamRes.isOk()) return upstreamRes;
+        if (!upstreamRes.isOk()) {
+            return ResultPayload<VideoFrame>::error(upstreamRes.getErrorCode(), "[Node: " + m_name + "] <- " + upstreamRes.getMessage());
+        }
 
         VideoFrame upstreamFrame = upstreamRes.getValue();
         if (!upstreamFrame.isValid()) {
-            return ResultPayload<VideoFrame>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Upstream produced an invalid frame");
+            return ResultPayload<VideoFrame>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "[Node: " + m_name + "] Upstream produced an invalid frame");
         }
 
         Texture texIn{upstreamFrame.textureId, upstreamFrame.width, upstreamFrame.height};
@@ -76,7 +78,7 @@ public:
 
         auto processRes = m_filter->processFrame(texIn, fbo);
         if (!processRes.isOk()) {
-            return ResultPayload<VideoFrame>::error(processRes.getErrorCode(), processRes.getMessage());
+            return ResultPayload<VideoFrame>::error(processRes.getErrorCode(), "[Node: " + m_name + "] " + processRes.getMessage());
         }
         Texture texOut = processRes.getValue();
 
@@ -108,12 +110,14 @@ public:
 
     ResultPayload<VideoFrame> pullFrame(int64_t timestampNs) override {
         if (m_inputs.empty()) {
-            return ResultPayload<VideoFrame>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "OutputNode has no input");
+            return ResultPayload<VideoFrame>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "[Node: " + m_name + "] OutputNode has no input");
         }
 
         auto res = m_inputs[0]->pullFrame(timestampNs);
         if (res.isOk()) {
             m_lastFrame = res.getValue();
+        } else {
+            return ResultPayload<VideoFrame>::error(res.getErrorCode(), "[Node: " + m_name + "] <- " + res.getMessage());
         }
         return res;
     }

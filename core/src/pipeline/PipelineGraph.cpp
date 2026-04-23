@@ -1,5 +1,7 @@
 #include <algorithm>
 #include "../../include/pipeline/PipelineGraph.h"
+#define LOG_TAG "PipelineGraph"
+#include "../../include/Log.h"
 #include <iostream>
 
 namespace sdk {
@@ -107,6 +109,7 @@ Result PipelineGraph::execute(int64_t timestampNs) {
     for (auto* sink : m_sinkNodes) {
         auto res = sink->pullFrame(timestampNs);
         if (!res.isOk()) {
+            LOGE("Execution failed at sink node '%s': %s", sink->getName().c_str(), res.getMessage().c_str());
             return Result::error(res.getErrorCode(), res.getMessage());
         }
     }

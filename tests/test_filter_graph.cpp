@@ -231,9 +231,53 @@ void test_graph_execute_pull_failure() {
     Result execRes = graph.execute(1000);
     assert(!execRes.isOk());
     assert(execRes.getErrorCode() == ErrorCode::ERR_TIMELINE_DECODER_GET_FRAME_FAILED);
+    // Updated expectation: PipelineGraph::execute returns the error from the sink
+    // and also logs it. The message should now contain the node info if wrapped.
+    // Actually, MockPullFailureNode here is a sink (no outputs).
+    // Sink Node directly returns its pullFrame result.
     assert(execRes.getMessage() == "Mock pull failure");
 
     std::cout << "test_graph_execute_pull_failure passed" << std::endl;
+}
+
+void test_filter_engine_execute_failure_transparency() {
+    FilterEngine engine;
+    engine.initialize();
+    engine.buildCameraPipeline();
+
+    // Inject a failure node into the graph as the input to the output node
+    auto failureNode = std::make_shared<MockPullFailureNode>("InternalFailureNode");
+    auto outputNode = std::make_shared<OutputNode>("DisplaySink");
+
+    auto graph = std::make_shared<PipelineGraph>();
+    graph->addNode(failureNode);
+    graph->addNode(outputNode);
+    graph->connect(failureNode, outputNode);
+    assert(graph->compile().isOk());
+
+    FilterEngineTestAccessor::setGraph(engine, graph);
+    FilterEngineTestAccessor::setOutputNode(engine, outputNode);
+    FilterEngineTestAccessor::setGraphDirty(engine, false);
+
+    Texture inTex{1, 100, 100};
+    auto res = engine.processFrame(inTex, 100, 100);
+
+    assert(!res.isOk());
+    assert(res.getErrorCode() == ErrorCode::ERR_TIMELINE_DECODER_GET_FRAME_FAILED);
+
+    // Message should have the chain: [Node: DisplaySink] <- [Node: InternalFailureNode] <- Mock pull failure
+    // Wait, let's trace:
+    // OutputNode::pullFrame calls m_inputs[0]->pullFrame (InternalFailureNode)
+    // InternalFailureNode::pullFrame returns "Mock pull failure"
+    // OutputNode::pullFrame returns "[Node: DisplaySink] <- Mock pull failure"
+    // FilterEngine returns that message.
+
+    // Update: InternalFailureNode is MockPullFailureNode which does NOT wrap message.
+    // So OutputNode wraps it once.
+    std::string expectedMsg = "[Node: DisplaySink] <- Mock pull failure";
+    assert(res.getMessage() == expectedMsg);
+
+    std::cout << "test_filter_engine_execute_failure_transparency passed" << std::endl;
 }
 
 void test_graph_compile_idempotency() {
@@ -313,6 +357,7 @@ int main() {
     test_graph_node_init_failure();
     test_graph_no_sink_nodes();
     test_graph_execute_pull_failure();
+    test_filter_engine_execute_failure_transparency();
     test_graph_compile_idempotency();
     return 0;
 }
