@@ -36,6 +36,21 @@ Result FilterEngine::initialize() {
     // 实例化 RHI 后端设备 (当前过渡阶段始终使用 GLRenderDevice)
     m_renderDevice = std::make_shared<rhi::GLRenderDevice>();
 
+    // Create Global Quad VAO/VBO via RHI
+    static const float s_quadVertices[] = {
+        -1.0f, -1.0f, 0.0f, 0.0f, // pos(2), uv(2)
+         1.0f, -1.0f, 1.0f, 0.0f,
+        -1.0f,  1.0f, 0.0f, 1.0f,
+         1.0f,  1.0f, 1.0f, 1.0f
+    };
+    m_quadVbo = m_renderDevice->createBuffer(rhi::BufferType::VertexBuffer, rhi::BufferUsage::StaticDraw, sizeof(s_quadVertices), s_quadVertices);
+    m_quadVao = m_renderDevice->createVertexArray();
+    m_quadVao->addVertexBuffer(m_quadVbo, {
+        {0, rhi::VertexFormat::Float2, 0, 4 * sizeof(float)}, // Location 0: position
+        {1, rhi::VertexFormat::Float2, 2 * sizeof(float), 4 * sizeof(float)} // Location 1: texcoord
+    });
+
+
     if (m_graph) {
         for (const auto& node : m_graph->getNodes()) {
             node->initialize();
@@ -179,6 +194,8 @@ Result FilterEngine::addFilterRaw(FilterPtr filter) {
     }
     if (filter) {
         filter->setShaderManager(m_shaderManager);
+        filter->setRenderDevice(m_renderDevice);
+        filter->setQuadVao(m_quadVao);
         if (!m_graph) { m_graph = std::make_shared<PipelineGraph>(); }
         auto filterNode = std::make_shared<FilterNode>("Filter_" + std::to_string(m_graph->getNodes().size()), filter);
         m_graph->addNode(filterNode);

@@ -1,3 +1,4 @@
+#include "IVertexArray.h"
 #pragma once
 #include <cstdint>
 
@@ -21,9 +22,13 @@ public:
 
     // Bind an input texture to a specific slot
     virtual void bindTexture(int slot, ITexture* texture) = 0;
+    // Draw using VAO abstraction
+    virtual void draw(std::shared_ptr<IVertexArray> vao, int vertexCount) = 0;
+    virtual void drawIndexed(std::shared_ptr<IVertexArray> vao, int indexCount) = 0;
+    virtual void bindUniformBuffer(uint32_t bindingPoint, std::shared_ptr<IBuffer> ubo) = 0;
+
 
     // Dispatch a draw call
-    virtual void drawPrimitives(int vertexCount) = 0;
 };
 
 } // namespace rhi

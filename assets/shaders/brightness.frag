@@ -3,7 +3,9 @@ precision mediump float;
 in vec2 textureCoordinate;
 out vec4 fragColor;
 uniform sampler2D inputImageTexture;
-uniform float brightness;
+layout(std140) uniform FilterParams {
+    float brightness;
+};
 
 void main() {
     vec4 textureColor = texture(inputImageTexture, textureCoordinate);

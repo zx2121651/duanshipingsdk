@@ -1,3 +1,7 @@
+#include "GLBuffer.h"
+#include "GLVertexArray.h"
+#include "GLVertexArray.h"
+#include "GLBuffer.h"
 #include "GLRenderDevice.h"
 #include "../../include/GLStateManager.h"
 
@@ -30,10 +34,6 @@ void GLCommandBuffer::bindTexture(int slot, ITexture* texture) {
     GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, texture->getId());
 }
 
-void GLCommandBuffer::drawPrimitives(int vertexCount) {
-    // Hardcoded to triangle strip for this specific transitional demo
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, vertexCount);
-}
 
 // --- GLRenderDevice ---
 
@@ -65,6 +65,36 @@ void GLRenderDevice::submit(ICommandBuffer* cmdBuffer) {
 #endif
 }
 
+
+std::shared_ptr<IBuffer> GLRenderDevice::createBuffer(BufferType type, BufferUsage usage, size_t size, const void* data) {
+    return std::make_shared<GLBuffer>(type, usage, size, data);
+}
+
+std::shared_ptr<IVertexArray> GLRenderDevice::createVertexArray() {
+    return std::make_shared<GLVertexArray>();
+}
+
+void GLCommandBuffer::draw(std::shared_ptr<IVertexArray> vao, int vertexCount) {
+    if (!vao) return;
+    auto glVao = std::static_pointer_cast<GLVertexArray>(vao);
+    glBindVertexArray(glVao->getGLHandle());
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, vertexCount);
+    glBindVertexArray(0);
+}
+
+void GLCommandBuffer::drawIndexed(std::shared_ptr<IVertexArray> vao, int indexCount) {
+    if (!vao) return;
+    auto glVao = std::static_pointer_cast<GLVertexArray>(vao);
+    glBindVertexArray(glVao->getGLHandle());
+    glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_SHORT, nullptr);
+    glBindVertexArray(0);
+}
+
+void GLCommandBuffer::bindUniformBuffer(uint32_t bindingPoint, std::shared_ptr<IBuffer> ubo) {
+    if (!ubo || ubo->getType() != BufferType::UniformBuffer) return;
+    auto glBuffer = std::static_pointer_cast<GLBuffer>(ubo);
+    glBindBufferBase(GL_UNIFORM_BUFFER, bindingPoint, glBuffer->getGLHandle());
+}
 } // namespace rhi
 } // namespace video
 } // namespace sdk

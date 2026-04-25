@@ -1,3 +1,5 @@
+#include "rhi/IVertexArray.h"
+#include "rhi/IBuffer.h"
 #pragma once
 #include "GLTypes.h"
 #include "Filter.h"
@@ -21,6 +23,11 @@ namespace video {
 class FilterEngineTestAccessor;
 
 class FilterEngine {
+public:
+    std::shared_ptr<rhi::IVertexArray> getQuadVao() const { return m_quadVao; }
+private:
+    std::shared_ptr<rhi::IVertexArray> m_quadVao;
+    std::shared_ptr<rhi::IBuffer> m_quadVbo;
 public:
     std::shared_ptr<ShaderManager> getShaderManager() const { return m_shaderManager; }
     void setAssetProvider(std::shared_ptr<IAssetProvider> provider) { m_shaderManager->setAssetProvider(provider); }

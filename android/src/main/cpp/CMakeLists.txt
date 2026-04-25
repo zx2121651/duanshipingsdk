@@ -32,6 +32,8 @@ set(CORE_SRC
         ../../../../core/src/timeline/TimelineExporterAndroid.cpp
         ../../../../core/src/rhi/GLTexture.cpp
         ../../../../core/src/rhi/GLRenderDevice.cpp
+        ../../../../core/src/rhi/GLBuffer.cpp
+        ../../../../core/src/rhi/GLVertexArray.cpp
 )
 
 add_library(video-sdk SHARED

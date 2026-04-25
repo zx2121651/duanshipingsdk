@@ -54,6 +54,8 @@ set(CORE_SOURCES
     core/src/timeline/AudioMixer.cpp
     core/src/rhi/GLTexture.cpp
     core/src/rhi/GLRenderDevice.cpp
+    core/src/rhi/GLBuffer.cpp
+    core/src/rhi/GLVertexArray.cpp
 )
 
 # Phase-1 Verification Target: Core engine build
