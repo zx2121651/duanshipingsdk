@@ -34,6 +34,7 @@ set(CORE_SRC
         ../../../../core/src/rhi/GLRenderDevice.cpp
         ../../../../core/src/rhi/GLBuffer.cpp
         ../../../../core/src/rhi/GLVertexArray.cpp
+        ../../../../core/src/rhi/GLShaderProgram.cpp
 )
 
 add_library(video-sdk SHARED

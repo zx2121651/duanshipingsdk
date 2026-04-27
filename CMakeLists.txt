@@ -56,6 +56,7 @@ set(CORE_SOURCES
     core/src/rhi/GLRenderDevice.cpp
     core/src/rhi/GLBuffer.cpp
     core/src/rhi/GLVertexArray.cpp
+    core/src/rhi/GLShaderProgram.cpp
 )
 
 # Phase-1 Verification Target: Core engine build

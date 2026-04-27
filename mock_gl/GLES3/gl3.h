@@ -34,6 +34,7 @@ typedef unsigned char GLboolean;
 #define GL_FLOAT 0x1406
 #define GL_BYTE 0x1400
 #define GL_UNSIGNED_BYTE 0x1401
+#define GL_INVALID_INDEX 0xFFFFFFFFu
 #define GL_TRUE 1
 #define GL_LINK_STATUS 4
 
@@ -60,6 +61,7 @@ typedef unsigned char GLboolean;
 #define GL_RGB 0x1907
 #define GL_UNSIGNED_SHORT_5_6_5 0x8363
 #define GL_UNSIGNED_BYTE 0x1401
+#define GL_INVALID_INDEX 0xFFFFFFFFu
 #define GL_COLOR_ATTACHMENT0 0x8CE0
 #define GL_FRAMEBUFFER_COMPLETE 0x8CD5
 
@@ -167,6 +169,7 @@ inline void glClear(GLuint) {}
 #endif
 #ifndef GL_UNSIGNED_BYTE
 #define GL_UNSIGNED_BYTE 0x1401
+#define GL_INVALID_INDEX 0xFFFFFFFFu
 #endif
 
 #ifdef __cplusplus
