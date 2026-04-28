@@ -1,6 +1,10 @@
 #pragma once
 #include "../../include/rhi/IVertexArray.h"
-#include <GLES3/gl3.h>
+#ifdef __APPLE__
+    #include <OpenGLES/ES3/gl.h>
+#else
+    #include <GLES3/gl3.h>
+#endif
 
 namespace sdk {
 namespace video {
