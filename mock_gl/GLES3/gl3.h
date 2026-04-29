@@ -2,6 +2,13 @@
 #pragma once
 #include <stdint.h>
 #include <stddef.h>
+typedef ptrdiff_t GLsizeiptr;
+typedef ptrdiff_t GLintptr;
+#include <stddef.h>
+typedef ptrdiff_t GLsizeiptr;
+typedef ptrdiff_t GLintptr;
+typedef ptrdiff_t GLsizeiptr;
+typedef ptrdiff_t GLintptr;
 
 typedef unsigned int GLuint;
 typedef int GLint;
@@ -16,6 +23,18 @@ typedef unsigned char GLboolean;
 #define GL_COMPILE_STATUS 2
 #define GL_INFO_LOG_LENGTH 3
 #define GL_FALSE 0
+#define GL_TRIANGLES 0x0004
+#define GL_UNSIGNED_SHORT 0x1403
+#define GL_UNIFORM_BUFFER 0x8A11
+#define GL_ARRAY_BUFFER 0x8892
+#define GL_ELEMENT_ARRAY_BUFFER 0x8893
+#define GL_STATIC_DRAW 0x88E4
+#define GL_DYNAMIC_DRAW 0x88E8
+#define GL_STREAM_DRAW 0x88E0
+#define GL_FLOAT 0x1406
+#define GL_BYTE 0x1400
+#define GL_UNSIGNED_BYTE 0x1401
+#define GL_INVALID_INDEX 0xFFFFFFFFu
 #define GL_TRUE 1
 #define GL_LINK_STATUS 4
 
@@ -42,6 +61,7 @@ typedef unsigned char GLboolean;
 #define GL_RGB 0x1907
 #define GL_UNSIGNED_SHORT_5_6_5 0x8363
 #define GL_UNSIGNED_BYTE 0x1401
+#define GL_INVALID_INDEX 0xFFFFFFFFu
 #define GL_COLOR_ATTACHMENT0 0x8CE0
 #define GL_FRAMEBUFFER_COMPLETE 0x8CD5
 
@@ -77,6 +97,19 @@ inline void glUniform1i(GLint, GLint) {}
 inline void glUniformMatrix4fv(GLint, GLsizei, GLboolean, const GLfloat*) {}
 inline void glVertexAttribPointer(GLuint, GLint, GLenum, GLboolean, GLsizei, const void*) {}
 inline void glEnableVertexAttribArray(GLuint) {}
+inline void glBindVertexArray(GLuint) {}
+inline void glDrawElements(GLenum, GLsizei, GLenum, const void*) {}
+inline void glBindBufferBase(GLenum, GLuint, GLuint) {}
+inline void glGenVertexArrays(GLsizei, GLuint*) {}
+inline void glDeleteVertexArrays(GLsizei, const GLuint*) {}
+inline void glGenBuffers(GLsizei, GLuint*) {}
+inline void glDeleteBuffers(GLsizei, const GLuint*) {}
+inline void glBindBuffer(GLenum, GLuint) {}
+inline void glBufferData(GLenum, GLsizeiptr, const void*, GLenum) {}
+inline void glBufferSubData(GLenum, GLintptr, GLsizeiptr, const void*) {}
+inline GLuint glGetUniformBlockIndex(GLuint, const char*) { return 0; }
+inline void glUniformBlockBinding(GLuint, GLuint, GLuint) {}
+
 inline void glDrawArrays(GLenum, GLint, GLsizei) {}
 inline void glDisableVertexAttribArray(GLuint) {}
 inline void glEnable(GLenum) {}
@@ -102,3 +135,48 @@ inline void glGetIntegerv(GLenum, GLint* params) { if (params) *params = 0; }
 inline void glViewport(GLint, GLint, GLsizei, GLsizei) {}
 inline void glClearColor(GLfloat, GLfloat, GLfloat, GLfloat) {}
 inline void glClear(GLuint) {}
+
+// --- RHI Mock Extensions added for Unit Tests ---
+#ifndef GL_TRIANGLES
+#define GL_TRIANGLES 0x0004
+#endif
+#ifndef GL_UNSIGNED_SHORT
+#define GL_UNSIGNED_SHORT 0x1403
+#endif
+#ifndef GL_UNIFORM_BUFFER
+#define GL_UNIFORM_BUFFER 0x8A11
+#endif
+#ifndef GL_ARRAY_BUFFER
+#define GL_ARRAY_BUFFER 0x8892
+#endif
+#ifndef GL_ELEMENT_ARRAY_BUFFER
+#define GL_ELEMENT_ARRAY_BUFFER 0x8893
+#endif
+#ifndef GL_STATIC_DRAW
+#define GL_STATIC_DRAW 0x88E4
+#endif
+#ifndef GL_DYNAMIC_DRAW
+#define GL_DYNAMIC_DRAW 0x88E8
+#endif
+#ifndef GL_STREAM_DRAW
+#define GL_STREAM_DRAW 0x88E0
+#endif
+#ifndef GL_FLOAT
+#define GL_FLOAT 0x1406
+#endif
+#ifndef GL_BYTE
+#define GL_BYTE 0x1400
+#endif
+#ifndef GL_UNSIGNED_BYTE
+#define GL_UNSIGNED_BYTE 0x1401
+#define GL_INVALID_INDEX 0xFFFFFFFFu
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
+#ifdef __cplusplus
+}
+#endif

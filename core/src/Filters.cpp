@@ -74,6 +74,7 @@ void OES2RGBFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb)
 
     GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
     GLStateManager::getInstance().bindTexture(GL_TEXTURE_EXTERNAL_OES, inputTexture.id); // Important: Use OES target
+    auto cmdBuffer = m_renderDevice->createCommandBuffer();
     glUniform1i(m_inputImageTextureHandle, 0);
 
     if (m_mat4Parameters.count("textureMatrix")) {
@@ -86,6 +87,7 @@ void OES2RGBFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb)
         flipH = std::any_cast<bool>(m_parameters.at("flipHorizontal"));
     }
     glUniform1i(m_flipHorizontalHandle, flipH ? 1 : 0);
+    cmdBuffer->draw(m_quadVao, 4);
 
     bool flipV = false;
     if (m_parameters.count("flipVertical") && m_parameters.at("flipVertical").type() == typeid(bool)) {
@@ -93,16 +95,10 @@ void OES2RGBFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb)
     }
     glUniform1i(m_flipVerticalHandle, flipV ? 1 : 0);
 
-    GLStateManager::getInstance().enableVertexAttribArray(m_positionHandle);
-    glVertexAttribPointer(m_positionHandle, 2, GL_FLOAT, GL_FALSE, 0, s_vertexCoords);
 
-    GLStateManager::getInstance().enableVertexAttribArray(m_texCoordHandle);
-    glVertexAttribPointer(m_texCoordHandle, 2, GL_FLOAT, GL_FALSE, 0, s_textureCoords);
 
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
-    GLStateManager::getInstance().disableVertexAttribArray(m_positionHandle);
-    GLStateManager::getInstance().disableVertexAttribArray(m_texCoordHandle);
+
     GLStateManager::getInstance().bindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
 
     outputFb->unbind();
@@ -137,6 +133,7 @@ void BrightnessFilter::onDraw(const Texture& inputTexture, FrameBufferPtr output
 
     GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
     GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, inputTexture.id);
+    auto cmdBuffer = m_renderDevice->createCommandBuffer();
     glUniform1i(m_inputImageTextureHandle, 0);
 
     float brightness = 0.0f;
@@ -145,16 +142,10 @@ void BrightnessFilter::onDraw(const Texture& inputTexture, FrameBufferPtr output
     }
     glUniform1f(m_brightnessHandle, brightness);
 
-    GLStateManager::getInstance().enableVertexAttribArray(m_positionHandle);
-    glVertexAttribPointer(m_positionHandle, 2, GL_FLOAT, GL_FALSE, 0, s_vertexCoords);
 
-    GLStateManager::getInstance().enableVertexAttribArray(m_texCoordHandle);
-    glVertexAttribPointer(m_texCoordHandle, 2, GL_FLOAT, GL_FALSE, 0, s_textureCoords);
 
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
-    GLStateManager::getInstance().disableVertexAttribArray(m_positionHandle);
-    GLStateManager::getInstance().disableVertexAttribArray(m_texCoordHandle);
+
     GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, 0);
 
     outputFb->unbind();
@@ -212,6 +203,7 @@ ResultPayload<Texture> GaussianBlurFilter::processFrame(const Texture& inputText
 
     GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
     GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, inputTexture.id);
+    auto cmdBuffer = m_renderDevice->createCommandBuffer();
     glUniform1i(m_inputImageTextureHandle, 0);
 
     // 设置水平方向的偏移量，垂直方向为 0
@@ -228,13 +220,9 @@ ResultPayload<Texture> GaussianBlurFilter::processFrame(const Texture& inputText
     static const float s_vertexCoords[] = { -1.0f, -1.0f,  1.0f, -1.0f,  -1.0f, 1.0f,  1.0f, 1.0f };
     static const float s_textureCoords[] = { 0.0f, 0.0f,  1.0f, 0.0f,  0.0f, 1.0f,  1.0f, 1.0f };
 
-    GLStateManager::getInstance().enableVertexAttribArray(m_positionHandle);
-    glVertexAttribPointer(m_positionHandle, 2, GL_FLOAT, GL_FALSE, 0, s_vertexCoords);
 
-    GLStateManager::getInstance().enableVertexAttribArray(m_texCoordHandle);
-    glVertexAttribPointer(m_texCoordHandle, 2, GL_FLOAT, GL_FALSE, 0, s_textureCoords);
 
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
 
     // ---------------------------------------------------------
     // Pass 2: 垂直模糊 (Vertical Blur)
@@ -253,10 +241,8 @@ ResultPayload<Texture> GaussianBlurFilter::processFrame(const Texture& inputText
     // blurSize 保持不变
     glUniform1f(m_blurSizeHandle, blurSize);
 
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
-    GLStateManager::getInstance().disableVertexAttribArray(m_positionHandle);
-    GLStateManager::getInstance().disableVertexAttribArray(m_texCoordHandle);
+
 
     // 释放临时 FBO，归还到池中
     m_pool->release(intermediateFb);
@@ -313,6 +299,7 @@ void LookupFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) 
 
     GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
     GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, inputTexture.id);
+    auto cmdBuffer = m_renderDevice->createCommandBuffer();
     glUniform1i(m_inputImageTextureHandle, 0);
 
     if (m_parameters.count("lookupTextureId") && m_parameters.at("lookupTextureId").type() == typeid(int)) {
@@ -331,16 +318,10 @@ void LookupFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) 
     }
     glUniform1f(m_intensityHandle, intensity);
 
-    GLStateManager::getInstance().enableVertexAttribArray(m_positionHandle);
-    glVertexAttribPointer(m_positionHandle, 2, GL_FLOAT, GL_FALSE, 0, s_vertexCoords);
 
-    GLStateManager::getInstance().enableVertexAttribArray(m_texCoordHandle);
-    glVertexAttribPointer(m_texCoordHandle, 2, GL_FLOAT, GL_FALSE, 0, s_textureCoords);
 
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
-    GLStateManager::getInstance().disableVertexAttribArray(m_positionHandle);
-    GLStateManager::getInstance().disableVertexAttribArray(m_texCoordHandle);
+
     GLStateManager::getInstance().activeTexture(GL_TEXTURE1);
     GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, 0);
     GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
@@ -382,6 +363,7 @@ void BilateralFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputF
 
     GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
     GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, inputTexture.id);
+    auto cmdBuffer = m_renderDevice->createCommandBuffer();
     glUniform1i(m_inputImageTextureHandle, 0);
 
     // Provide offsets for neighborhood sampling based on texture resolution
@@ -398,16 +380,10 @@ void BilateralFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputF
     }
     glUniform1f(m_distanceNormalizationFactorHandle, factor);
 
-    GLStateManager::getInstance().enableVertexAttribArray(m_positionHandle);
-    glVertexAttribPointer(m_positionHandle, 2, GL_FLOAT, GL_FALSE, 0, s_vertexCoords);
 
-    GLStateManager::getInstance().enableVertexAttribArray(m_texCoordHandle);
-    glVertexAttribPointer(m_texCoordHandle, 2, GL_FLOAT, GL_FALSE, 0, s_textureCoords);
 
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
-    GLStateManager::getInstance().disableVertexAttribArray(m_positionHandle);
-    GLStateManager::getInstance().disableVertexAttribArray(m_texCoordHandle);
+
     GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, 0);
 
     outputFb->unbind();
@@ -463,8 +439,9 @@ void CinematicLookupFilter::onDraw(const Texture& inputTexture, FrameBufferPtr o
 
     GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
     GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, inputTexture.id);
+    auto cmdBuffer = m_renderDevice->createCommandBuffer();
 
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
 
     GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, 0);
 }
@@ -519,19 +496,13 @@ void NightVisionFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outpu
             0.0f, 0.0f,  1.0f, 0.0f,
             0.0f, 1.0f,  1.0f, 1.0f,
         };
-        glVertexAttribPointer(m_positionHandle, 2, GL_FLOAT, GL_FALSE, 0, squareVertices);
-        glEnableVertexAttribArray(m_positionHandle);
-        glVertexAttribPointer(m_texCoordHandle, 2, GL_FLOAT, GL_FALSE, 0, textureVertices);
-        glEnableVertexAttribArray(m_texCoordHandle);
 
-        cmd->drawPrimitives(4); // Abstracts glDrawArrays(GL_TRIANGLE_STRIP, 0, 4)
+        cmd->draw(m_quadVao, 4); // Abstracts glDrawArrays(GL_TRIANGLE_STRIP, 0, 4)
 
         // 5. End Pass
         cmd->endRenderPass();
         m_device->submit(cmd.get());
 
-        glDisableVertexAttribArray(m_positionHandle);
-        glDisableVertexAttribArray(m_texCoordHandle);
     } else {
         // Fallback to purely raw GL if no device was injected
         outputFb->bind();
@@ -540,16 +511,11 @@ void NightVisionFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outpu
         glClear(GL_COLOR_BUFFER_BIT);
         GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
         GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, inputTexture.id);
+    auto cmdBuffer = m_renderDevice->createCommandBuffer();
         glUniform1i(m_inputImageTextureHandle, 0);
         static const GLfloat squareVertices[] = {-1.0f, -1.0f, 1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f};
         static const GLfloat textureVertices[] = {0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f};
-        glVertexAttribPointer(m_positionHandle, 2, GL_FLOAT, GL_FALSE, 0, squareVertices);
-        glEnableVertexAttribArray(m_positionHandle);
-        glVertexAttribPointer(m_texCoordHandle, 2, GL_FLOAT, GL_FALSE, 0, textureVertices);
-        glEnableVertexAttribArray(m_texCoordHandle);
-        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-        glDisableVertexAttribArray(m_positionHandle);
-        glDisableVertexAttribArray(m_texCoordHandle);
+
     }
 }
 

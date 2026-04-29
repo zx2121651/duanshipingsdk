@@ -20,6 +20,9 @@
 		1A00000000000019 /* Filter.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B0000000000001C /* Filter.cpp */; };
 		1A00000000000020 /* GLTexture.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000022 /* GLTexture.cpp */; };
 		1A00000000000021 /* GLRenderDevice.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000023 /* GLRenderDevice.cpp */; };
+		1A00000000000030 /* GLBuffer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000030 /* GLBuffer.cpp */; };
+		1A00000000000031 /* GLVertexArray.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000031 /* GLVertexArray.cpp */; };
+		1A00000000000032 /* GLShaderProgram.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000032 /* GLShaderProgram.cpp */; };
 		1A0000000000000B /* FrameBuffer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B0000000000000E /* FrameBuffer.cpp */; };
 		1A0000000000000C /* FrameBufferPool.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B0000000000000F /* FrameBufferPool.cpp */; };
 		1A0000000000000D /* GLContextManager.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000010 /* GLContextManager.cpp */; };
@@ -53,6 +56,9 @@
 		1B0000000000001C /* Filter.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = Filter.cpp; path = ../core/src/Filter.cpp; sourceTree = SOURCE_ROOT; };
 		1B00000000000022 /* GLTexture.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLTexture.cpp; path = ../core/src/rhi/GLTexture.cpp; sourceTree = SOURCE_ROOT; };
 		1B00000000000023 /* GLRenderDevice.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLRenderDevice.cpp; path = ../core/src/rhi/GLRenderDevice.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000030 /* GLBuffer.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLBuffer.cpp; path = ../core/src/rhi/GLBuffer.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000031 /* GLVertexArray.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLVertexArray.cpp; path = ../core/src/rhi/GLVertexArray.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000032 /* GLShaderProgram.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLShaderProgram.cpp; path = ../core/src/rhi/GLShaderProgram.cpp; sourceTree = SOURCE_ROOT; };
 		1B0000000000000E /* FrameBuffer.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = FrameBuffer.cpp; path = ../core/src/FrameBuffer.cpp; sourceTree = SOURCE_ROOT; };
 		1B0000000000000F /* FrameBufferPool.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = FrameBufferPool.cpp; path = ../core/src/FrameBufferPool.cpp; sourceTree = SOURCE_ROOT; };
 		1B00000000000010 /* GLContextManager.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLContextManager.cpp; path = ../core/src/GLContextManager.cpp; sourceTree = SOURCE_ROOT; };
@@ -203,6 +209,9 @@
 				1A00000000000019 /* Filter.cpp in Sources */,
 				1A00000000000020 /* GLTexture.cpp in Sources */,
 				1A00000000000021 /* GLRenderDevice.cpp in Sources */,
+				1A00000000000030 /* GLBuffer.cpp in Sources */,
+				1A00000000000031 /* GLVertexArray.cpp in Sources */,
+				1A00000000000032 /* GLShaderProgram.cpp in Sources */,
 				1A0000000000000B /* FrameBuffer.cpp in Sources */,
 				1A0000000000000C /* FrameBufferPool.cpp in Sources */,
 				1A0000000000000D /* GLContextManager.cpp in Sources */,
