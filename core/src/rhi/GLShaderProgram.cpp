@@ -2,12 +2,60 @@
 #include <iostream>
 #include <cstdlib>
 
+
+#ifndef __APPLE__
+extern "C" {
+    void glDetachShader(GLuint program, GLuint shader) __attribute__((weak));
+}
+#endif
+
 namespace sdk {
 namespace video {
 namespace rhi {
 
 GLShaderProgram::GLShaderProgram(const std::string& vertexSource, const std::string& fragmentSource) {
     m_programId = createProgram(vertexSource.c_str(), fragmentSource.c_str());
+}
+
+
+GLShaderProgram::GLShaderProgram(const std::string& computeSource) {
+    m_isCompute = true;
+#ifndef GL_COMPUTE_SHADER
+#define GL_COMPUTE_SHADER 0x91B9
+#endif
+    GLuint computeShader = loadShader(GL_COMPUTE_SHADER, computeSource.c_str());
+    if (!computeShader) {
+        m_programId = 0;
+        return;
+    }
+
+    m_programId = glCreateProgram();
+    if (m_programId) {
+        glAttachShader(m_programId, computeShader);
+        glLinkProgram(m_programId);
+        GLint linkStatus = GL_FALSE;
+        glGetProgramiv(m_programId, GL_LINK_STATUS, &linkStatus);
+        if (linkStatus != GL_TRUE) {
+            GLint bufLength = 0;
+            glGetProgramiv(m_programId, GL_INFO_LOG_LENGTH, &bufLength);
+            if (bufLength) {
+                char* buf = (char*)std::malloc(bufLength);
+                if (buf) {
+                    glGetProgramInfoLog(m_programId, bufLength, nullptr, buf);
+                    std::cerr << "Could not link compute program:\n" << buf << std::endl;
+                    std::free(buf);
+                }
+            }
+            glDeleteProgram(m_programId);
+            m_programId = 0;
+        }
+        if (m_programId) {
+            glDetachShader(m_programId, computeShader);
+        }
+    }
+    if (computeShader) {
+        glDeleteShader(computeShader);
+    }
 }
 
 GLShaderProgram::~GLShaderProgram() {
@@ -23,6 +71,23 @@ void GLShaderProgram::bindUniformBlock(const std::string& blockName, uint32_t bi
     if (blockIndex != GL_INVALID_INDEX) {
         glUniformBlockBinding(m_programId, blockIndex, bindingPoint);
     }
+}
+
+
+void GLShaderProgram::dispatchCompute(uint32_t numGroupsX, uint32_t numGroupsY, uint32_t numGroupsZ) {
+    if (m_programId == 0 || !m_isCompute) return;
+#if defined(GL_ES_VERSION_3_1) || !defined(__APPLE__)
+    glUseProgram(m_programId);
+    // Note: To compile we might need dynamic lookup if gl31 is not available, but assuming GLES3/gl32.h
+#ifndef __APPLE__
+    // iOS doesn't support compute natively in GLES, it requires Metal
+    // Android supports it via GLES 3.1
+    extern void glDispatchCompute(GLuint, GLuint, GLuint) __attribute__((weak));
+    if (glDispatchCompute) {
+        glDispatchCompute(numGroupsX, numGroupsY, numGroupsZ);
+    }
+#endif
+#endif
 }
 
 GLuint GLShaderProgram::loadShader(GLenum shaderType, const char* pSource) {

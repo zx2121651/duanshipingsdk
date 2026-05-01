@@ -18,6 +18,8 @@ public:
     BufferType getType() const override { return m_type; }
     size_t getSize() const override { return m_size; }
     void updateData(const void* data, size_t size, size_t offset = 0) override;
+    void* map(size_t offset, size_t size, BufferAccess access) override;
+    void unmap() override;
 
     GLuint getGLHandle() const { return m_handle; }
 

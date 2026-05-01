@@ -19,6 +19,9 @@ public:
 
     // Connect a uniform block in the shader to a specific binding point for UBOs
     virtual void bindUniformBlock(const std::string& blockName, uint32_t bindingPoint) = 0;
+
+    // Dispatch compute shader execution
+    virtual void dispatchCompute(uint32_t numGroupsX, uint32_t numGroupsY, uint32_t numGroupsZ) = 0;
 };
 
 } // namespace rhi
