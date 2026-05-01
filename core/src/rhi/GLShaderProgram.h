@@ -18,9 +18,9 @@ public:
     ~GLShaderProgram() override;
 
     bool isValid() const override { return m_programId != 0; }
-    void bindUniformBlock(const std::string& blockName, uint32_t bindingPoint) override;
+
     void dispatchCompute(uint32_t numGroupsX, uint32_t numGroupsY, uint32_t numGroupsZ) override;
-    uint32_t getGLHandle() const override { return m_programId; }
+    uint32_t getGLHandle() const { return m_programId; }
 
 private:
     GLuint m_programId = 0;

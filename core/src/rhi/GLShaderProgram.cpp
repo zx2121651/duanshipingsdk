@@ -2,9 +2,13 @@
 #include <iostream>
 #include <cstdlib>
 
+#ifndef GL_COMPUTE_SHADER
+#define GL_COMPUTE_SHADER 0x91B9
+#endif
 
 #ifndef __APPLE__
 extern "C" {
+    void glDispatchCompute(GLuint num_groups_x, GLuint num_groups_y, GLuint num_groups_z) __attribute__((weak));
     void glDetachShader(GLuint program, GLuint shader) __attribute__((weak));
 }
 #endif
@@ -17,12 +21,8 @@ GLShaderProgram::GLShaderProgram(const std::string& vertexSource, const std::str
     m_programId = createProgram(vertexSource.c_str(), fragmentSource.c_str());
 }
 
-
 GLShaderProgram::GLShaderProgram(const std::string& computeSource) {
     m_isCompute = true;
-#ifndef GL_COMPUTE_SHADER
-#define GL_COMPUTE_SHADER 0x91B9
-#endif
     GLuint computeShader = loadShader(GL_COMPUTE_SHADER, computeSource.c_str());
     if (!computeShader) {
         m_programId = 0;
@@ -65,24 +65,11 @@ GLShaderProgram::~GLShaderProgram() {
     }
 }
 
-void GLShaderProgram::bindUniformBlock(const std::string& blockName, uint32_t bindingPoint) {
-    if (m_programId == 0) return;
-    GLuint blockIndex = glGetUniformBlockIndex(m_programId, blockName.c_str());
-    if (blockIndex != GL_INVALID_INDEX) {
-        glUniformBlockBinding(m_programId, blockIndex, bindingPoint);
-    }
-}
-
-
 void GLShaderProgram::dispatchCompute(uint32_t numGroupsX, uint32_t numGroupsY, uint32_t numGroupsZ) {
     if (m_programId == 0 || !m_isCompute) return;
 #if defined(GL_ES_VERSION_3_1) || !defined(__APPLE__)
     glUseProgram(m_programId);
-    // Note: To compile we might need dynamic lookup if gl31 is not available, but assuming GLES3/gl32.h
 #ifndef __APPLE__
-    // iOS doesn't support compute natively in GLES, it requires Metal
-    // Android supports it via GLES 3.1
-    extern void glDispatchCompute(GLuint, GLuint, GLuint) __attribute__((weak));
     if (glDispatchCompute) {
         glDispatchCompute(numGroupsX, numGroupsY, numGroupsZ);
     }
