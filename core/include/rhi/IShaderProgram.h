@@ -14,11 +14,7 @@ public:
     // Returns true if the program compiled and linked successfully
     virtual bool isValid() const = 0;
 
-    // Get the low-level handle for legacy functions during transition
-    virtual uint32_t getGLHandle() const = 0;
 
-    // Connect a uniform block in the shader to a specific binding point for UBOs
-    virtual void bindUniformBlock(const std::string& blockName, uint32_t bindingPoint) = 0;
 
     // Dispatch compute shader execution
     virtual void dispatchCompute(uint32_t numGroupsX, uint32_t numGroupsY, uint32_t numGroupsZ) = 0;

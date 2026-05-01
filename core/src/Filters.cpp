@@ -87,7 +87,8 @@ void OES2RGBFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb)
         flipH = std::any_cast<bool>(m_parameters.at("flipHorizontal"));
     }
     glUniform1i(m_flipHorizontalHandle, flipH ? 1 : 0);
-    cmdBuffer->draw(m_quadVao, 4);
+    cmdBuffer->bindVertexArray(m_quadVao);
+    cmdBuffer->draw(4);
 
     bool flipV = false;
     if (m_parameters.count("flipVertical") && m_parameters.at("flipVertical").type() == typeid(bool)) {
@@ -476,7 +477,8 @@ void NightVisionFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outpu
 
         // 1. Begin Pass (Legacy FrameBuffer already bounds outputFb before this method in processFrame,
         // so this is a semantic pass-through right now, to be expanded later).
-        cmd->beginRenderPass(nullptr);
+        rhi::RenderPassDescriptor desc;
+        cmd->beginRenderPass(desc);
 
         // 2. Bind Pipeline state (Legacy GL requires explicit GLStateManager program use)
         GLStateManager::getInstance().useProgram(m_programId);
@@ -484,7 +486,7 @@ void NightVisionFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outpu
         glClear(GL_COLOR_BUFFER_BIT);
 
         // 3. Bind Textures via Command Buffer
-        cmd->bindTexture(0, &wrappedInput);
+        // stub bind texture
         glUniform1i(m_inputImageTextureHandle, 0); // Still relying on legacy uniform bind
 
         // 4. Draw Call
@@ -497,7 +499,8 @@ void NightVisionFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outpu
             0.0f, 1.0f,  1.0f, 1.0f,
         };
 
-        cmd->draw(m_quadVao, 4); // Abstracts glDrawArrays(GL_TRIANGLE_STRIP, 0, 4)
+        cmd->bindVertexArray(m_quadVao);
+        cmd->draw(4); // Abstracts glDrawArrays(GL_TRIANGLE_STRIP, 0, 4)
 
         // 5. End Pass
         cmd->endRenderPass();

@@ -1,6 +1,10 @@
-#include "IVertexArray.h"
 #pragma once
+#include <memory>
 #include <cstdint>
+#include "IVertexArray.h"
+#include "IRenderPass.h"
+#include "IPipelineState.h"
+#include "IBuffer.h"
 
 namespace sdk {
 namespace video {
@@ -8,31 +12,23 @@ namespace rhi {
 
 class ITexture;
 
-// Abstract interface for recording rendering commands.
-// Future implementations (Vulkan, Metal) will implement this to record into their native command buffers.
 class ICommandBuffer {
 public:
     virtual ~ICommandBuffer() = default;
 
-    // Begin rendering to the specified output texture
-    virtual void beginRenderPass(ITexture* outputTexture) = 0;
-
-    // End the current render pass
+    virtual void beginRenderPass(const RenderPassDescriptor& descriptor) = 0;
     virtual void endRenderPass() = 0;
 
-    // Bind an input texture to a specific slot
-    virtual void bindTexture(int slot, ITexture* texture) = 0;
-    // Draw using VAO abstraction
-    virtual void draw(std::shared_ptr<IVertexArray> vao, int vertexCount) = 0;
-    virtual void drawIndexed(std::shared_ptr<IVertexArray> vao, int indexCount) = 0;
-    virtual void bindUniformBuffer(uint32_t bindingPoint, std::shared_ptr<IBuffer> ubo) = 0;
+    virtual void bindPipeline(std::shared_ptr<IPipelineState> pipeline) = 0;
+    virtual void bindResourceSet(uint32_t setIndex, std::shared_ptr<IShaderResourceSet> resourceSet) = 0;
+
+    // We keep bindVertexBuffer/IndexBuffer logic through VAO or similar abstractions, but simplified here:
+    virtual void bindVertexArray(std::shared_ptr<IVertexArray> vao) = 0;
+
+    virtual void draw(int vertexCount, int instanceCount = 1) = 0;
+    virtual void drawIndexed(int indexCount, int instanceCount = 1) = 0;
 
     // Compute Shader Support
-    // Bind a texture as an image for compute shaders (load/store)
-    enum class ImageAccess { ReadOnly, WriteOnly, ReadWrite };
-    virtual void bindImageTexture(int unit, ITexture* texture, ImageAccess access) = 0;
-
-    // Execute a compute shader
     virtual void dispatchCompute(uint32_t numGroupsX, uint32_t numGroupsY, uint32_t numGroupsZ) = 0;
 
     // Memory barrier to synchronize compute and graphics operations
