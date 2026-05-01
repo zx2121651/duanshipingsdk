@@ -20,6 +20,13 @@ enum class BufferUsage {
     StreamDraw   // Modified once, drawn at most a few times
 };
 
+// Access hints for mapping buffers
+enum class BufferAccess {
+    Read,
+    Write,
+    ReadWrite
+};
+
 // Abstract interface for any hardware buffer (VBO, IBO, UBO)
 class IBuffer {
 public:
@@ -34,6 +41,12 @@ public:
     // Upload data to the buffer.
     // If offset is 0 and size == getSize(), it may reallocate/orphan the old buffer.
     virtual void updateData(const void* data, size_t size, size_t offset = 0) = 0;
+
+    // Map a portion (or all) of the buffer to CPU memory
+    virtual void* map(size_t offset, size_t size, BufferAccess access) = 0;
+
+    // Unmap a previously mapped buffer
+    virtual void unmap() = 0;
 };
 
 } // namespace rhi

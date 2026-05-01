@@ -14,14 +14,17 @@ namespace rhi {
 class GLShaderProgram : public IShaderProgram {
 public:
     GLShaderProgram(const std::string& vertexSource, const std::string& fragmentSource);
+    explicit GLShaderProgram(const std::string& computeSource);
     ~GLShaderProgram() override;
 
     bool isValid() const override { return m_programId != 0; }
     void bindUniformBlock(const std::string& blockName, uint32_t bindingPoint) override;
+    void dispatchCompute(uint32_t numGroupsX, uint32_t numGroupsY, uint32_t numGroupsZ) override;
     uint32_t getGLHandle() const override { return m_programId; }
 
 private:
     GLuint m_programId = 0;
+    bool m_isCompute = false;
 
     GLuint loadShader(GLenum type, const char* shaderSrc);
     GLuint createProgram(const char* vertexSource, const char* fragmentSource);

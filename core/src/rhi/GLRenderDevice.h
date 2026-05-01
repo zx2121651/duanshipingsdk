@@ -19,6 +19,14 @@ public:
     void drawIndexed(std::shared_ptr<IVertexArray> vao, int indexCount) override;
     void bindUniformBuffer(uint32_t bindingPoint, std::shared_ptr<IBuffer> ubo) override;
 
+    void bindImageTexture(int unit, ITexture* texture, ImageAccess access) override;
+    void dispatchCompute(uint32_t numGroupsX, uint32_t numGroupsY, uint32_t numGroupsZ) override;
+    void memoryBarrier(uint32_t barriers) override;
+
+private:
+    uint32_t m_currentFBO = 0;
+
+
 };
 
 class GLRenderDevice : public IRenderDevice {
