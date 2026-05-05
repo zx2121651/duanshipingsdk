@@ -1,111 +1,96 @@
 #include "GLBuffer.h"
 #include "GLVertexArray.h"
 #include "GLRenderDevice.h"
-#include "GLShaderProgram.h"
 #include "../../include/GLStateManager.h"
 #include <unordered_map>
 #include <memory>
+#include <iostream>
+#include <chrono>
 
 #ifdef __APPLE__
     #include <OpenGLES/ES3/gl.h>
 #else
     #include <GLES3/gl3.h>
+
 #endif
 
-#ifndef GL_READ_ONLY
-#define GL_READ_ONLY 0x88B8
-#define GL_WRITE_ONLY 0x88B9
-#define GL_READ_WRITE 0x88BA
+// We need an assertion macro
+#define RHI_ASSERT(condition) if(!(condition)) { std::cerr << "RHI_ASSERT Failed: " << #condition << std::endl; std::abort(); }
+
+
+#ifndef GL_TEXTURE_EXTERNAL_OES
+#define GL_TEXTURE_EXTERNAL_OES 0x8D65
 #endif
 
-#ifndef GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT
-#define GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT 0x00000001
-#define GL_ELEMENT_ARRAY_BARRIER_BIT 0x00000002
-#define GL_UNIFORM_BARRIER_BIT 0x00000004
-#define GL_TEXTURE_FETCH_BARRIER_BIT 0x00000008
-#define GL_SHADER_IMAGE_ACCESS_BARRIER_BIT 0x00000020
-#define GL_SHADER_STORAGE_BARRIER_BIT 0x00002000
-#endif
 
-#ifndef GLbitfield
-typedef unsigned int GLbitfield;
+#ifndef GL_BLEND
+#define GL_BLEND 0x0BE2
+#define GL_CULL_FACE 0x0B44
+#define GL_DEPTH_TEST 0x0B71
 #endif
-
 #ifndef __APPLE__
-extern "C" {
-    void glBindImageTexture(GLuint unit, GLuint texture, GLint level, GLboolean layered, GLint layer, GLenum access, GLenum format) __attribute__((weak));
-    void glDispatchCompute(GLuint num_groups_x, GLuint num_groups_y, GLuint num_groups_z) __attribute__((weak));
-    void glMemoryBarrier(GLbitfield barriers) __attribute__((weak));
-}
+
+#endif
+
+
+#ifndef glDepthMask
+#define glDepthMask(x)
 #endif
 
 namespace sdk {
 namespace video {
 namespace rhi {
 
-// --- GLCommandBuffer ---
+// --- Shadow State Management ---
+struct ShadowState {
+    bool blendEnabled = false;
+    bool cullFaceEnabled = false;
+    bool depthTestEnabled = false;
+    bool depthWriteEnabled = false;
+};
+static ShadowState s_shadowState;
 
+void GLPipelineState::apply() {
+    if (desc.blendState.blendEnabled != s_shadowState.blendEnabled) {
+        if (desc.blendState.blendEnabled) glEnable(GL_BLEND);
+        else glDisable(GL_BLEND);
+        s_shadowState.blendEnabled = desc.blendState.blendEnabled;
+    }
+
+    if (desc.rasterizerState.cullFaceEnabled != s_shadowState.cullFaceEnabled) {
+        if (desc.rasterizerState.cullFaceEnabled) glEnable(GL_CULL_FACE);
+        else glDisable(GL_CULL_FACE);
+        s_shadowState.cullFaceEnabled = desc.rasterizerState.cullFaceEnabled;
+    }
+
+    if (desc.depthStencilState.depthTestEnabled != s_shadowState.depthTestEnabled) {
+        if (desc.depthStencilState.depthTestEnabled) glEnable(GL_DEPTH_TEST);
+        else glDisable(GL_DEPTH_TEST);
+        s_shadowState.depthTestEnabled = desc.depthStencilState.depthTestEnabled;
+    }
+
+    if (desc.depthStencilState.depthWriteEnabled != s_shadowState.depthWriteEnabled) {
+        glDepthMask(desc.depthStencilState.depthWriteEnabled ? GL_TRUE : GL_FALSE);
+        s_shadowState.depthWriteEnabled = desc.depthStencilState.depthWriteEnabled;
+    }
+}
+
+// --- GLCommandBuffer ---
 static std::unordered_map<uint32_t, GLuint> s_fboCache;
 
+void GLCommandBuffer::begin() {
+    auto now = std::chrono::steady_clock::now().time_since_epoch();
+    m_beginTimeNs = std::chrono::duration_cast<std::chrono::nanoseconds>(now).count();
+}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-void GLCommandBuffer::dispatchCompute(uint32_t numGroupsX, uint32_t numGroupsY, uint32_t numGroupsZ) {
-#if defined(GL_ES_VERSION_3_1) || !defined(__APPLE__)
-#ifndef __APPLE__
-    if (glDispatchCompute) {
-        glDispatchCompute(numGroupsX, numGroupsY, numGroupsZ);
+void GLCommandBuffer::end() {
+    auto now = std::chrono::steady_clock::now().time_since_epoch();
+    int64_t endTimeNs = std::chrono::duration_cast<std::chrono::nanoseconds>(now).count();
+    int64_t elapsedNs = endTimeNs - m_beginTimeNs;
+    if (elapsedNs > 2000000) { // 2ms
+        std::cerr << "ALogW: ICommandBuffer::end() execution exceeded 2ms! Took " << (elapsedNs / 1000000.0f) << " ms" << std::endl;
     }
-#endif
-#endif
 }
-
-void GLCommandBuffer::memoryBarrier(uint32_t barriers) {
-#if defined(GL_ES_VERSION_3_1) || !defined(__APPLE__)
-    GLbitfield glBarriers = 0;
-    if (barriers & static_cast<uint32_t>(BarrierBit::VertexAttribArray)) glBarriers |= GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT;
-    if (barriers & static_cast<uint32_t>(BarrierBit::ElementArray)) glBarriers |= GL_ELEMENT_ARRAY_BARRIER_BIT;
-    if (barriers & static_cast<uint32_t>(BarrierBit::Uniform)) glBarriers |= GL_UNIFORM_BARRIER_BIT;
-    if (barriers & static_cast<uint32_t>(BarrierBit::TextureFetch)) glBarriers |= GL_TEXTURE_FETCH_BARRIER_BIT;
-    if (barriers & static_cast<uint32_t>(BarrierBit::ShaderImageAccess)) glBarriers |= GL_SHADER_IMAGE_ACCESS_BARRIER_BIT;
-
-#ifndef __APPLE__
-    if (glMemoryBarrier) {
-        glMemoryBarrier(glBarriers);
-    }
-#endif
-#endif
-}
-
-// --- GLRenderDevice ---
-
-std::shared_ptr<ITexture> GLRenderDevice::createTexture(uint32_t width, uint32_t height) {
-    GLuint id = 0;
-    glGenTextures(1, &id);
-    glBindTexture(GL_TEXTURE_2D, id);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    auto tex = std::make_shared<GLTexture>(id, width, height);
-    tex->setOwnsHandle(true);
-    return tex;
-}
-
 
 void GLCommandBuffer::beginRenderPass(const RenderPassDescriptor& descriptor) {
     if (descriptor.colorAttachments.empty() || !descriptor.colorAttachments[0].texture) {
@@ -120,6 +105,12 @@ void GLCommandBuffer::beginRenderPass(const RenderPassDescriptor& descriptor) {
         glGenFramebuffers(1, &fbo);
         glBindFramebuffer(GL_FRAMEBUFFER, fbo);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texId, 0);
+
+        GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+        if (status != GL_FRAMEBUFFER_COMPLETE) {
+            std::cerr << "VIDEO_SDK_ERROR_GPU_OUT_OF_MEMORY: Framebuffer status incomplete!" << std::endl;
+        }
+
         s_fboCache[texId] = fbo;
     } else {
         glBindFramebuffer(GL_FRAMEBUFFER, s_fboCache[texId]);
@@ -140,11 +131,14 @@ void GLCommandBuffer::endRenderPass() {
     m_currentFBO = 0;
 }
 
-void GLCommandBuffer::bindPipeline(std::shared_ptr<IPipelineState> pipeline) {
-    auto glPipeline = std::dynamic_pointer_cast<GLPipelineState>(pipeline);
-    if (glPipeline && glPipeline->desc.shaderProgram) {
-        auto glProg = std::dynamic_pointer_cast<GLShaderProgram>(glPipeline->desc.shaderProgram);
-        if (glProg) glUseProgram(glProg->getGLHandle());
+void GLCommandBuffer::bindPipelineState(std::shared_ptr<IPipelineState> pso) {
+    auto glPipeline = std::dynamic_pointer_cast<GLPipelineState>(pso);
+    if (glPipeline) {
+        if (glPipeline->desc.shaderProgram) {
+            auto glProg = static_cast<GLShaderProgram*>(glPipeline->desc.shaderProgram);
+            glUseProgram(glProg->getGLHandle());
+        }
+        glPipeline->apply();
     } else {
         glUseProgram(0);
     }
@@ -154,31 +148,71 @@ void GLCommandBuffer::bindResourceSet(uint32_t setIndex, std::shared_ptr<IShader
     // Stub
 }
 
-void GLCommandBuffer::bindVertexArray(std::shared_ptr<IVertexArray> vao) {
+void GLCommandBuffer::bindVertexArray(IVertexArray* vao) {
     if (!vao) {
         glBindVertexArray(0);
         return;
     }
-    auto glVao = std::static_pointer_cast<GLVertexArray>(vao);
+    auto glVao = static_cast<GLVertexArray*>(vao);
     glBindVertexArray(glVao->getGLHandle());
 }
 
-void GLCommandBuffer::draw(int vertexCount, int instanceCount) {
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, vertexCount);
+void GLCommandBuffer::draw(uint32_t count) {
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, count);
 }
 
-void GLCommandBuffer::drawIndexed(int indexCount, int instanceCount) {
+void GLCommandBuffer::drawIndexed(uint32_t indexCount) {
     glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_SHORT, nullptr);
 }
 
-std::shared_ptr<IPipelineState> GLRenderDevice::createGraphicsPipeline(const GraphicsPipelineDescriptor& desc) {
-    auto pso = std::make_shared<GLPipelineState>();
-    pso->desc = desc;
-    return pso;
+void GLCommandBuffer::dispatchCompute(uint32_t numGroupsX, uint32_t numGroupsY, uint32_t numGroupsZ) {
+#if defined(GL_ES_VERSION_3_1) || !defined(__APPLE__)
+#ifndef __APPLE__
+    extern void glDispatchCompute(GLuint, GLuint, GLuint) __attribute__((weak));
+    if (glDispatchCompute) {
+        glDispatchCompute(numGroupsX, numGroupsY, numGroupsZ);
+    }
+#endif
+#endif
 }
 
-std::shared_ptr<IShaderResourceSet> GLRenderDevice::createShaderResourceSet() {
-    return std::make_shared<GLShaderResourceSet>();
+void GLCommandBuffer::pipelineBarrier(BarrierType type) {
+#if defined(GL_ES_VERSION_3_1) || !defined(__APPLE__)
+#ifndef __APPLE__
+    extern void glMemoryBarrier(unsigned int barriers) __attribute__((weak));
+    if (glMemoryBarrier) {
+        glMemoryBarrier(0xFFFFFFFF); // Full barrier for simple translation
+    }
+#endif
+#endif
+}
+
+// --- GLRenderDevice ---
+
+GLRenderDevice::~GLRenderDevice() {
+    processDeferredDeletions();
+    // In a real device we would destroy ResourcePool here
+}
+
+std::shared_ptr<ITexture> GLRenderDevice::createTexture(const TextureDesc& desc) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    GLuint id = 0;
+    glGenTextures(1, &id);
+    glBindTexture(GL_TEXTURE_2D, id);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, desc.width, desc.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    // OOM tracking would go here
+    size_t memCost = desc.width * desc.height * 4;
+    // ...
+
+    auto tex = std::make_shared<GLTexture>(id, desc.width, desc.height);
+    tex->setOwnsHandle(true);
+    return tex;
 }
 
 std::shared_ptr<ICommandBuffer> GLRenderDevice::createCommandBuffer() {
@@ -186,16 +220,67 @@ std::shared_ptr<ICommandBuffer> GLRenderDevice::createCommandBuffer() {
 }
 
 void GLRenderDevice::submit(ICommandBuffer* cmdBuffer) {
-#ifndef MOCK_GL_ENV_VAR
-#endif
+    m_frameCount.fetch_add(1, std::memory_order_relaxed);
+    processDeferredDeletions();
 }
 
 std::shared_ptr<IBuffer> GLRenderDevice::createBuffer(BufferType type, BufferUsage usage, size_t size, const void* data) {
+    std::lock_guard<std::mutex> lock(m_mutex);
     return std::make_shared<GLBuffer>(type, usage, size, data);
 }
 
 std::shared_ptr<IVertexArray> GLRenderDevice::createVertexArray() {
+    std::lock_guard<std::mutex> lock(m_mutex);
     return std::make_shared<GLVertexArray>();
+}
+
+std::shared_ptr<IPipelineState> GLRenderDevice::createGraphicsPipeline(const PipelineStateDesc& desc) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    auto pso = std::make_shared<GLPipelineState>();
+    pso->desc = desc;
+    return pso;
+}
+
+std::shared_ptr<IShaderResourceSet> GLRenderDevice::createShaderResourceSet() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return std::make_shared<GLShaderResourceSet>();
+}
+
+std::shared_ptr<ITexture> GLRenderDevice::bindExternalHardwareBuffer(void* nativeBuffer) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    // EGLImageKHR -> glEGLImageTargetTexture2DOES -> GL_TEXTURE_2D
+    // Stub for binding AHardwareBuffer
+    GLuint id = 0;
+    glGenTextures(1, &id);
+    glBindTexture(GL_TEXTURE_EXTERNAL_OES, id);
+    // ... logic for eglCreateImageKHR ...
+    glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
+
+    auto tex = std::make_shared<GLTexture>(id, 1, 1);
+    tex->setOwnsHandle(true);
+    return tex;
+}
+
+void GLRenderDevice::removeFBOFromCache(uint32_t texId) {
+    auto it = s_fboCache.find(texId);
+    if (it != s_fboCache.end()) {
+        GLuint fbo = it->second;
+        glDeleteFramebuffers(1, &fbo);
+        s_fboCache.erase(it);
+    }
+}
+
+void GLRenderDevice::queueDeferredDeletion(std::function<void()> cleanupTask) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_deletionQueue.push(cleanupTask);
+}
+
+void GLRenderDevice::processDeferredDeletions() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    while(!m_deletionQueue.empty()) {
+        m_deletionQueue.front()();
+        m_deletionQueue.pop();
+    }
 }
 
 } // namespace rhi

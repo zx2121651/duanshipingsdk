@@ -87,7 +87,7 @@ void OES2RGBFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb)
         flipH = std::any_cast<bool>(m_parameters.at("flipHorizontal"));
     }
     glUniform1i(m_flipHorizontalHandle, flipH ? 1 : 0);
-    cmdBuffer->bindVertexArray(m_quadVao);
+    cmdBuffer->bindVertexArray(m_quadVao.get());
     cmdBuffer->draw(4);
 
     bool flipV = false;
@@ -499,7 +499,7 @@ void NightVisionFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outpu
             0.0f, 1.0f,  1.0f, 1.0f,
         };
 
-        cmd->bindVertexArray(m_quadVao);
+        cmd->bindVertexArray(m_quadVao.get());
         cmd->draw(4); // Abstracts glDrawArrays(GL_TRIANGLE_STRIP, 0, 4)
 
         // 5. End Pass
