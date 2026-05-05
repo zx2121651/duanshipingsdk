@@ -2,46 +2,41 @@
 #include <memory>
 #include <vector>
 #include "IShaderProgram.h"
-#include "IVertexArray.h" // For VertexAttribute, though ideally vertex layout should be decoupled from buffer bindings
+#include "IVertexArray.h"
 
 namespace sdk {
 namespace video {
 namespace rhi {
 
-// Resource Binding (Descriptor Set)
 class IShaderResourceSet {
 public:
     virtual ~IShaderResourceSet() = default;
 };
 
-// Blend State
-struct BlendState {
+struct BlendDesc {
     bool blendEnabled = false;
-    // Simplification for the skeleton
 };
 
-// Rasterization State
-struct RasterizationState {
-    bool cullFaceEnabled = false;
+struct DepthStencilDesc {
     bool depthTestEnabled = false;
     bool depthWriteEnabled = false;
 };
 
-// Vertex Layout Descriptor
-struct VertexLayoutDescriptor {
-    std::vector<VertexAttribute> attributes;
+struct RasterizerDesc {
+    bool cullFaceEnabled = false;
 };
 
-struct GraphicsPipelineDescriptor {
-    std::shared_ptr<IShaderProgram> shaderProgram;
-    VertexLayoutDescriptor vertexLayout;
-    BlendState blendState;
-    RasterizationState rasterizationState;
+struct PipelineStateDesc {
+    IShaderProgram* shaderProgram = nullptr;
+    BlendDesc blendState;
+    DepthStencilDesc depthStencilState;
+    RasterizerDesc rasterizerState;
 };
 
-class IPipelineState {
+class [[nodiscard]] IPipelineState {
 public:
     virtual ~IPipelineState() = default;
+    virtual const PipelineStateDesc& getDesc() const = 0;
 };
 
 } // namespace rhi
