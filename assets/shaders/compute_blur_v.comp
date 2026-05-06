@@ -1,0 +1,56 @@
+#version 310 es
+// compute_blur_v.comp — 垂直方向可分离高斯模糊 (Pass 2/2)
+// 由 compute_blur_h.comp 的结果（中间纹理）输入，最终写入 outputImage
+
+#define TILE_SIZE  64
+#define MAX_RADIUS 16
+
+layout(local_size_x = 1, local_size_y = TILE_SIZE, local_size_z = 1) in;
+
+layout(binding = 0, rgba8) uniform readonly  highp image2D inputImage;
+layout(binding = 1, rgba8) uniform writeonly highp image2D outputImage;
+
+uniform int   u_radius;
+uniform float u_weights[MAX_RADIUS + 1];
+
+// Shared memory tile：TILE_SIZE 个中心像素 + 上下各 MAX_RADIUS 个 apron 像素
+shared highp vec4 tile[TILE_SIZE + 2 * MAX_RADIUS];
+
+void main() {
+    ivec2 size        = imageSize(inputImage);
+    int   globalX     = int(gl_GlobalInvocationID.x);
+    int   globalY     = int(gl_GlobalInvocationID.y);
+    int   localY      = int(gl_LocalInvocationID.y);
+    int   groupStartY = int(gl_WorkGroupID.y) * TILE_SIZE;
+
+    if (globalX >= size.x) return;
+
+    // 中心像素
+    int srcY = clamp(groupStartY + localY, 0, size.y - 1);
+    tile[localY + MAX_RADIUS] = imageLoad(inputImage, ivec2(globalX, srcY));
+
+    // 上方 apron
+    if (localY < MAX_RADIUS) {
+        int apronY = clamp(groupStartY - MAX_RADIUS + localY, 0, size.y - 1);
+        tile[localY] = imageLoad(inputImage, ivec2(globalX, apronY));
+    }
+
+    // 下方 apron
+    if (localY >= TILE_SIZE - MAX_RADIUS) {
+        int apronY = clamp(groupStartY + localY + MAX_RADIUS, 0, size.y - 1);
+        tile[localY + 2 * MAX_RADIUS] = imageLoad(inputImage, ivec2(globalX, apronY));
+    }
+
+    barrier();
+    memoryBarrierShared();
+
+    if (globalY >= size.y) return;
+
+    int  center = localY + MAX_RADIUS;
+    vec4 sum    = u_weights[0] * tile[center];
+    for (int i = 1; i <= u_radius; i++) {
+        sum += u_weights[i] * (tile[center - i] + tile[center + i]);
+    }
+
+    imageStore(outputImage, ivec2(globalX, globalY), sum);
+}

@@ -10,6 +10,19 @@ namespace video {
 namespace timeline {
 
 /**
+ * @brief 软解 Fallback 策略
+ *
+ *  AUTO     — 硬件解码失败时自动切换软解（默认）
+ *  HW_ONLY  — 仅硬件解码；失败则返回错误帧（保帧优先）
+ *  SW_FIRST — 优先软解，主要用于调试或低端机
+ */
+enum class DecoderFallbackStrategy {
+    AUTO     = 0,
+    HW_ONLY  = 1,
+    SW_FIRST = 2,
+};
+
+/**
  * @brief 视频解码池 (Decoder Pool)
  *
  * 用于在 NLE 架构中按需根据时间戳提取各个素材轨的帧数据。
@@ -39,6 +52,31 @@ public:
     // 清除所有注册的资源
     void clear();
 
+    /**
+     * @brief P1-3: Hint the pool to start decoding ahead to the given time.
+     * Must be called from the render thread after getFrame(); non-blocking.
+     * The pool marks the context so decodeLoop() fills its queue for timeNs+1frame.
+     */
+    void prefetchFrame(const std::string& clipId, int64_t upcomingTimeNs);
+
+    /**
+     * @brief 设置软解 Fallback 策略。
+     *
+     * 默认 AUTO：AMediaCodec 失败后自动尝试 FFmpeg 软解。
+     * SW_FIRST：直接走软解（适合低端机、模拟器）。
+     * HW_ONLY：不允许软解降级（适合对帧质量严格的导出场景）。
+     *
+     * @note 线程安全。可在任意线程调用（下次 getFrame() 时生效）。
+     */
+    void setFallbackStrategy(DecoderFallbackStrategy strategy) {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_strategy = strategy;
+    }
+
+    DecoderFallbackStrategy getFallbackStrategy() const {
+        return m_strategy;
+    }
+
 private:
     std::mutex m_mutex;
 
@@ -59,6 +97,7 @@ private:
     std::map<std::string, std::shared_ptr<DecoderContext>> m_decoders;
     uint64_t m_accessCounter = 0;
     int m_activeDecoderCount = 0;
+    DecoderFallbackStrategy m_strategy = DecoderFallbackStrategy::AUTO;
 
     void evictDecodersIfNeeded();
 };

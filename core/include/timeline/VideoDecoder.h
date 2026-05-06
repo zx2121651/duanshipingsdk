@@ -40,30 +40,35 @@ public:
 };
 
 /**
- * @brief 自研软件解码器 (占位)
- * 用于在硬解失败或精准抽帧时提供基于 FFMpeg 的 CPU 软解支持，彻底解决 B 帧寻址漂移噩梦。
+ * @brief 自研软件解码器 (FFmpeg 集成占位，暂不可用)
+ *
+ * 当硬件解码器报告 hwFailed=true 后，DecoderPool 会尝试此路径。
+ * 目前 FFmpeg 尚未集成，所有方法均返回明确错误码，
+ * 防止上层把零纹理 {0,0,0} 误当有效帧渲染出黑帧。
+ *
+ * TODO: 集成 FFmpeg libavcodec 后替换 open() / getFrameAt() 实现。
  */
 class SoftwareVideoDecoder : public VideoDecoder {
 public:
     Result open(const std::string& filePath) override {
-        m_isOpen = true;
-        return Result::ok();
+        // FFmpeg 尚未集成，明确拒绝，避免 DecoderPool 误以为软解可用
+        return Result::error(ErrorCode::ERR_TIMELINE_SOFT_DECODER_UNIMPLEMENTED,
+            "SoftwareVideoDecoder: FFmpeg not integrated, file=" + filePath);
     }
+
     ResultPayload<Texture> getFrameAt(int64_t timeNs) override {
-        if (!m_isOpen) return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Software decoder not open");
-        return ResultPayload<Texture>::ok({0, 0, 0});
+        return ResultPayload<Texture>::error(ErrorCode::ERR_TIMELINE_SOFT_DECODER_UNIMPLEMENTED,
+            "SoftwareVideoDecoder: FFmpeg not integrated");
     }
+
     Result seekExact(int64_t timeNs) override {
-        return Result::ok();
-    }
-    void close() override {
-        m_isOpen = false;
+        return Result::error(ErrorCode::ERR_TIMELINE_SOFT_DECODER_UNIMPLEMENTED,
+            "SoftwareVideoDecoder: FFmpeg not integrated");
     }
 
-    bool isOpen() const { return m_isOpen; }
+    void close() override {}
 
-private:
-    bool m_isOpen = false;
+    bool isOpen() const { return false; }
 };
 
 

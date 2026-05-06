@@ -96,7 +96,8 @@ public:
             // Check queue size
             {
                 std::unique_lock<std::mutex> lock(m_queueMutex);
-                m_queueCv.wait(lock, [this]() { return m_frameQueue.size() < 3 || !m_running; });
+                // P1-3: 8-frame prefetch buffer (was 3) to absorb seek/display jitter
+            m_queueCv.wait(lock, [this]() { return m_frameQueue.size() < 8 || !m_running; });
             }
             if (!m_running) break;
 

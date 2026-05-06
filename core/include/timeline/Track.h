@@ -17,7 +17,9 @@ public:
     enum class TrackType {
         MAIN_VIDEO, // 主视频轴 (决定主画幅和转场基准)
         PIP_VIDEO,  // 画中画层 (可以在空间上自由缩放)
-        AUDIO_ONLY  // 纯音频轨 (无画面)
+        AUDIO_ONLY, // 纯音频轨 (无画面)
+        SUBTITLE,   // 字幕/文字层（叠加在画面上方，无需解码器）
+        STICKER     // 贴纸/GIF/动效层（独立 z 轴，支持运动路径关键帧）
     };
 
     Track(int zIndex, TrackType type);

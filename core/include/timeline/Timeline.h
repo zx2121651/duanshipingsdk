@@ -48,6 +48,10 @@ public:
     // 同理，获取当前时间点所有需要混音 (Audio Mixing) 的素材
     void getActiveAudioClipsAtTime(int64_t timelineNs, std::vector<ClipPtr>& outClips) const;
 
+    // 获取当前时间点所有字幕 / 贴纸叠加层（TrackType::SUBTITLE + STICKER），
+    // 按 Z-Index 从低到高排列，由 Compositor 在视频层之上逐层叠加。
+    void getActiveOverlayClipsAtTime(int64_t timelineNs, std::vector<ClipPtr>& outClips) const;
+
 private:
     int m_outputWidth;
     int m_outputHeight;

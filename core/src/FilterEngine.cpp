@@ -2,6 +2,7 @@
 #define LOG_TAG "FilterEngine"
 #include "../include/Log.h"
 #include "rhi/GLRenderDevice.h"
+#include "../include/rhi/RenderDeviceFactory.h"
 #include <iostream>
 #include <chrono>
 #include <algorithm>
@@ -33,8 +34,11 @@ Result FilterEngine::initialize() {
     // 初始化前首先唤醒嗅探器，对底层硬件进行深度体检
     m_contextManager.sniffCapabilities();
 
-    // 实例化 RHI 后端设备 (当前过渡阶段始终使用 GLRenderDevice)
-    m_renderDevice = std::make_shared<rhi::GLRenderDevice>();
+    // 通过 RenderDeviceFactory 按首选后端 + 设备能力自动选择 RHI 实现
+    m_renderDevice = rhi::RenderDeviceFactory::create(m_preferredBackend, m_contextManager, m_activeBackend);
+    LOGI("FilterEngine: RHI backend = %s, GLES tier = %d",
+         rhi::backendTypeName(m_activeBackend),
+         m_contextManager.getGLESVersionInt());
 
     // Create Global Quad VAO/VBO via RHI
     static const float s_quadVertices[] = {
@@ -362,6 +366,81 @@ Result FilterEngine::rebuildGraph(std::shared_ptr<PipelineNode> inputNode) {
     m_cameraNode = newCameraNode;
 
     return Result::ok();
+}
+
+// ============================================================================
+// P1-6: GL Context Lost / Restored recovery
+// ============================================================================
+
+void FilterEngine::onContextLost() {
+    LOGE("FilterEngine::onContextLost — all GPU handles are invalid, releasing CPU-side state.");
+    // All GL objects (textures, FBOs, programs) are now dangling.
+    // Release CPU bookkeeping so subsequent calls don't try to use them.
+    if (m_graph) {
+        m_graph->release();
+        m_graph = nullptr;
+    }
+    m_cameraNode = nullptr;
+    m_outputNode = nullptr;
+    m_renderDevice = nullptr;
+    m_frameBufferPool.clear();
+    m_metricsCollector.clear();
+    m_isGraphDirty = true;
+    m_initialized = false;
+    m_currentMode = PipelineMode::UNDEFINED;
+    m_timeline = nullptr;
+    m_compositor.reset();
+    m_threadCheck.unbind();
+    LOGW("FilterEngine::onContextLost — engine reset to UNINITIALIZED. Call initialize() after new context is current.");
+}
+
+Result FilterEngine::onContextRestored() {
+    LOGI("FilterEngine::onContextRestored — re-initializing engine on new GL context.");
+    // Re-run full initialization on the newly created GL context.
+    // The caller is responsible for making the new context current on this thread first.
+    return initialize();
+}
+
+// ---------------------------------------------------------------------------
+// onTrimMemory — Android ComponentCallbacks2 五档内存压力响应
+//
+// 策略（从重到轻）：
+//   >= 80  TRIM_MEMORY_COMPLETE   : 清空所有 FBO，VRAM 上限  32 MB
+//   >= 40  TRIM_MEMORY_BACKGROUND : 清空所有 FBO，VRAM 上限  64 MB
+//   >= 20  TRIM_MEMORY_UI_HIDDEN  : 同上（UI 隐藏即强制清理）
+//   >= 15  RUNNING_CRITICAL       : 触发 LRU 驱逐，VRAM 上限  64 MB
+//   >= 10  RUNNING_LOW            : 收紧预算至 128 MB
+//   >=  5  RUNNING_MODERATE       : 收紧预算至 192 MB
+// ---------------------------------------------------------------------------
+void FilterEngine::onTrimMemory(int level) {
+    // ComponentCallbacks2 常量（与 Android API 对齐，不引入 JNI 依赖）
+    constexpr int TRIM_RUNNING_MODERATE  =  5;
+    constexpr int TRIM_RUNNING_LOW       = 10;
+    constexpr int TRIM_RUNNING_CRITICAL  = 15;
+    constexpr int TRIM_UI_HIDDEN         = 20;
+    constexpr int TRIM_BACKGROUND        = 40;
+    constexpr int TRIM_COMPLETE          = 80;
+
+    constexpr size_t MB = 1024ULL * 1024ULL;
+
+    if (level >= TRIM_UI_HIDDEN) {
+        // 应用进入后台或内存极端紧张 → 清空全部缓存 FBO
+        size_t budget = (level >= TRIM_COMPLETE)  ? 32  * MB :
+                        (level >= TRIM_BACKGROUND) ? 64  * MB :
+                                                      64  * MB; // UI_HIDDEN
+        m_frameBufferPool.setVramBudget(budget);
+        m_frameBufferPool.clear();
+        LOGI("onTrimMemory(%d): FBO pool cleared, VRAM budget → %zu MB", level, budget / MB);
+    } else if (level >= TRIM_RUNNING_CRITICAL) {
+        m_frameBufferPool.setVramBudget(64 * MB);
+        LOGI("onTrimMemory(%d): VRAM budget → 64 MB (LRU evict on next alloc)", level);
+    } else if (level >= TRIM_RUNNING_LOW) {
+        m_frameBufferPool.setVramBudget(128 * MB);
+        LOGI("onTrimMemory(%d): VRAM budget → 128 MB", level);
+    } else if (level >= TRIM_RUNNING_MODERATE) {
+        m_frameBufferPool.setVramBudget(192 * MB);
+        LOGI("onTrimMemory(%d): VRAM budget → 192 MB", level);
+    }
 }
 
 } // namespace video

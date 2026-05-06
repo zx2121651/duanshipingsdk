@@ -21,7 +21,19 @@ android {
         externalNativeBuild {
             cmake {
                 cppFlags "-std=c++17"
-                arguments "-DANDROID_STL=c++_shared"
+                // 基础参数
+                arguments "-DANDROID_STL=c++_shared",
+                          // ---------------------------------------------------------------------------
+                          // FFmpeg 软解可选开关：
+                          // 下载 FFmpeg for Android 预编译包（推荐 mobile-ffmpeg-lite 或 ffmpeg-kit），
+                          // 解压到 src/main/jniLibs/ffmpeg/ 并取消下面这行注释。
+                          // 预期目录结构：
+                          //   src/main/jniLibs/ffmpeg/include/         ← FFmpeg 头文件
+                          //   src/main/jniLibs/ffmpeg/arm64-v8a/*.so   ← arm64 库
+                          //   src/main/jniLibs/ffmpeg/armeabi-v7a/*.so ← arm32 库
+                          // ---------------------------------------------------------------------------
+                          // "-DFFMPEG_PREBUILT_DIR=${projectDir}/src/main/jniLibs/ffmpeg"
+                          "-DANDROID_PLATFORM=android-24"
             }
         }
     }

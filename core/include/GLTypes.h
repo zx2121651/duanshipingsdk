@@ -61,7 +61,16 @@ enum ErrorCode {
     ERR_TIMELINE_COMPOSITOR_INIT_FAILED = -3006,   // 渲染合成器初始化失败
     ERR_DECODER_SEEK_FAILED = -3007,         // 定位失败（通常触发硬解转软解）
     ERR_DECODER_FRAME_DROP = -3008,          // 解码掉帧
-    ERR_DECODER_HW_FAILURE = -3009,          // 硬件解码器崩溃
+    ERR_TIMELINE_SOFT_DECODER_UNIMPLEMENTED = -3009, // 软件解码器未实现（FFmpeg 未集成）
+    ERR_DECODER_HW_FAILURE = -3010,          // 硬件解码器崩溃
+
+    // --- [Category: Audio Decoder] Range: -3011 ~ -3019 ---
+    ERR_AUDIO_EXTRACTOR_CREATE_FAILED = -3011, // AMediaExtractor 创建失败
+    ERR_AUDIO_SOURCE_OPEN_FAILED      = -3012, // 文件路径无法读取
+    ERR_AUDIO_TRACK_NOT_FOUND         = -3013, // 文件中无音轨
+    ERR_AUDIO_CODEC_CREATE_FAILED     = -3014, // 音频解码器创建失败
+    ERR_AUDIO_CODEC_CONFIG_FAILED     = -3015, // 音频解码器配置失败
+    ERR_AUDIO_CODEC_START_FAILED      = -3016, // 音频解码器启动失败
 
     // --- [Category: Graph Compilation] (Recoverable) Range: -4000 ~ -4999 ---
     // 滤镜图构建错误，建议回滚到上一个有效图状态

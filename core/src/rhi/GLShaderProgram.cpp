@@ -6,12 +6,12 @@
 #define GL_COMPUTE_SHADER 0x91B9
 #endif
 
-#ifndef __APPLE__
+#if !defined(__APPLE__) && !defined(_MSC_VER)
 extern "C" {
-    void glDispatchCompute(GLuint num_groups_x, GLuint num_groups_y, GLuint num_groups_z) __attribute__((weak));
     void glDetachShader(GLuint program, GLuint shader) __attribute__((weak));
 }
 #endif
+// On MSVC with USE_MOCK_GL, glDetachShader is provided as an inline stub in mock_gl/GLES3/gl3.h
 
 namespace sdk {
 namespace video {
@@ -19,6 +19,10 @@ namespace rhi {
 
 GLShaderProgram::GLShaderProgram(const std::string& vertexSource, const std::string& fragmentSource) {
     m_programId = createProgram(vertexSource.c_str(), fragmentSource.c_str());
+}
+
+GLShaderProgram::GLShaderProgram(GLuint prelinkedProgramId) {
+    m_programId = prelinkedProgramId;
 }
 
 GLShaderProgram::GLShaderProgram(const std::string& computeSource) {
@@ -65,16 +69,47 @@ GLShaderProgram::~GLShaderProgram() {
     }
 }
 
-void GLShaderProgram::dispatchCompute(uint32_t numGroupsX, uint32_t numGroupsY, uint32_t numGroupsZ) {
-    if (m_programId == 0 || !m_isCompute) return;
-#if defined(GL_ES_VERSION_3_1) || !defined(__APPLE__)
+// --- Uniform helpers ---
+
+GLint GLShaderProgram::getUniformLocation(const std::string& name) const {
+    auto it = m_uniformCache.find(name);
+    if (it != m_uniformCache.end()) return it->second;
+    GLint loc = glGetUniformLocation(m_programId, name.c_str());
+    m_uniformCache[name] = loc;
+    return loc;
+}
+
+void GLShaderProgram::setUniform1i(const std::string& name, int value) {
+    GLint loc = getUniformLocation(name);
+    if (loc >= 0) glUniform1i(loc, value);
+}
+
+void GLShaderProgram::setUniform1f(const std::string& name, float value) {
+    GLint loc = getUniformLocation(name);
+    if (loc >= 0) glUniform1f(loc, value);
+}
+
+void GLShaderProgram::setUniform2f(const std::string& name, float x, float y) {
+    GLint loc = getUniformLocation(name);
+    if (loc >= 0) glUniform2f(loc, x, y);
+}
+
+void GLShaderProgram::setUniform4f(const std::string& name, float x, float y, float z, float w) {
+    GLint loc = getUniformLocation(name);
+    if (loc >= 0) glUniform4f(loc, x, y, z, w);
+}
+
+void GLShaderProgram::setUniformMat4(const std::string& name, const float* matrix4x4) {
+    GLint loc = getUniformLocation(name);
+    if (loc >= 0) glUniformMatrix4fv(loc, 1, GL_FALSE, matrix4x4);
+}
+
+void GLShaderProgram::bind() {
     glUseProgram(m_programId);
-#ifndef __APPLE__
-    if (glDispatchCompute) {
-        glDispatchCompute(numGroupsX, numGroupsY, numGroupsZ);
-    }
-#endif
-#endif
+}
+
+void GLShaderProgram::unbind() {
+    glUseProgram(0);
 }
 
 GLuint GLShaderProgram::loadShader(GLenum shaderType, const char* pSource) {

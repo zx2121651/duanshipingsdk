@@ -16,7 +16,8 @@ enum class FilterType {
     BILATERAL = 3,
     CINEMATIC_LOOKUP = 4,
     COMPUTE_BLUR = 5,
-    NIGHT_VISION = 6
+    NIGHT_VISION = 6,
+    LUT3D = 7           // P1-2: 64x64x64 3D LUT colour grading
 };
 
 class FilterFactory {
@@ -53,6 +54,9 @@ public:
                 filter->setRenderDevice(device);
                 return filter;
             }
+
+            case FilterType::LUT3D:
+                return std::make_shared<LUT3DFilter>();
 
             default:
                 return nullptr;

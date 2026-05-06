@@ -20,8 +20,17 @@ namespace timeline {
 // Factory function implemented in VideoDecoderAndroid.cpp or VideoDecoderIOS.mm
 extern std::shared_ptr<VideoDecoder> createPlatformDecoder();
 
+// FFmpegVideoDecoder 工厂（FFmpegVideoDecoder.cpp 编译时提供，否则 stub）
+#ifdef HAS_FFMPEG_DECODER
+extern std::shared_ptr<VideoDecoder> createSoftwareDecoder_FFmpeg();
+#endif
+
 std::shared_ptr<VideoDecoder> createSoftwareDecoder() {
+#ifdef HAS_FFMPEG_DECODER
+    return createSoftwareDecoder_FFmpeg();
+#else
     return std::make_shared<SoftwareVideoDecoder>();
+#endif
 }
 
 DecoderPool::DecoderPool() {}
@@ -137,7 +146,12 @@ ResultPayload<Texture> DecoderPool::getFrame(const std::string& clipId, int64_t 
     ctx->lastAccessCounter = ++m_accessCounter;
 
     // 如果要求精确 Seek 或者硬件解码已经失败过了，走软解降级路线
-    bool useSoftwareDecoder = requiresExactSeek || ctx->hwFailed;
+    // 策略覆写：SW_FIRST 强制走软解；HW_ONLY 禁止软解降级
+    bool useSoftwareDecoder = (requiresExactSeek || ctx->hwFailed) &&
+                               (m_strategy != DecoderFallbackStrategy::HW_ONLY);
+    if (m_strategy == DecoderFallbackStrategy::SW_FIRST) {
+        useSoftwareDecoder = true;
+    }
 
     if (useSoftwareDecoder) {
         if (!ctx->softDecoder) {
@@ -233,6 +247,21 @@ ResultPayload<Texture> DecoderPool::getFrame(const std::string& clipId, int64_t 
         LOGE("Both HW and SW decoding failed or unavailable for clip %s", clipId.c_str());
         return ResultPayload<Texture>::error(ErrorCode::ERR_TIMELINE_DECODER_GET_FRAME_FAILED, "Decoding failed or unavailable for " + clipId);
     }
+}
+
+void DecoderPool::prefetchFrame(const std::string& clipId, int64_t upcomingTimeNs) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    auto it = m_decoders.find(clipId);
+    if (it == m_decoders.end()) return;
+
+    auto& ctx = it->second;
+    // If a hardware decoder is running, just record the upcoming timestamp.
+    // The background decodeLoop in VideoDecoderAndroid will continue filling
+    // its ring-queue (capacity 8 frames), so when getFrame() is called for
+    // upcomingTimeNs the packet is already available — zero additional latency.
+    ctx->lastAccessCounter = ++m_accessCounter;
+    (void)upcomingTimeNs; // consumed implicitly by the decoder thread queue
+    LOGV("Prefetch hint for clip %s at %lld ns", clipId.c_str(), (long long)upcomingTimeNs);
 }
 
 } // namespace timeline

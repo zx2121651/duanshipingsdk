@@ -4,6 +4,7 @@
 
 #ifdef __ANDROID__
     #include <android/log.h>
+    #include <dlfcn.h>
     #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "GLContextManager", __VA_ARGS__)
     #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, "GLContextManager", __VA_ARGS__)
 #else
@@ -76,9 +77,19 @@ void GLContextManager::sniffCapabilities() {
     // [检查点 C]：Vulkan 和 Metal 后端探测
     // ========================================================================
 #ifdef __ANDROID__
-    // 模拟检测 Vulkan (可以检测 VK_KHR_surface 等，此处为了结构完整只做一个标称判断)
-    m_supportVulkan = true; // Placeholder for Vulkan backend availability
-    LOGI("=> Feature Vulkan Backend: SUPPORTED (Stub)");
+    // 真实探测：尝试加载 libvulkan.so 动态库
+    // 低端机 / x86 模拟器可能缺少此库，不能盲目标记支持
+    {
+        void* vulkanLib = dlopen("libvulkan.so", RTLD_NOW | RTLD_LOCAL);
+        if (vulkanLib) {
+            m_supportVulkan = true;
+            dlclose(vulkanLib);
+            LOGI("=> Feature Vulkan Backend: SUPPORTED (libvulkan.so found)");
+        } else {
+            m_supportVulkan = false;
+            LOGI("=> Feature Vulkan Backend: NOT SUPPORTED (libvulkan.so not found)");
+        }
+    }
     m_supportMetal = false;
 #elif defined(__APPLE__)
     m_supportVulkan = false;
@@ -121,6 +132,73 @@ void GLContextManager::sniffCapabilities() {
     // 绝对不能强行调用 glDispatchCompute，否则必然闪退，必须在此拦截。
     m_supportComputeShader = false;
     LOGI("=> Feature Compute Shader Parallelism: REJECTED! iOS Apple Silicon unsupported. Use Metal instead.");
+#endif
+
+    // ========================================================================
+    // [检查点 E]：GLES 版本梯级 + GLES 3.2 专属能力
+    // ========================================================================
+
+    // E-1. 确定 GLESVersion 枚举值
+    if (m_majorVersion == 3 && m_minorVersion >= 2)
+        m_glesVersion = GLESVersion::GLES_32;
+    else if (m_majorVersion == 3 && m_minorVersion >= 1)
+        m_glesVersion = GLESVersion::GLES_31;
+    else
+        m_glesVersion = GLESVersion::GLES_30;
+
+    LOGI("=> GLES Version Tier: %d", static_cast<int>(m_glesVersion));
+
+    // E-2. 几何着色器 (GLES 3.2 core; 3.1 可通过 OES 扩展获得)
+#ifdef __ANDROID__
+    if (m_glesVersion == GLESVersion::GLES_32) {
+        m_supportGeoShader = true;
+        LOGI("=> Feature Geometry Shader: SUPPORTED (GLES 3.2 core)");
+    } else if (checkExtension("GL_EXT_geometry_shader") ||
+               checkExtension("GL_OES_geometry_shader")) {
+        m_supportGeoShader = true;
+        LOGI("=> Feature Geometry Shader: SUPPORTED (OES/EXT extension)");
+    } else {
+        m_supportGeoShader = false;
+        LOGI("=> Feature Geometry Shader: NOT SUPPORTED");
+    }
+
+    // E-3. 细分着色器 (GLES 3.2 core; 3.1 可通过 OES 扩展获得)
+    if (m_glesVersion == GLESVersion::GLES_32) {
+        m_supportTessShader = true;
+        LOGI("=> Feature Tessellation Shader: SUPPORTED (GLES 3.2 core)");
+    } else if (checkExtension("GL_EXT_tessellation_shader") ||
+               checkExtension("GL_OES_tessellation_shader")) {
+        m_supportTessShader = true;
+        LOGI("=> Feature Tessellation Shader: SUPPORTED (OES/EXT extension)");
+    } else {
+        m_supportTessShader = false;
+        LOGI("=> Feature Tessellation Shader: NOT SUPPORTED");
+    }
+
+    // E-4. MSAA FBO (GLES 3.0+ 支持 glRenderbufferStorageMultisample，
+    //               GLES 3.2 强制支持 GL_TEXTURE_2D_MULTISAMPLE)
+    {
+        glGetIntegerv(GL_MAX_SAMPLES, &m_maxMSAASamples);
+        m_supportMSAA = (m_maxMSAASamples >= 4);
+        LOGI("=> Feature MSAA: %s (maxSamples=%d)",
+             m_supportMSAA ? "SUPPORTED" : "LIMITED", m_maxMSAASamples);
+    }
+
+    // E-5. ASTC：GLES 3.2 强制包含，低版本通过扩展
+    // 注：原检查点 B 只看扩展，此处修正为统一入口
+    if (m_glesVersion == GLESVersion::GLES_32) {
+        m_supportASTC = true; // GLES 3.2 mandatory
+        LOGI("=> Feature ASTC: SUPPORTED (GLES 3.2 core mandatory)");
+    }
+    // 低版本路径已在检查点 B 设置，此处不重复
+#else
+    // iOS/桌面：GLES 3.2 不可用，维持现有检测结果
+    m_glesVersion    = GLESVersion::GLES_30;
+    m_supportGeoShader  = false;
+    m_supportTessShader = false;
+    m_supportMSAA       = false;
+    m_maxMSAASamples    = 1;
+    LOGI("=> GLES Tier 2 features: REJECTED (non-Android platform, use Metal instead)");
 #endif
 
     LOGI("Hardware Capabilities Sniffing Completed.");

@@ -4,6 +4,9 @@
 #include "rhi/GLTexture.h"
 #include <iostream>
 #include <vector>
+#include <algorithm>
+#include <cstdint>
+#include <cmath>
 
 #ifndef GL_TEXTURE_EXTERNAL_OES
 #define GL_TEXTURE_EXTERNAL_OES 0x8D65
@@ -216,14 +219,8 @@ ResultPayload<Texture> GaussianBlurFilter::processFrame(const Texture& inputText
         try { blurSize = std::any_cast<float>(m_parameters.at("blurSize")); } catch (const std::bad_any_cast& e) { std::cerr << "Parameter type cast error: " << e.what() << std::endl; }
     }
     glUniform1f(m_blurSizeHandle, blurSize);
-
-    // TODO: bind attributes correctly (assuming standard base class handles)
-    static const float s_vertexCoords[] = { -1.0f, -1.0f,  1.0f, -1.0f,  -1.0f, 1.0f,  1.0f, 1.0f };
-    static const float s_textureCoords[] = { 0.0f, 0.0f,  1.0f, 0.0f,  0.0f, 1.0f,  1.0f, 1.0f };
-
-
-
-
+    cmdBuffer->bindVertexArray(m_quadVao.get());
+    cmdBuffer->draw(4);
 
     // ---------------------------------------------------------
     // Pass 2: 垂直模糊 (Vertical Blur)
@@ -241,8 +238,9 @@ ResultPayload<Texture> GaussianBlurFilter::processFrame(const Texture& inputText
     glUniform1f(m_texelHeightOffsetHandle, 1.0f / inputTexture.height);
     // blurSize 保持不变
     glUniform1f(m_blurSizeHandle, blurSize);
-
-
+    auto cmdBuffer2 = m_renderDevice->createCommandBuffer();
+    cmdBuffer2->bindVertexArray(m_quadVao.get());
+    cmdBuffer2->draw(4);
 
 
     // 释放临时 FBO，归还到池中
@@ -507,18 +505,18 @@ void NightVisionFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outpu
         m_device->submit(cmd.get());
 
     } else {
-        // Fallback to purely raw GL if no device was injected
+        // Fallback: m_device not injected, use m_renderDevice (always set by FilterEngine)
         outputFb->bind();
         GLStateManager::getInstance().useProgram(m_programId);
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
         GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
         GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, inputTexture.id);
-    auto cmdBuffer = m_renderDevice->createCommandBuffer();
         glUniform1i(m_inputImageTextureHandle, 0);
-        static const GLfloat squareVertices[] = {-1.0f, -1.0f, 1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f};
-        static const GLfloat textureVertices[] = {0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f};
-
+        auto cmdBuffer = m_renderDevice->createCommandBuffer();
+        cmdBuffer->bindVertexArray(m_quadVao.get());
+        cmdBuffer->draw(4);
+        outputFb->unbind();
     }
 }
 
@@ -538,107 +536,285 @@ void main() {
 )";
 }
 
-#ifdef __ANDROID__
-// --- 高性能 Compute Shader 计算模糊 (ComputeBlurFilter) ---
+// --- LUT3DFilter Implementation ---
 
-ComputeBlurFilter::ComputeBlurFilter() : m_computeProgramId(0) {
-    m_parameters["blurSize"] = 2.0f; // 默认模糊半径
+LUT3DFilter::LUT3DFilter() {
+    m_parameters["intensity"] = 1.0f;
 }
 
-ComputeBlurFilter::~ComputeBlurFilter() {
-    if (m_computeProgramId != 0) {
-        glDeleteProgram(m_computeProgramId);
+LUT3DFilter::~LUT3DFilter() {
+    if (m_lut3dTexture != 0) {
+        glDeleteTextures(1, &m_lut3dTexture);
+        m_lut3dTexture = 0;
     }
 }
 
-Result ComputeBlurFilter::initialize() {
-    // 1. 编译 Compute Shader
-    std::string csStr = "";
-    if (m_shaderManager) {
-        csStr = m_shaderManager->getShaderSource(getComputeShaderName());
-    }
-    const char* csSrc = csStr.c_str();
-    GLuint computeShader = glCreateShader(GL_COMPUTE_SHADER);
-    glShaderSource(computeShader, 1, &csSrc, NULL);
-    glCompileShader(computeShader);
+Result LUT3DFilter::initialize() {
+    Result base = Filter::initialize();
+    if (!base.isOk()) return base;
 
-    GLint compiled = 0;
-    glGetShaderiv(computeShader, GL_COMPILE_STATUS, &compiled);
-    if (!compiled) {
-        std::string infoLogStr = "";
-        GLint infoLen = 0;
-        glGetShaderiv(computeShader, GL_INFO_LOG_LENGTH, &infoLen);
-        if (infoLen > 1) {
-            char* infoLog = new char[infoLen];
-            glGetShaderInfoLog(computeShader, infoLen, NULL, infoLog);
-            infoLogStr = infoLog;
-            delete[] infoLog;
-        }
-        glDeleteShader(computeShader);
-        return Result::error(ErrorCode::ERR_INIT_SHADER_FAILED, "Error compiling compute shader: " + infoLogStr);
-    }
+    glGenTextures(1, &m_lut3dTexture);
+    glBindTexture(GL_TEXTURE_3D, m_lut3dTexture);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
-    // 2. 链接 Program
-    m_computeProgramId = glCreateProgram();
-    glAttachShader(m_computeProgramId, computeShader);
-    glLinkProgram(m_computeProgramId);
-
-    GLint linked = 0;
-    glGetProgramiv(m_computeProgramId, GL_LINK_STATUS, &linked);
-    if (!linked) {
-        glDeleteProgram(m_computeProgramId);
-        m_computeProgramId = 0;
-        glDeleteShader(computeShader);
-        return Result::error(ErrorCode::ERR_INIT_SHADER_FAILED, "Error linking compute program");
-    }
-
-    glDeleteShader(computeShader);
-
-    m_blurSizeHandle = glGetUniformLocation(m_computeProgramId, "blurSize");
+    std::vector<uint8_t> identity(LUT_SIZE * LUT_SIZE * LUT_SIZE * 3);
+    for (int b = 0; b < LUT_SIZE; b++)
+        for (int g = 0; g < LUT_SIZE; g++)
+            for (int r = 0; r < LUT_SIZE; r++) {
+                int idx = (b * LUT_SIZE * LUT_SIZE + g * LUT_SIZE + r) * 3;
+                identity[idx + 0] = static_cast<uint8_t>(r * 255 / (LUT_SIZE - 1));
+                identity[idx + 1] = static_cast<uint8_t>(g * 255 / (LUT_SIZE - 1));
+                identity[idx + 2] = static_cast<uint8_t>(b * 255 / (LUT_SIZE - 1));
+            }
+    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB8, LUT_SIZE, LUT_SIZE, LUT_SIZE,
+                 0, GL_RGB, GL_UNSIGNED_BYTE, identity.data());
+    glBindTexture(GL_TEXTURE_3D, 0);
     return Result::ok();
 }
 
-ResultPayload<Texture> ComputeBlurFilter::processFrame(const Texture& inputTexture, FrameBufferPtr outputFb) {
-    if (m_computeProgramId == 0) {
-        return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "ComputeBlurFilter program not initialized");
+void LUT3DFilter::onProgramRecompiled() {
+    m_lut3dHandle     = glGetUniformLocation(m_programId, "lut3d");
+    m_intensityHandle = glGetUniformLocation(m_programId, "uIntensity");
+}
+
+void LUT3DFilter::setLUT(const uint8_t* rgbData, int size) {
+    const int expected = LUT_SIZE * LUT_SIZE * LUT_SIZE * 3;
+    if (!rgbData || size < expected) return;
+    glBindTexture(GL_TEXTURE_3D, m_lut3dTexture);
+    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB8, LUT_SIZE, LUT_SIZE, LUT_SIZE,
+                 0, GL_RGB, GL_UNSIGNED_BYTE, rgbData);
+    glBindTexture(GL_TEXTURE_3D, 0);
+}
+
+void LUT3DFilter::setIntensity(float intensity) {
+    m_intensity = std::max(0.0f, std::min(1.0f, intensity));
+    m_parameters["intensity"] = m_intensity;
+}
+
+void LUT3DFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_3D, m_lut3dTexture);
+    glUniform1i(m_lut3dHandle, 1);
+    glUniform1f(m_intensityHandle, m_intensity);
+}
+
+std::string LUT3DFilter::getFragmentShaderSource() const {
+    return R"(#version 300 es
+precision mediump float;
+in vec2 vTextureCoord;
+out vec4 fragColor;
+uniform sampler2D  sTexture;
+uniform highp sampler3D lut3d;
+uniform float      uIntensity;
+void main() {
+    vec4 src = texture(sTexture, vTextureCoord);
+    float scale  = 63.0 / 64.0;
+    float offset = 0.5  / 64.0;
+    vec3 lutCoord = src.rgb * scale + offset;
+    vec3 graded = texture(lut3d, lutCoord).rgb;
+    fragColor = vec4(mix(src.rgb, graded, uIntensity), src.a);
+}
+)";
+}
+
+#ifdef __ANDROID__
+// ---------------------------------------------------------------------------
+// ComputeBlurFilter — 两阶段可分离高斯模糊 (Separable Gaussian, GLES 3.1)
+//
+// Pass 1 (H): inputTexture  → m_tempTexId  (水平卷积, local_size_x=64)
+// Pass 2 (V): m_tempTexId   → outputFb     (垂直卷积, local_size_y=64)
+//
+// 相较原 O(r²) 盒式模糊：
+//   - 每像素 imageLoad 次数从 (2r+1)² 降至 2*(2r+1)
+//   - shared memory tile 消除重复全局显存读取
+//   - r=15, 1080p 时显存带宽节省约 16×
+// ---------------------------------------------------------------------------
+
+ComputeBlurFilter::ComputeBlurFilter() {
+    m_parameters["blurSize"] = 2.0f;
+}
+
+ComputeBlurFilter::~ComputeBlurFilter() {
+    if (m_computeProgramH != 0) glDeleteProgram(m_computeProgramH);
+    if (m_computeProgramV != 0) glDeleteProgram(m_computeProgramV);
+    if (m_tempTexId       != 0) glDeleteTextures(1, &m_tempTexId);
+}
+
+// ---------------------------------------------------------------------------
+// Helper: compile + link one compute shader from ShaderManager
+// ---------------------------------------------------------------------------
+Result ComputeBlurFilter::compileComputeProgram(const std::string& shaderName, GLuint& outProgId) {
+    std::string src;
+    if (m_shaderManager) {
+        src = m_shaderManager->getShaderSource(shaderName);
+    }
+    if (src.empty()) {
+        return Result::error(ErrorCode::ERR_INIT_SHADER_FAILED,
+            "compute shader source empty: " + shaderName);
     }
 
+    const char* csSrc = src.c_str();
+    GLuint shader = glCreateShader(GL_COMPUTE_SHADER);
+    glShaderSource(shader, 1, &csSrc, nullptr);
+    glCompileShader(shader);
+
+    GLint compiled = 0;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
+    if (!compiled) {
+        GLint len = 0;
+        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &len);
+        std::string log(len > 1 ? len : 1, '\0');
+        if (len > 1) glGetShaderInfoLog(shader, len, nullptr, &log[0]);
+        glDeleteShader(shader);
+        return Result::error(ErrorCode::ERR_INIT_SHADER_FAILED,
+            "compile " + shaderName + ": " + log);
+    }
+
+    GLuint prog = glCreateProgram();
+    glAttachShader(prog, shader);
+    glLinkProgram(prog);
+
+    GLint linked = 0;
+    glGetProgramiv(prog, GL_LINK_STATUS, &linked);
+    glDeleteShader(shader);
+    if (!linked) {
+        glDeleteProgram(prog);
+        return Result::error(ErrorCode::ERR_INIT_SHADER_FAILED,
+            "link " + shaderName + " failed");
+    }
+
+    outProgId = prog;
+    return Result::ok();
+}
+
+// ---------------------------------------------------------------------------
+// Helper: normalised Gaussian weights for radius (σ = radius/2)
+// ---------------------------------------------------------------------------
+void ComputeBlurFilter::recomputeWeights(int radius) {
+    if (radius == m_lastRadius) return;
+    m_lastRadius = radius;
+
+    float sigma = std::max(radius / 2.0f, 0.5f);
+    float sum   = 0.0f;
+    for (int i = 0; i <= radius; i++) {
+        m_weights[i] = std::exp(-0.5f * i * i / (sigma * sigma));
+        sum += (i == 0) ? m_weights[i] : 2.0f * m_weights[i];
+    }
+    for (int i = 0; i <= radius; i++) m_weights[i] /= sum;
+}
+
+// ---------------------------------------------------------------------------
+// Helper: create (or resize) temp texture used as H-pass output
+// ---------------------------------------------------------------------------
+void ComputeBlurFilter::ensureTempTexture(int width, int height) {
+    if (m_tempTexId != 0 && m_tempTexWidth == width && m_tempTexHeight == height) return;
+
+    if (m_tempTexId != 0) glDeleteTextures(1, &m_tempTexId);
+
+    glGenTextures(1, &m_tempTexId);
+    glBindTexture(GL_TEXTURE_2D, m_tempTexId);
+    glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, width, height);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    m_tempTexWidth  = width;
+    m_tempTexHeight = height;
+}
+
+// ---------------------------------------------------------------------------
+// initialize(): compile H and V programs, cache uniform locations
+// ---------------------------------------------------------------------------
+Result ComputeBlurFilter::initialize() {
+    Result res = compileComputeProgram(getComputeShaderNameH(), m_computeProgramH);
+    if (!res.isOk()) return res;
+
+    res = compileComputeProgram(getComputeShaderNameV(), m_computeProgramV);
+    if (!res.isOk()) return res;
+
+    m_radiusHandleH  = glGetUniformLocation(m_computeProgramH, "u_radius");
+    m_weightsHandleH = glGetUniformLocation(m_computeProgramH, "u_weights");
+    m_radiusHandleV  = glGetUniformLocation(m_computeProgramV, "u_radius");
+    m_weightsHandleV = glGetUniformLocation(m_computeProgramV, "u_weights");
+
+    return Result::ok();
+}
+
+// ---------------------------------------------------------------------------
+// processFrame(): H dispatch → barrier → V dispatch → barrier
+// ---------------------------------------------------------------------------
+ResultPayload<Texture> ComputeBlurFilter::processFrame(const Texture& inputTexture,
+                                                        FrameBufferPtr outputFb) {
+    if (m_computeProgramH == 0 || m_computeProgramV == 0) {
+        return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE,
+            "ComputeBlurFilter: programs not initialized");
+    }
     if (!outputFb) {
-        return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Output framebuffer is null in ComputeBlurFilter");
+        return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE,
+            "ComputeBlurFilter: null outputFb");
     }
 
-    // 我们不需要调用 FBO 的 bind() 来画三角形。
-    // Compute Shader 直接对着内存中的 Texture 进行读写（Image Store）。
-    GLStateManager::getInstance().useProgram(m_computeProgramId);
+    const int W = inputTexture.width;
+    const int H = inputTexture.height;
 
-    // 绑定输入纹理作为只读的 image2D (绑定在单元 0)
-    glBindImageTexture(0, inputTexture.id, 0, GL_FALSE, 0, GL_READ_ONLY, GL_RGBA8);
-
-    // 绑定输出 FBO 的纹理作为只写的 image2D (绑定在单元 1)
-    glBindImageTexture(1, outputFb->getTexture().id, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA8);
-
+    // Radius from blurSize parameter (clamped to MAX_RADIUS)
     float blurSize = 2.0f;
     if (m_parameters.count("blurSize")) {
-        try { blurSize = std::any_cast<float>(m_parameters.at("blurSize")); } catch (const std::bad_any_cast& e) { std::cerr << "Parameter type cast error: " << e.what() << std::endl; }
+        try { blurSize = std::any_cast<float>(m_parameters.at("blurSize")); }
+        catch (const std::bad_any_cast&) {}
     }
-    glUniform1f(m_blurSizeHandle, blurSize);
+    int radius = std::min(static_cast<int>(blurSize), MAX_RADIUS);
+    radius = std::max(radius, 1);
 
-    // 分发计算任务 (Dispatch)
-    // 假设我们在 Shader 中定义了 local_size_x = 16, local_size_y = 16
-    // 我们需要启动 (width/16) * (height/16) 个工作组 (Work Groups)
-    GLuint numGroupsX = (inputTexture.width + 15) / 16;
-    GLuint numGroupsY = (inputTexture.height + 15) / 16;
+    recomputeWeights(radius);
+    ensureTempTexture(W, H);
 
-    glDispatchCompute(numGroupsX, numGroupsY, 1);
+    // ----------------------------------------------------------------
+    // Pass 1: Horizontal  —  inputTexture → m_tempTexId
+    // ----------------------------------------------------------------
+    GLStateManager::getInstance().useProgram(m_computeProgramH);
 
-    // 设置内存屏障，确保在下次被当作纹理采样前，Compute Shader 的写入已经完全落盘到显存
+    glBindImageTexture(0, inputTexture.id, 0, GL_FALSE, 0, GL_READ_ONLY,  GL_RGBA8);
+    glBindImageTexture(1, m_tempTexId,     0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA8);
+
+    glUniform1i(m_radiusHandleH, radius);
+    glUniform1fv(m_weightsHandleH, radius + 1, m_weights);
+
+    // H pass: one workgroup per 64-pixel row segment
+    GLuint groupsX = (static_cast<GLuint>(W) + 63u) / 64u;
+    GLuint groupsY = static_cast<GLuint>(H);
+    glDispatchCompute(groupsX, groupsY, 1);
+
+    // Ensure H-pass writes are visible to V-pass reads
+    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+
+    // ----------------------------------------------------------------
+    // Pass 2: Vertical  —  m_tempTexId → outputFb texture
+    // ----------------------------------------------------------------
+    GLStateManager::getInstance().useProgram(m_computeProgramV);
+
+    glBindImageTexture(0, m_tempTexId,              0, GL_FALSE, 0, GL_READ_ONLY,  GL_RGBA8);
+    glBindImageTexture(1, outputFb->getTexture().id, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA8);
+
+    glUniform1i(m_radiusHandleV, radius);
+    glUniform1fv(m_weightsHandleV, radius + 1, m_weights);
+
+    // V pass: one workgroup per 64-pixel column segment
+    GLuint groupsX2 = static_cast<GLuint>(W);
+    GLuint groupsY2 = (static_cast<GLuint>(H) + 63u) / 64u;
+    glDispatchCompute(groupsX2, groupsY2, 1);
+
     glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
     return ResultPayload<Texture>::ok(outputFb->getTexture());
 }
 
-void ComputeBlurFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {
-    // 留空，重载 processFrame 直接使用 Compute
+void ComputeBlurFilter::onDraw(const Texture& /*inputTexture*/, FrameBufferPtr /*outputFb*/) {
+    // Not used: processFrame overrides the full pipeline
 }
 
 #endif

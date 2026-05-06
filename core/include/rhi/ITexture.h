@@ -11,9 +11,18 @@ enum class TextureUsage {
     Storage = 1 << 2
 };
 
+enum class TextureFormat {
+    RGBA8,      // GL_RGBA / GL_UNSIGNED_BYTE  (default)
+    RGBA16F,    // GL_RGBA / GL_HALF_FLOAT     (HDR rendering)
+    RG16F,      // GL_RG   / GL_HALF_FLOAT     (normal maps, motion vectors)
+    Depth24,    // GL_DEPTH_COMPONENT / GL_UNSIGNED_INT (depth attachment)
+    RGB8        // GL_RGB  / GL_UNSIGNED_BYTE  (no alpha, legacy compat)
+};
+
 struct TextureDesc {
     uint32_t width = 0;
     uint32_t height = 0;
+    TextureFormat format = TextureFormat::RGBA8;
     uint32_t usageFlags = static_cast<uint32_t>(TextureUsage::Sampled);
 };
 

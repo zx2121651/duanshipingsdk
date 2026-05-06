@@ -3,6 +3,12 @@ project("video-sdk-core")
 
 set(CMAKE_CXX_STANDARD 17)
 
+# MSVC: treat all source files as UTF-8 to avoid C4819 / parse failures
+# caused by Chinese comments in headers (GLStateManager.h etc.)
+if(MSVC)
+    add_compile_options(/utf-8)
+endif()
+
 # --- GLES / Mock GL Strategy ---
 # By default, we try to find a real GLESv2 implementation.
 # If not found (e.g., in pure Linux CI or non-vcpkg Windows), we fallback to mock_gl.
@@ -35,6 +41,97 @@ endif()
 
 include_directories(${CMAKE_SOURCE_DIR}/core/include)
 
+# ---------------------------------------------------------------------------
+# FFmpeg 软解支持（可选）
+# 若系统中存在 libavcodec，则编译 FFmpegVideoDecoder 并定义 HAS_FFMPEG_DECODER。
+# Android 侧通过 android/src/main/cpp/CMakeLists.txt 的显式路径配置。
+# ---------------------------------------------------------------------------
+option(WITH_FFMPEG "Enable FFmpeg software decoder" OFF)
+
+# ---------------------------------------------------------------------------
+# TensorFlow Lite 推理引擎（可选）
+# 用于 AI 美颜/人像分割。Android 侧通过 TFLITE_PREBUILT_DIR 传入预编译库。
+# ---------------------------------------------------------------------------
+option(WITH_TFLITE  "Enable TensorFlow Lite inference engine" OFF)
+option(WITH_VULKAN  "Enable Vulkan RHI backend (Android NDK / desktop Vulkan SDK)" OFF)
+option(WITH_METAL   "Enable Metal RHI backend (iOS / macOS only)" OFF)
+
+# ---------------------------------------------------------------------------
+# Vulkan 后端检测
+# ---------------------------------------------------------------------------
+if(WITH_VULKAN)
+    if(ANDROID)
+        # Android NDK 自带 Vulkan 头文件，无需 find_package
+        set(HAS_VULKAN ON)
+        message(STATUS "Vulkan: Android NDK built-in")
+    else()
+        find_package(Vulkan QUIET)
+        if(Vulkan_FOUND)
+            set(HAS_VULKAN ON)
+            message(STATUS "Vulkan found: ${Vulkan_LIBRARIES}")
+        else()
+            message(STATUS "Vulkan NOT found — VulkanRenderDevice will be excluded")
+        endif()
+    endif()
+endif()
+
+# ---------------------------------------------------------------------------
+# Metal 后端检测（仅 Apple 平台）
+# ---------------------------------------------------------------------------
+if(WITH_METAL AND APPLE)
+    set(HAS_METAL ON)
+    message(STATUS "Metal: enabled (Apple platform)")
+elseif(WITH_METAL)
+    message(STATUS "Metal: skipped (non-Apple platform)")
+endif()
+
+# ---------------------------------------------------------------------------
+# SPIR-V 编译函数（需要 glslangValidator 在 PATH 中）
+# ---------------------------------------------------------------------------
+function(compile_spirv TARGET SHADER_FILE)
+    get_filename_component(BASE ${SHADER_FILE} NAME_WE)
+    get_filename_component(EXT  ${SHADER_FILE} EXT)
+    string(REPLACE "." "_" STAGE_ID "${EXT}")
+    set(OUTPUT_FILE "${CMAKE_BINARY_DIR}/spirv/${BASE}${STAGE_ID}.spv")
+    add_custom_command(
+        OUTPUT  ${OUTPUT_FILE}
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/spirv"
+        COMMAND glslangValidator -V -o ${OUTPUT_FILE} ${SHADER_FILE}
+        DEPENDS ${SHADER_FILE}
+        COMMENT "Compiling SPIR-V: ${SHADER_FILE}"
+    )
+    target_sources(${TARGET} PRIVATE ${OUTPUT_FILE})
+endfunction()
+
+if(WITH_TFLITE OR DEFINED TFLITE_ROOT)
+    find_path(TFLITE_INCLUDE_DIR tensorflow/lite/interpreter.h
+              HINTS ${TFLITE_ROOT}/include ENV TFLITE_ROOT)
+    find_library(TFLITE_LIB tensorflowlite
+                 HINTS ${TFLITE_ROOT}/lib ENV TFLITE_ROOT)
+    if(TFLITE_LIB AND TFLITE_INCLUDE_DIR)
+        message(STATUS "TFLite found — enabling HAS_TFLITE")
+        set(HAS_TFLITE ON)
+    else()
+        message(STATUS "TFLite NOT found — AI inference will use stub")
+    endif()
+endif()
+
+if(WITH_FFMPEG OR DEFINED FFMPEG_ROOT)
+    find_path(FFMPEG_INCLUDE_DIR libavcodec/avcodec.h
+              HINTS ${FFMPEG_ROOT}/include ENV FFMPEG_ROOT)
+    find_library(FFMPEG_AVCODEC_LIB   avcodec   HINTS ${FFMPEG_ROOT}/lib ENV FFMPEG_ROOT)
+    find_library(FFMPEG_AVFORMAT_LIB  avformat  HINTS ${FFMPEG_ROOT}/lib ENV FFMPEG_ROOT)
+    find_library(FFMPEG_AVUTIL_LIB    avutil    HINTS ${FFMPEG_ROOT}/lib ENV FFMPEG_ROOT)
+    find_library(FFMPEG_SWSCALE_LIB   swscale   HINTS ${FFMPEG_ROOT}/lib ENV FFMPEG_ROOT)
+
+    if(FFMPEG_AVCODEC_LIB AND FFMPEG_AVFORMAT_LIB AND FFMPEG_AVUTIL_LIB AND FFMPEG_SWSCALE_LIB)
+        message(STATUS "FFmpeg found — enabling HAS_FFMPEG_DECODER")
+        set(HAS_FFMPEG ON)
+    else()
+        message(STATUS "FFmpeg NOT found — SoftwareVideoDecoder will remain a stub")
+    endif()
+endif()
+
 set(CORE_SOURCES
     core/src/Filter.cpp
     core/src/Filters.cpp
@@ -52,15 +149,84 @@ set(CORE_SOURCES
     core/src/timeline/Compositor.cpp
     core/src/timeline/DecoderPool.cpp
     core/src/timeline/AudioMixer.cpp
+    core/src/timeline/AudioEffects.cpp
     core/src/rhi/GLTexture.cpp
     core/src/rhi/GLRenderDevice.cpp
     core/src/rhi/GLBuffer.cpp
     core/src/rhi/GLVertexArray.cpp
     core/src/rhi/GLShaderProgram.cpp
+    core/src/rhi/RenderDeviceFactory.cpp
+    core/src/timeline/FFmpegVideoDecoder.cpp
+    core/src/ai/TfliteInferenceEngine.cpp
+    core/src/ai/SegmentationFilter.cpp
+    core/src/ai/BeautyFilter.cpp
+    core/src/ai/FaceLandmarkDetector.cpp
+    core/src/ai/FaceReshapeFilter.cpp
+    core/src/ai/MakeupFilter.cpp
+    core/src/ai/HairSegmentationFilter.cpp
+    core/src/EffectPlugin.cpp
 )
 
 # Phase-1 Verification Target: Core engine build
 add_library(video_sdk_core STATIC ${CORE_SOURCES})
+
+# Vulkan 后端条件编译
+if(HAS_VULKAN)
+    target_compile_definitions(video_sdk_core PUBLIC HAS_VULKAN)
+    target_sources(video_sdk_core PRIVATE
+        core/src/rhi/vk/VulkanContext.cpp
+        core/src/rhi/vk/VulkanMemoryAllocator.cpp
+        core/src/rhi/vk/VulkanBuffer.cpp
+        core/src/rhi/vk/VulkanTexture.cpp
+        core/src/rhi/vk/VulkanShaderProgram.cpp
+        core/src/rhi/vk/VulkanCommandBuffer.cpp
+        core/src/rhi/vk/VulkanRenderDevice.cpp
+    )
+    if(Vulkan_FOUND)
+        target_include_directories(video_sdk_core PUBLIC ${Vulkan_INCLUDE_DIRS})
+        target_link_libraries(video_sdk_core ${Vulkan_LIBRARIES})
+    elseif(ANDROID)
+        target_link_libraries(video_sdk_core vulkan)
+    endif()
+    message(STATUS "Vulkan RHI backend: ENABLED")
+endif()
+
+# Metal 后端条件编译
+if(HAS_METAL)
+    target_compile_definitions(video_sdk_core PUBLIC HAS_METAL)
+    target_sources(video_sdk_core PRIVATE
+        core/src/rhi/mtl/MetalTexture.mm
+        core/src/rhi/mtl/MetalBuffer.mm
+        core/src/rhi/mtl/MetalShaderProgram.mm
+        core/src/rhi/mtl/MetalCommandBuffer.mm
+        core/src/rhi/mtl/MetalRenderDevice.mm
+    )
+    target_link_libraries(video_sdk_core
+        "-framework Metal"
+        "-framework MetalKit"
+        "-framework QuartzCore"
+    )
+    message(STATUS "Metal RHI backend: ENABLED")
+endif()
+
+# TFLite 条件链接
+if(HAS_TFLITE)
+    target_compile_definitions(video_sdk_core PUBLIC HAS_TFLITE)
+    target_include_directories(video_sdk_core PUBLIC ${TFLITE_INCLUDE_DIR})
+    target_link_libraries(video_sdk_core ${TFLITE_LIB})
+endif()
+
+# FFmpeg 条件链接
+if(HAS_FFMPEG)
+    target_compile_definitions(video_sdk_core PUBLIC HAS_FFMPEG_DECODER)
+    target_include_directories(video_sdk_core PUBLIC ${FFMPEG_INCLUDE_DIR})
+    target_link_libraries(video_sdk_core
+        ${FFMPEG_AVCODEC_LIB}
+        ${FFMPEG_AVFORMAT_LIB}
+        ${FFMPEG_AVUTIL_LIB}
+        ${FFMPEG_SWSCALE_LIB}
+    )
+endif()
 
 if(USE_MOCK_GL)
     target_include_directories(video_sdk_core PUBLIC ${CMAKE_SOURCE_DIR}/mock_gl)
@@ -131,3 +297,19 @@ add_test(NAME test_timeline_node_harden COMMAND test_timeline_node_harden)
 add_executable(test_exporter_logic tests/test_exporter_logic.cpp tests/mocks/MockCompositor.cpp)
 target_link_libraries(test_exporter_logic video_sdk_core)
 add_test(NAME test_exporter_logic COMMAND test_exporter_logic)
+
+add_executable(test_ffmpeg_decoder tests/test_ffmpeg_decoder.cpp)
+target_link_libraries(test_ffmpeg_decoder video_sdk_core)
+add_test(NAME test_ffmpeg_decoder COMMAND test_ffmpeg_decoder)
+
+add_executable(test_ai_inference tests/test_ai_inference.cpp)
+target_link_libraries(test_ai_inference video_sdk_core)
+add_test(NAME test_ai_inference COMMAND test_ai_inference)
+
+add_executable(test_rhi_backend tests/test_rhi_backend.cpp)
+target_link_libraries(test_rhi_backend video_sdk_core)
+add_test(NAME test_rhi_backend COMMAND test_rhi_backend)
+
+add_executable(test_douyin_compat tests/test_douyin_compat.cpp)
+target_link_libraries(test_douyin_compat video_sdk_core)
+add_test(NAME test_douyin_compat COMMAND test_douyin_compat)

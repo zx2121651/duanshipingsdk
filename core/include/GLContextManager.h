@@ -5,6 +5,13 @@
 namespace sdk {
 namespace video {
 
+/// GLES 版本梯级（对应能力 Tier）
+enum class GLESVersion {
+    GLES_30 = 30,  ///< Tier 0 — Fragment/Vertex, FBO, OES, YUV
+    GLES_31 = 31,  ///< Tier 1 — + Compute Shader, SSBO, image2D
+    GLES_32 = 32   ///< Tier 2 — + Geometry Shader, Tessellation, MSAA, ASTC core
+};
+
 /**
  * @brief 运行时 OpenGL ES 能力嗅探器 (GL Feature Sniffer)
  *
@@ -46,6 +53,28 @@ public:
     bool isMetalSupported() const { return m_supportMetal; }
 
     // ------------------------------------------------------------------------
+    // GLES 版本梯级 API（Step 1 新增）
+    // ------------------------------------------------------------------------
+
+    /// @brief 返回当前设备实际支持的 GLES 版本梯级
+    GLESVersion getGLESVersion() const { return m_glesVersion; }
+
+    /// @brief 整数版本号方便比较（30 / 31 / 32）
+    int getGLESVersionInt() const { return static_cast<int>(m_glesVersion); }
+
+    /// @brief GLES 3.2 新增：几何着色器（GL_GEOMETRY_SHADER）
+    bool isGeometryShaderSupported() const { return m_supportGeoShader; }
+
+    /// @brief GLES 3.2 新增：细分着色器（GL_TESS_CONTROL_SHADER / GL_TESS_EVALUATION_SHADER）
+    bool isTessellationSupported() const { return m_supportTessShader; }
+
+    /// @brief GLES 3.2+ 或扩展：多采样 FBO（MSAA）
+    bool isMSAASupported() const { return m_supportMSAA; }
+
+    /// @brief 设备 MSAA 最大倍率（glGetIntegerv GL_MAX_SAMPLES）
+    int getMaxMSAASamples() const { return m_maxMSAASamples; }
+
+    // ------------------------------------------------------------------------
 
 private:
     bool checkExtension(const std::string& extensionName) const;
@@ -57,6 +86,13 @@ private:
     bool m_supportASTC = false;
     bool m_supportVulkan = false;
     bool m_supportMetal = false;
+
+    // GLES 三级梯级
+    GLESVersion m_glesVersion = GLESVersion::GLES_30;
+    bool m_supportGeoShader  = false;
+    bool m_supportTessShader = false;
+    bool m_supportMSAA       = false;
+    int  m_maxMSAASamples    = 1;
 
 };
 

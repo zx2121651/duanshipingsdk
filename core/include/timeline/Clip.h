@@ -2,6 +2,7 @@
 #include <string>
 #include <memory>
 #include <map>
+#include <algorithm>
 
 namespace sdk {
 namespace video {
@@ -11,7 +12,15 @@ namespace timeline {
 enum class TransitionType {
     NONE,
     CROSSFADE,
-    WIPE_LEFT
+    WIPE_LEFT,
+    WIPE_RIGHT,
+    WIPE_UP,
+    WIPE_DOWN,
+    SLIDE_LEFT,
+    SLIDE_RIGHT,
+    ZOOM_IN,
+    FADE_BLACK,
+    FLASH
 };
 
 /**
@@ -26,7 +35,7 @@ public:
     };
 
     Clip(const std::string& id, const std::string& sourcePath, MediaType type);
-    ~Clip() = default;
+    virtual ~Clip() = default;
 
     std::string getId() const { return m_id; }
     std::string getSourcePath() const { return m_sourcePath; }
@@ -53,6 +62,10 @@ public:
     void setSpeed(float speed) { m_speed = speed; }
     float getSpeed() const { return m_speed; }
 
+    /** @brief 倒放开关。开启时 DecoderPool 将触发精确 Seek 路径（逐帧反向取帧）。 */
+    void setReversed(bool reversed) { m_isReversed = reversed; }
+    bool isReversed() const { return m_isReversed; }
+
     // 空间变换
     void setTransform(float scale, float rotation, float transX, float transY);
 
@@ -60,16 +73,32 @@ public:
     void setInTransition(TransitionType type, int64_t durationNs) {
         m_inTransitionType = type;
         m_inTransitionDurationNs = durationNs;
+        // 同步到注册表 key，方便 Compositor 统一查询
+        m_inTransitionName = transitionTypeName(type);
+    }
+    // 设置来自 TransitionRegistry 的自定义转场（扩展接口）
+    void setInTransitionByName(const std::string& name, int64_t durationNs) {
+        m_inTransitionType = TransitionType::NONE; // 标记为自定义
+        m_inTransitionName = name;
+        m_inTransitionDurationNs = durationNs;
     }
     TransitionType getInTransitionType() const { return m_inTransitionType; }
+    const std::string& getInTransitionName() const { return m_inTransitionName; }
     int64_t getInTransitionDurationNs() const { return m_inTransitionDurationNs; }
 
     // 此 Clip 结束时，与下一层画面的融合方式
     void setOutTransition(TransitionType type, int64_t durationNs) {
         m_outTransitionType = type;
         m_outTransitionDurationNs = durationNs;
+        m_outTransitionName = transitionTypeName(type);
+    }
+    void setOutTransitionByName(const std::string& name, int64_t durationNs) {
+        m_outTransitionType = TransitionType::NONE;
+        m_outTransitionName = name;
+        m_outTransitionDurationNs = durationNs;
     }
     TransitionType getOutTransitionType() const { return m_outTransitionType; }
+    const std::string& getOutTransitionName() const { return m_outTransitionName; }
     int64_t getOutTransitionDurationNs() const { return m_outTransitionDurationNs; }
 
     // 关键帧控制
@@ -86,6 +115,30 @@ public:
 
     void setVolume(float volume) { m_volume = volume; } // Fallback static volume
 
+    // 音调变换（变声）：以半音为单位，0=不变，+12=升一个八度，-12=降一个八度
+    void  setPitchShift(float semitones) { m_pitchShiftSemitones = semitones; }
+    float getPitchShift() const          { return m_pitchShiftSemitones; }
+
+    // 音量淡入：从静音线性升到当前 volume，自动写入 "volume" 关键帧
+    void setFadeIn(int64_t durationNs) {
+        m_fadeInNs = durationNs;
+        addKeyframe("volume", 0,           0.0f);
+        addKeyframe("volume", durationNs,  m_volume);
+    }
+    // 音量淡出：相对 clip 起点的偏移时间由调用方传入（= clip_timeline_duration - fadeDuration）
+    // 调用示例：setFadeOut(clipTimelineDuration - fadeDurationNs, fadeDurationNs)
+    void setFadeOut(int64_t startRelNs, int64_t durationNs) {
+        m_fadeOutNs = durationNs;
+        addKeyframe("volume", startRelNs,              m_volume);
+        addKeyframe("volume", startRelNs + durationNs, 0.0f);
+    }
+    int64_t getFadeInDuration()  const { return m_fadeInNs; }
+    int64_t getFadeOutDuration() const { return m_fadeOutNs; }
+
+    // 降噪强度 [0, 1]：0=关闭，1=最强（Wiener Filter 调参因子）
+    void  setNoiseReduction(float strength) { m_noiseReductionStrength = std::max(0.0f, std::min(1.0f, strength)); }
+    float getNoiseReduction() const         { return m_noiseReductionStrength; }
+
 private:
     std::string m_id;
     std::string m_sourcePath;
@@ -98,6 +151,11 @@ private:
 
     float m_speed = 1.0f;
     float m_volume = 1.0f;
+    bool  m_isReversed = false;
+    float m_pitchShiftSemitones    = 0.0f;
+    float m_noiseReductionStrength = 0.0f;
+    int64_t m_fadeInNs  = 0;
+    int64_t m_fadeOutNs = 0;
 
     float m_scale = 1.0f;
     float m_rotation = 0.0f;
@@ -105,10 +163,29 @@ private:
     float m_transY = 0.0f;
 
     TransitionType m_inTransitionType = TransitionType::NONE;
-    int64_t m_inTransitionDurationNs = 0;
+    std::string    m_inTransitionName;          // TransitionRegistry key
+    int64_t        m_inTransitionDurationNs = 0;
 
     TransitionType m_outTransitionType = TransitionType::NONE;
-    int64_t m_outTransitionDurationNs = 0;
+    std::string    m_outTransitionName;         // TransitionRegistry key
+    int64_t        m_outTransitionDurationNs = 0;
+
+    // 将 enum 映射到注册表 key（向后兼容）
+    static std::string transitionTypeName(TransitionType t) {
+        switch (t) {
+            case TransitionType::CROSSFADE:   return "crossfade";
+            case TransitionType::WIPE_LEFT:   return "wipe_left";
+            case TransitionType::WIPE_RIGHT:  return "wipe_right";
+            case TransitionType::WIPE_UP:     return "wipe_up";
+            case TransitionType::WIPE_DOWN:   return "wipe_down";
+            case TransitionType::SLIDE_LEFT:  return "slide_left";
+            case TransitionType::SLIDE_RIGHT: return "slide_right";
+            case TransitionType::ZOOM_IN:     return "zoom_in";
+            case TransitionType::FADE_BLACK:  return "fade_black";
+            case TransitionType::FLASH:       return "flash";
+            default:                          return "";
+        }
+    }
 
     // 数据结构：属性名 -> (相对时间戳 -> 参数值)
     // std::map 自带按 Key (时间戳) 排序的特性，极大方便插值查找

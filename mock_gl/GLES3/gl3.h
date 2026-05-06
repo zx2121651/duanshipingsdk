@@ -94,6 +94,9 @@ inline void glActiveTexture(GLenum) {}
 inline void glBindTexture(GLenum, GLuint) {}
 inline void glUniform1f(GLint, GLfloat) {}
 inline void glUniform1i(GLint, GLint) {}
+inline void glUniform2fv(GLint, GLsizei, const GLfloat*) {}
+inline void glUniform3fv(GLint, GLsizei, const GLfloat*) {}
+inline void glUniform4fv(GLint, GLsizei, const GLfloat*) {}
 inline void glUniformMatrix4fv(GLint, GLsizei, GLboolean, const GLfloat*) {}
 inline void glVertexAttribPointer(GLuint, GLint, GLenum, GLboolean, GLsizei, const void*) {}
 inline void glEnableVertexAttribArray(GLuint) {}
@@ -143,6 +146,9 @@ inline void glClear(GLuint) {}
 #ifndef GL_UNSIGNED_SHORT
 #define GL_UNSIGNED_SHORT 0x1403
 #endif
+#ifndef GL_UNSIGNED_INT
+#define GL_UNSIGNED_INT 0x1405
+#endif
 #ifndef GL_UNIFORM_BUFFER
 #define GL_UNIFORM_BUFFER 0x8A11
 #endif
@@ -169,8 +175,165 @@ inline void glClear(GLuint) {}
 #endif
 #ifndef GL_UNSIGNED_BYTE
 #define GL_UNSIGNED_BYTE 0x1401
+#endif
+#ifndef GL_INVALID_INDEX
 #define GL_INVALID_INDEX 0xFFFFFFFFu
 #endif
+
+// --- Texture format constants missing from base mock ---
+#ifndef GL_R8
+#define GL_R8      0x8229
+#endif
+#ifndef GL_RED
+#define GL_RED     0x1903
+#endif
+#ifndef GL_RG8
+#define GL_RG8     0x822B
+#endif
+#ifndef GL_RG
+#define GL_RG      0x8227
+#endif
+#ifndef GL_RG16F
+#define GL_RG16F   0x822F
+#endif
+#ifndef GL_RGB8
+#define GL_RGB8    0x8051
+#endif
+#ifndef GL_DEPTH_COMPONENT
+#define GL_DEPTH_COMPONENT   0x1902
+#endif
+#ifndef GL_DEPTH_COMPONENT24
+#define GL_DEPTH_COMPONENT24 0x81A6
+#endif
+
+// --- Blend / state constants ---
+#ifndef GL_BLEND
+#define GL_BLEND         0x0BE2
+#endif
+#ifndef GL_CULL_FACE
+#define GL_CULL_FACE     0x0B44
+#endif
+#ifndef GL_DEPTH_TEST
+#define GL_DEPTH_TEST    0x0B71
+#endif
+#ifndef GL_SRC_ALPHA
+#define GL_SRC_ALPHA           0x0302
+#endif
+#ifndef GL_ONE_MINUS_SRC_ALPHA
+#define GL_ONE_MINUS_SRC_ALPHA 0x0303
+#endif
+#ifndef GL_SRC_COLOR
+#define GL_SRC_COLOR           0x0300
+#endif
+#ifndef GL_ONE_MINUS_SRC_COLOR
+#define GL_ONE_MINUS_SRC_COLOR 0x0301
+#endif
+#ifndef GL_DST_COLOR
+#define GL_DST_COLOR           0x0306
+#endif
+#ifndef GL_ONE_MINUS_DST_COLOR
+#define GL_ONE_MINUS_DST_COLOR 0x0307
+#endif
+#ifndef GL_DST_ALPHA
+#define GL_DST_ALPHA           0x0304
+#endif
+#ifndef GL_ONE_MINUS_DST_ALPHA
+#define GL_ONE_MINUS_DST_ALPHA 0x0305
+#endif
+#ifndef GL_CONSTANT_ALPHA
+#define GL_CONSTANT_ALPHA           0x8003
+#endif
+#ifndef GL_ONE_MINUS_CONSTANT_ALPHA
+#define GL_ONE_MINUS_CONSTANT_ALPHA 0x8004
+#endif
+#ifndef GL_CONSTANT_COLOR
+#define GL_CONSTANT_COLOR           0x8001
+#endif
+#ifndef GL_ONE_MINUS_CONSTANT_COLOR
+#define GL_ONE_MINUS_CONSTANT_COLOR 0x8002
+#endif
+#ifndef GL_SRC_ALPHA_SATURATE
+#define GL_SRC_ALPHA_SATURATE  0x0308
+#endif
+#ifndef GL_ONE
+#define GL_ONE  1
+#endif
+#ifndef GL_ZERO
+#define GL_ZERO 0
+#endif
+#ifndef GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS
+#define GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS 0x90EB
+#endif
+#ifndef GL_BACK
+#define GL_BACK  0x0405
+#endif
+#ifndef GL_FRONT
+#define GL_FRONT 0x0404
+#endif
+
+// --- Additional GL function stubs ---
+#ifndef GL_MOCK_EXTENDED
+#define GL_MOCK_EXTENDED
+
+#ifndef GLbitfield
+typedef unsigned int GLbitfield;
+#endif
+
+inline void  glFlush() {}
+inline void  glUniform2f(GLint, GLfloat, GLfloat) {}
+inline void  glUniform4f(GLint, GLfloat, GLfloat, GLfloat, GLfloat) {}
+inline void  glUniform3f(GLint, GLfloat, GLfloat, GLfloat) {}
+inline void  glUniform2i(GLint, GLint, GLint) {}
+inline void  glBlendFunc(GLenum, GLenum) {}
+inline void  glBlendFuncSeparate(GLenum, GLenum, GLenum, GLenum) {}
+inline void  glDepthMask(GLboolean) {}
+inline void  glCullFace(GLenum) {}
+inline void  glColorMask(GLboolean, GLboolean, GLboolean, GLboolean) {}
+inline void  glScissor(GLint, GLint, GLsizei, GLsizei) {}
+inline GLenum glGetError() { return 0; }
+inline void  glDetachShader(GLuint, GLuint) {}
+inline void* glMapBufferRange(GLenum, GLintptr, GLsizeiptr, GLbitfield) { return nullptr; }
+inline GLboolean glUnmapBuffer(GLenum) { return GL_TRUE; }
+
+// --- 3D Texture support (GLES 3.0) ---
+#ifndef GL_TEXTURE_3D
+#define GL_TEXTURE_3D 0x806F
+#endif
+#ifndef GL_TEXTURE_WRAP_R
+#define GL_TEXTURE_WRAP_R 0x8072
+#endif
+inline void glTexImage3D(GLenum, GLint, GLint, GLsizei, GLsizei, GLsizei, GLint, GLenum, GLenum, const void*) {}
+inline void glTexSubImage3D(GLenum, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLsizei, GLenum, GLenum, const void*) {}
+inline void glTexSubImage2D(GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, const void*) {}
+inline void glReadPixels(GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void*) {}
+inline void glPixelStorei(GLenum, GLint) {}
+#ifndef GL_UNPACK_ROW_LENGTH
+#define GL_UNPACK_ROW_LENGTH 0x0CF2
+#endif
+#ifndef GL_TEXTURE2
+#define GL_TEXTURE2 0x84C2
+#endif
+#ifndef GL_MAX_SAMPLES
+#define GL_MAX_SAMPLES 0x8D57
+#endif
+// GLES 3.2 shader stages
+#ifndef GL_GEOMETRY_SHADER
+#define GL_GEOMETRY_SHADER          0x8DD9
+#endif
+#ifndef GL_TESS_CONTROL_SHADER
+#define GL_TESS_CONTROL_SHADER      0x8E88
+#endif
+#ifndef GL_TESS_EVALUATION_SHADER
+#define GL_TESS_EVALUATION_SHADER   0x8E87
+#endif
+// GLES 3.2 multisample texture
+#ifndef GL_TEXTURE_2D_MULTISAMPLE
+#define GL_TEXTURE_2D_MULTISAMPLE   0x9100
+#endif
+inline void glTexStorage2DMultisample(GLenum, GLsizei, GLenum, GLsizei, GLsizei, GLboolean) {}
+inline void glRenderbufferStorageMultisample(GLenum, GLsizei, GLenum, GLsizei, GLsizei) {}
+
+#endif // GL_MOCK_EXTENDED
 
 #ifdef __cplusplus
 extern "C" {

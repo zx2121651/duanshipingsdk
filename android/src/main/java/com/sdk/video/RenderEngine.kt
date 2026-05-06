@@ -20,6 +20,7 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
         const val FILTER_TYPE_LOOKUP = 2
         const val FILTER_TYPE_BILATERAL = 3 // Skin Smoothing
         const val FILTER_TYPE_NIGHT_VISION = 6
+        const val FILTER_TYPE_LUT3D = 7        // P1-2: 64x64x64 3D LUT
     }
 
     private var nativeHandle: Long = 0
@@ -317,6 +318,234 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
         }
     }
 
+    /**
+     * P1-6: Call from the GL thread immediately after the EGL context is reported lost
+     * (e.g. EGL_CONTEXT_LOST from eglMakeCurrent). Clears all CPU-side GL state.
+     */
+    fun onContextLost() {
+        handleLock.read {
+            if (nativeHandle != 0L) nativeOnContextLost(nativeHandle)
+        }
+    }
+
+    /**
+     * P1-6: Call from the GL thread once a new EGL context has been made current.
+     * Re-initializes shaders and FBOs on the new context.
+     * @return 0 on success, negative error code on failure.
+     */
+    fun onContextRestored(): Int {
+        handleLock.read {
+            return if (nativeHandle != 0L) nativeOnContextRestored(nativeHandle) else
+                -1
+        }
+    }
+
+    /**
+     * P2-13: 启用动态分辨率缩放（DSR）。
+     *
+     * 当平均帧时间超过目标 10% 时自动降低渲染分辨率，帧时间恢复后缓慢回升。
+     * 配置在下一次 [TimelineExporter.exportAsync] 调用时生效。
+     *
+     * @param targetFps  目标帧率（Hz），超过则低降分辨率
+     * @param minScale   允许的最低分辨率倉率（默认 0.5 = 50%）
+     * @param maxScale   允许的最高分辨率倉率（默认 1.0 = 原始分辨率）
+     */
+    fun setDsrConfig(targetFps: Float, minScale: Float = 0.5f, maxScale: Float = 1.0f) {
+        handleLock.read {
+            if (nativeHandle != 0L) nativeSetDsrConfig(nativeHandle, targetFps, minScale, maxScale)
+        }
+    }
+
+    /**
+     * P2-14: Android ComponentCallbacks2.onTrimMemory 钩子。
+     *
+     * 根据 [level] 分 5 档收缩 GPU FBO 缓存占用：
+     * - >= 80 (TRIM_MEMORY_COMPLETE)        → 清空所有 FBO，上限  32 MB
+     * - >= 40 (TRIM_MEMORY_BACKGROUND)      → 清空所有 FBO，上限  64 MB
+     * - >= 20 (TRIM_MEMORY_UI_HIDDEN)       → 同上
+     * - >= 15 (TRIM_MEMORY_RUNNING_CRITICAL)→ 上限  64 MB（LRU 驱逐）
+     * - >= 10 (TRIM_MEMORY_RUNNING_LOW)     → 上限 128 MB
+     * - >=  5 (TRIM_MEMORY_RUNNING_MODERATE)→ 上限 192 MB
+     *
+     * 推荐用 [VideoSdkMemoryCallbacks] 自动绑定：
+     * ```
+     * application.registerComponentCallbacks(VideoSdkMemoryCallbacks(renderEngine))
+     * ```
+     */
+    fun onTrimMemory(level: Int) {
+        handleLock.read {
+            if (nativeHandle != 0L) nativeOnTrimMemory(nativeHandle, level)
+        }
+    }
+
+    // ----------------------------------------------------------------
+    // RHI 后端选择 API
+    // ----------------------------------------------------------------
+
+    /** RHI 后端类型（与 C++ BackendType 枚举对齐，值相同） */
+    enum class BackendType(val value: Int) {
+        AUTO(0),    /** 自动选择（优先级：Metal > Vulkan > GLES） */
+        GLES(1),    /** OpenGL ES（3.0 / 3.1 / 3.2 三级梯级） */
+        VULKAN(2),  /** Vulkan NDK（Android） */
+        METAL(3);   /** Metal（iOS/macOS，Android 不可用） */
+
+        companion object {
+            fun fromInt(v: Int) = entries.firstOrNull { it.value == v } ?: GLES
+        }
+    }
+
+    /**
+     * 设置首选渲染后端（必须在 initialize() 之前调用）。
+     * 实际使用的后端通过 [getActiveBackend] 查询。
+     */
+    fun setPreferredBackend(backend: BackendType) {
+        handleLock.read {
+            if (nativeHandle != 0L) nativeSetBackend(nativeHandle, backend.value)
+        }
+    }
+
+    /** 返回当前实际使用的渲染后端。 */
+    fun getActiveBackend(): BackendType {
+        handleLock.read {
+            return BackendType.fromInt(
+                if (nativeHandle != 0L) nativeGetActiveBackend(nativeHandle) else 1
+            )
+        }
+    }
+
+    /** 返回设备实际支持的 GLES 版本梯级（30 / 31 / 32）。 */
+    fun getGLESVersion(): Int {
+        handleLock.read {
+            return if (nativeHandle != 0L) nativeGetGLESVersion(nativeHandle) else 30
+        }
+    }
+
+    // ----------------------------------------------------------------
+    // 人脸 AI — 对标抖音
+    // ----------------------------------------------------------------
+
+    /** 美妆层类型，与 C++ MakeupFilter 对齐 */
+    enum class MakeupLayer(val value: Int) {
+        LIP(0), BLUSH(1), EYESHADOW(2), HIGHLIGHT(3), CONTOUR(4), EYEBROW(5)
+    }
+
+    /**
+     * 加载人脸关键点模型（.tflite）。
+     * @param modelPath  assets 解压后的绝对路径
+     */
+    fun loadFaceLandmarkModel(modelPath: String): Boolean {
+        handleLock.read {
+            return if (nativeHandle != 0L) nativeLoadFaceLandmarkModel(nativeHandle, modelPath)
+            else false
+        }
+    }
+
+    /**
+     * 获取最新帧人脸关键点，返回 FloatArray[212]（106点 × [x,y]），无人脸时返回 null。
+     */
+    fun getFaceLandmarks(): FloatArray? {
+        handleLock.read {
+            return if (nativeHandle != 0L) nativeGetFaceLandmarks(nativeHandle) else null
+        }
+    }
+
+    /**
+     * 设置人脸重塑参数（大眼/瘦脸/V脸/瘦鼻/额头/嘴型），参数范围 [0, 1]，0 = 关闭。
+     */
+    fun setFaceReshape(
+        eyeScale: Float   = 0f,
+        faceSlim: Float   = 0f,
+        noseSlim: Float   = 0f,
+        foreheadUp: Float = 0f,
+        chinV: Float      = 0f,
+        mouthWidth: Float = 0f
+    ) {
+        handleLock.read {
+            if (nativeHandle != 0L)
+                nativeSetFaceReshape(nativeHandle, eyeScale, faceSlim, noseSlim,
+                                     foreheadUp, chinV, mouthWidth)
+        }
+    }
+
+    /**
+     * 设置美妆层颜色和强度。
+     * @param layer      [MakeupLayer] 枚举
+     * @param r,g,b      RGB 颜色 [0,1]
+     * @param intensity  强度 [0,1]
+     */
+    fun setMakeup(layer: MakeupLayer, r: Float, g: Float, b: Float, intensity: Float) {
+        handleLock.read {
+            if (nativeHandle != 0L)
+                nativeSetMakeup(nativeHandle, layer.value, r, g, b, intensity)
+        }
+    }
+
+    /**
+     * 加载发色分割模型（.tflite）。
+     */
+    fun loadHairModel(modelPath: String): Boolean {
+        handleLock.read {
+            return if (nativeHandle != 0L) nativeLoadHairModel(nativeHandle, modelPath)
+            else false
+        }
+    }
+
+    /**
+     * 设置发色。
+     * @param r,g,b          目标颜色 [0,1]
+     * @param colorIntensity 染色强度 [0,1]
+     * @param glossIntensity 高光强度 [0,1]
+     */
+    fun setHairColor(r: Float, g: Float, b: Float,
+                     colorIntensity: Float = 0.7f, glossIntensity: Float = 0.3f) {
+        handleLock.read {
+            if (nativeHandle != 0L)
+                nativeSetHairColor(nativeHandle, r, g, b, colorIntensity, glossIntensity)
+        }
+    }
+
+    /**
+     * 加载特效包（目录内含 manifest.json）。
+     * @param effectRoot  特效包根目录绝对路径
+     * @return  特效 ID（失败返回空字符串）
+     */
+    fun loadEffect(effectRoot: String): String {
+        handleLock.read {
+            return if (nativeHandle != 0L) nativeLoadEffect(nativeHandle, effectRoot) else ""
+        }
+    }
+
+    /** 激活特效（传空字符串 = 关闭所有） */
+    fun activateEffect(effectId: String) {
+        handleLock.read {
+            if (nativeHandle != 0L) nativeActivateEffect(nativeHandle, effectId)
+        }
+    }
+
+    /** 关闭所有特效 */
+    fun deactivateAllEffects() {
+        handleLock.read {
+            if (nativeHandle != 0L) nativeDeactivateAllEffects(nativeHandle)
+        }
+    }
+
+    /** 禁用 DSR，恢复全分辨率渲染。 */
+    fun disableDsr() {
+        handleLock.read {
+            if (nativeHandle != 0L) nativeDisableDsr(nativeHandle)
+        }
+    }
+
+    /**
+     * 返回最近一次 export 实际应用的 DSR 倍率 [minScale, maxScale]。
+     * 若 DSR 深度降低段（如 0.6）表明设备 GPU 性能不足，可用来决策是否降码率。
+     */
+    fun getDsrScale(): Float {
+        handleLock.read {
+            return if (nativeHandle != 0L) nativeGetDsrScale(nativeHandle) else 1.0f
+        }
+    }
+
     // Native methods
     private external fun nativeUpdateShaderSource(handle: Long, name: String, source: String)
     private external fun nativeGetMetrics(handle: Long): FloatArray?
@@ -334,4 +563,28 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     private external fun nativeStopAudioRecord(handle: Long)
     private external fun nativeReadAudioPCM(handle: Long, buffer: ByteArray, length: Int): Int
     private external fun nativeGetAudioTimeNs(handle: Long): Long
+    private external fun nativeOnContextLost(handle: Long)
+    private external fun nativeOnContextRestored(handle: Long): Int
+    private external fun nativeOnTrimMemory(handle: Long, level: Int)
+    private external fun nativeSetDsrConfig(handle: Long, targetFps: Float, minScale: Float, maxScale: Float)
+    private external fun nativeDisableDsr(handle: Long)
+    private external fun nativeGetDsrScale(handle: Long): Float
+    private external fun nativeSetBackend(handle: Long, backendType: Int)
+    private external fun nativeGetActiveBackend(handle: Long): Int
+    private external fun nativeGetGLESVersion(handle: Long): Int
+
+    // ── 抖音对标 native 方法 ──────────────────────────────────────────
+    private external fun nativeLoadFaceLandmarkModel(handle: Long, modelPath: String): Boolean
+    private external fun nativeGetFaceLandmarks(handle: Long): FloatArray?
+    private external fun nativeSetFaceReshape(handle: Long,
+        eyeScale: Float, faceSlim: Float, noseSlim: Float,
+        foreheadUp: Float, chinV: Float, mouthWidth: Float)
+    private external fun nativeSetMakeup(handle: Long, layer: Int,
+        r: Float, g: Float, b: Float, intensity: Float)
+    private external fun nativeLoadHairModel(handle: Long, modelPath: String): Boolean
+    private external fun nativeSetHairColor(handle: Long, r: Float, g: Float, b: Float,
+        colorIntensity: Float, glossIntensity: Float)
+    private external fun nativeLoadEffect(handle: Long, effectRoot: String): String
+    private external fun nativeActivateEffect(handle: Long, effectId: String)
+    private external fun nativeDeactivateAllEffects(handle: Long)
 }

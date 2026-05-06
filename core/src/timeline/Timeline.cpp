@@ -84,6 +84,19 @@ void Timeline::getActiveAudioClipsAtTime(int64_t timelineNs, std::vector<ClipPtr
     }
 }
 
+void Timeline::getActiveOverlayClipsAtTime(int64_t timelineNs, std::vector<ClipPtr>& outClips) const {
+    outClips.clear();
+    std::shared_lock<std::shared_mutex> lock(m_tracksMutex);
+    for (const auto& pair : m_tracks) {
+        TrackPtr track = pair.second;
+        if (!track) continue;
+        if (track->getType() == Track::TrackType::SUBTITLE ||
+            track->getType() == Track::TrackType::STICKER) {
+            track->getActiveClipsAtTime(timelineNs, outClips);
+        }
+    }
+}
+
 } // namespace timeline
 } // namespace video
 } // namespace sdk

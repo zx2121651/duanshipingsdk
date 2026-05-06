@@ -7,26 +7,48 @@
 #include <queue>
 #include <functional>
 #include <atomic>
+#include <unordered_map>
+#include <vector>
+#include <memory>
 
 namespace sdk {
 namespace video {
 namespace rhi {
 
+// Per-device GL state shadow: avoids redundant glEnable/glDisable calls
+struct ShadowState {
+    bool blendEnabled = false;
+    GLenum blendSrcColor = GL_ONE;
+    GLenum blendDstColor = GL_ZERO;
+    GLenum blendSrcAlpha = GL_ONE;
+    GLenum blendDstAlpha = GL_ZERO;
+    bool cullFaceEnabled = false;
+    bool depthTestEnabled = false;
+    bool depthWriteEnabled = false;
+};
+
+class GLRenderDevice; // forward
+
 class GLPipelineState : public IPipelineState {
 public:
     PipelineStateDesc desc;
     const PipelineStateDesc& getDesc() const override { return desc; }
-    void apply();
+    void apply(ShadowState& shadow);
 };
 
 class GLShaderResourceSet : public IShaderResourceSet {
 public:
-    // ...
+    void bindTexture(uint32_t slot, std::shared_ptr<ITexture> texture) override;
+    void apply() override;
+
+private:
+    struct Binding { uint32_t slot; std::shared_ptr<ITexture> texture; };
+    std::vector<Binding> m_bindings;
 };
 
 class GLCommandBuffer : public ICommandBuffer {
 public:
-    GLCommandBuffer() = default;
+    explicit GLCommandBuffer(GLRenderDevice* device) : m_device(device) {}
     ~GLCommandBuffer() override = default;
 
     void begin() override;
@@ -46,6 +68,7 @@ public:
     void dispatchCompute(uint32_t numGroupsX, uint32_t numGroupsY, uint32_t numGroupsZ) override;
 
 private:
+    GLRenderDevice* m_device = nullptr;
     uint32_t m_currentFBO = 0;
     int64_t m_beginTimeNs = 0;
 };
@@ -65,17 +88,41 @@ public:
     std::shared_ptr<ICommandBuffer> createCommandBuffer() override;
     void submit(ICommandBuffer* cmdBuffer) override;
 
+    std::shared_ptr<IShaderProgram> createShaderProgram(
+        const char* vertexSrc, const char* fragmentSrc) override;
+
+    // GLES 3.2 — 几何着色器程序（不支持时返回 nullptr）
+    std::shared_ptr<IShaderProgram> createGeometryShaderProgram(
+        const char* vertSrc, const char* geomSrc, const char* fragSrc) override;
+
+    // GLES 3.2 — 细分着色器程序（不支持时返回 nullptr）
+    std::shared_ptr<IShaderProgram> createTessellationProgram(
+        const char* vertSrc, const char* tescSrc,
+        const char* teseSrc, const char* fragSrc) override;
+
+    // GLES 3.2 — 多采样纹理（MSAA）
+    std::shared_ptr<ITexture> createMSAATexture(
+        const TextureDesc& desc, int samples) override;
+
     std::shared_ptr<ITexture> bindExternalHardwareBuffer(void* nativeBuffer) override;
 
-    static void removeFBOFromCache(uint32_t texId);
+    // Instance-level FBO cache management (replaces former static cache)
+    GLuint getOrCreateFBO(uint32_t texId, uint32_t texWidth, uint32_t texHeight);
+    void removeFBOFromCache(uint32_t texId);
 
     void queueDeferredDeletion(std::function<void()> cleanupTask);
     void processDeferredDeletions();
+
+    ShadowState& getShadowState() { return m_shadowState; }
 
 private:
     std::mutex m_mutex;
     std::queue<std::function<void()>> m_deletionQueue;
     std::atomic<uint64_t> m_frameCount{0};
+
+    // Per-device GL state (replaces file-scope statics — safe for multiple EGL contexts)
+    ShadowState m_shadowState;
+    std::unordered_map<uint32_t, GLuint> m_fboCache;
 };
 
 } // namespace rhi

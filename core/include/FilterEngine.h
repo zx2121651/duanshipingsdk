@@ -16,6 +16,7 @@
 #include <vector>
 #include <any>
 #include "rhi/IRenderDevice.h"
+#include "rhi/RenderDeviceFactory.h"
 
 namespace sdk {
 namespace video {
@@ -82,12 +83,50 @@ public:
     void recordDroppedFrame() { if (m_initialized) m_metricsCollector.recordDroppedFrame(); }
     Result updateShaderSource(const std::string& name, const std::string& source);
 
+    /**
+     * @brief P1-6: Call when the EGL/EAGL context is lost (e.g. app backgrounded, driver eviction).
+     * Releases all CPU-side GL state bookkeeping. All GPU handles are assumed dead.
+     * @note Must be called on the Render thread.
+     */
+    void onContextLost();
+
+    /**
+     * @brief P1-6: Call after a new context has been made current on the Render thread.
+     * Re-initializes the engine and rebuilds the pipeline on the new context.
+     * @return Result::ok() on success, error code otherwise.
+     */
+    Result onContextRestored();
+
+    /**
+     * @brief P2-14: Android ComponentCallbacks2::onTrimMemory hook.
+     *
+     * 根据系统内存压力等级分五档清理 GPU FBO 缓存：
+     *  >= 80 (COMPLETE)   → 清空所有 FBO，VRAM 上限降至  32 MB
+     *  >= 40 (BACKGROUND) → 清空所有 FBO，VRAM 上限降至  64 MB
+     *  >= 15 (RUNNING_CRITICAL) → VRAM 上限降至  64 MB（下次分配触发驱逐）
+     *  >= 10 (RUNNING_LOW)      → VRAM 上限降至 128 MB
+     *  >=  5 (RUNNING_MODERATE) → VRAM 上限降至 192 MB
+     *  UI_HIDDEN (20)    → 视同 BACKGROUND 处理
+     *
+     * @note Thread-safe（内部加锁）。可在任意线程调用。
+     * @param level  ComponentCallbacks2 常量值
+     */
+    void onTrimMemory(int level);
+
 
     // 暴露 FBO 内存池供子滤镜（如 Two-pass 高斯模糊）借用
     FrameBufferPool* getFrameBufferPool() { return &m_frameBufferPool; }
 
     // 暴露 ContextManager 给 NativeBridge 探测
     GLContextManager& getContextManager() { return m_contextManager; }
+
+    // 暴露 RHI 设备供 Compositor / 其他子系统创建 shader program
+    rhi::IRenderDevice* getRenderDevice() { return m_renderDevice.get(); }
+
+    // RHI 后端选择 API
+    void setPreferredBackend(rhi::BackendType type) { m_preferredBackend = type; }
+    rhi::BackendType getPreferredBackend() const { return m_preferredBackend; }
+    rhi::BackendType getActiveBackend()    const { return m_activeBackend; }
 
     // Test access
     friend class FilterEngineTestAccessor;
@@ -122,6 +161,10 @@ private:
 
     // RHI 设备实例
     std::shared_ptr<rhi::IRenderDevice> m_renderDevice;
+
+    // 后端类型（用户首选 + 实际选择）
+    rhi::BackendType m_preferredBackend = rhi::BackendType::AUTO;
+    rhi::BackendType m_activeBackend    = rhi::BackendType::GLES;
 
     Result rebuildGraph(std::shared_ptr<PipelineNode> inputNode);
 };

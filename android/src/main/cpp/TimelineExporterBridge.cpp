@@ -3,6 +3,7 @@
 #include <string>
 #include <memory>
 #include "../../../../core/include/timeline/TimelineExporter.h"
+#include "../../../../core/include/timeline/Compositor.h"
 
 using namespace sdk::video::timeline;
 
@@ -44,14 +45,24 @@ Java_com_sdk_video_timeline_TimelineExporter_nativeExportAsync(JNIEnv *env, jobj
     // However, the Compositor needs a shared_ptr<FilterEngine>.
     // In NativeBridge.cpp, EngineWrapper is:
     // struct EngineWrapper { std::shared_ptr<FilterEngine> filterEngine; ... }
-    struct EngineWrapper { std::shared_ptr<sdk::video::FilterEngine> filterEngine; };
+    // EngineWrapper is defined in NativeBridge.cpp — replicate its layout here.
+    // Only fields needed for export are accessed; dsrEnabled/pendingDsr are new.
+    struct EngineWrapper {
+        std::shared_ptr<sdk::video::FilterEngine> filterEngine;
+        void* audioEngine = nullptr;         // OboeAudioEngine* — not used here
+        sdk::video::timeline::DsrConfig pendingDsr;
+        bool  dsrEnabled   = false;
+        float lastDsrScale = 1.0f;
+    };
     auto wrapper = reinterpret_cast<EngineWrapper*>(engineHandle);
 
     if (!timelinePtr || !(*timelinePtr) || !wrapper || !wrapper->filterEngine) return -1;
 
     auto compositor = std::make_shared<Compositor>(*timelinePtr, wrapper->filterEngine);
-    // Note: We might need to set a decoder pool here if the UI doesn't.
-    // For now, assume it's set or will be handled.
+    // 将 RenderEngine 中待命的 DSR 配置注入 Compositor
+    if (wrapper->dsrEnabled) {
+        compositor->setDsrConfig(wrapper->pendingDsr);
+    }
 
     // JNI Callbacks management
     JavaVM* jvm;
@@ -59,6 +70,8 @@ Java_com_sdk_video_timeline_TimelineExporter_nativeExportAsync(JNIEnv *env, jobj
     jobject progressGlobal = env->NewGlobalRef(onProgress);
     jobject completeGlobal = env->NewGlobalRef(onComplete);
 
+    // Capture compositor + wrapper so we can write back the final DSR scale
+    auto compositorWeak = std::weak_ptr<Compositor>(compositor);
     auto res = exporter->exportAsync(*timelinePtr, compositor,
         [jvm, progressGlobal](float progress) {
             JNIEnv* myEnv;
@@ -70,7 +83,11 @@ Java_com_sdk_video_timeline_TimelineExporter_nativeExportAsync(JNIEnv *env, jobj
                 jvm->DetachCurrentThread();
             }
         },
-        [jvm, completeGlobal, progressGlobal](sdk::video::Result result) {
+        [jvm, completeGlobal, progressGlobal, compositorWeak, wrapper](sdk::video::Result result) {
+            // Write back actual DSR scale so nativeGetDsrScale() reflects real performance
+            if (auto c = compositorWeak.lock()) {
+                wrapper->lastDsrScale = c->getDsrScale();
+            }
             JNIEnv* myEnv;
             if (jvm->AttachCurrentThread(&myEnv, nullptr) == JNI_OK) {
                 jclass cls = myEnv->GetObjectClass(completeGlobal);

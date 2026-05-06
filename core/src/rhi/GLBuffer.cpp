@@ -10,12 +10,13 @@
 typedef unsigned int GLbitfield;
 #endif
 
-#ifndef __APPLE__
+#if !defined(__APPLE__) && !defined(_MSC_VER)
 extern "C" {
     void* glMapBufferRange(GLenum target, GLintptr offset, GLsizeiptr length, GLbitfield access) __attribute__((weak));
     GLboolean glUnmapBuffer(GLenum target) __attribute__((weak));
 }
 #endif
+// On MSVC with USE_MOCK_GL, glMapBufferRange/glUnmapBuffer are inline stubs in mock_gl/GLES3/gl3.h
 
 
 #ifndef GLbitfield
@@ -84,14 +85,15 @@ void* GLBuffer::map(size_t offset, size_t size, BufferAccess access) {
         case BufferAccess::ReadWrite: glAccess = GL_MAP_READ_BIT | GL_MAP_WRITE_BIT; break;
     }
 
+    // Keep buffer bound until unmap() — the mapped pointer must remain valid
     glBindBuffer(m_glTarget, m_handle);
     void* ptr = glMapBufferRange(m_glTarget, offset, size, glAccess);
-    glBindBuffer(m_glTarget, 0);
+    // Do NOT unbind here; unmap() is responsible for the bind/unmap/unbind sequence
     return ptr;
 }
 
 void GLBuffer::unmap() {
-    glBindBuffer(m_glTarget, m_handle);
+    // Buffer must still be bound from map(); unmap then release the binding
     glUnmapBuffer(m_glTarget);
     glBindBuffer(m_glTarget, 0);
 }

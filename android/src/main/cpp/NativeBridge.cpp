@@ -17,6 +17,12 @@
 #include "AndroidAssetProvider.h"
 #include "../../../../core/include/FilterEngine.h"
 #include "../../../../core/include/Filters.h"
+#include "../../../../core/include/timeline/Compositor.h"
+#include "../../../../core/include/ai/FaceLandmarkDetector.h"
+#include "../../../../core/include/ai/FaceReshapeFilter.h"
+#include "../../../../core/include/ai/MakeupFilter.h"
+#include "../../../../core/include/ai/HairSegmentationFilter.h"
+#include "../../../../core/include/EffectPlugin.h"
 #include "OboeAudioEngine.h"
 
 using namespace sdk::video;
@@ -24,6 +30,18 @@ using namespace sdk::video;
 struct EngineWrapper {
     std::shared_ptr<FilterEngine> filterEngine;
     std::unique_ptr<OboeAudioEngine> audioEngine;
+
+    // DSR 配置：存储待注入到 Compositor 的参数
+    sdk::video::timeline::DsrConfig pendingDsr;
+    bool   dsrEnabled   = false;
+    float  lastDsrScale = 1.0f;  // 最近一次 export 结束时的实际倍率
+
+    // ── 抖音对标：人脸 AI 模块 ──────────────────────────────────────
+    std::shared_ptr<ai::FaceLandmarkDetector> faceLandmark;
+    std::shared_ptr<FaceReshapeFilter>        faceReshape;
+    std::shared_ptr<MakeupFilter>             makeup;
+    std::shared_ptr<HairSegmentationFilter>   hairSeg;
+    EffectPluginManager                       effectManager;
 
 #ifndef WIN32
     // Recording state
@@ -490,6 +508,257 @@ Java_com_sdk_video_RenderEngine_nativeRecordDroppedFrame(JNIEnv *env, jobject th
     if (wrapper && wrapper->filterEngine) {
         wrapper->filterEngine->recordDroppedFrame();
     }
+}
+
+// P1-6: GL Context Lost / Restored recovery
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeOnContextLost(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->filterEngine) {
+        wrapper->filterEngine->onContextLost();
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeOnContextRestored(JNIEnv *env, jobject thiz, jlong handle) {
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->filterEngine) {
+        return static_cast<jint>(sdk::video::ErrorCode::ERR_RENDER_NOT_INITIALIZED);
+    }
+    auto res = wrapper->filterEngine->onContextRestored();
+    return static_cast<jint>(res.getErrorCode());
+}
+
+// ---------------------------------------------------------------------------
+// P2-14: onTrimMemory — Android ComponentCallbacks2 内存压力响应
+// ---------------------------------------------------------------------------
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeOnTrimMemory(JNIEnv *env, jobject thiz, jlong handle, jint level)
+{
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (wrapper && wrapper->filterEngine) {
+        wrapper->filterEngine->onTrimMemory(static_cast<int>(level));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// P2-13: DSR (Dynamic Resolution Scaling) JNI
+// ---------------------------------------------------------------------------
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeSetDsrConfig(
+        JNIEnv *env, jobject thiz, jlong handle,
+        jfloat targetFps, jfloat minScale, jfloat maxScale)
+{
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper) return;
+    wrapper->pendingDsr.targetFps      = static_cast<float>(targetFps);
+    wrapper->pendingDsr.minScaleFactor = static_cast<float>(minScale);
+    wrapper->pendingDsr.maxScaleFactor = static_cast<float>(maxScale);
+    wrapper->dsrEnabled = true;
+    wrapper->lastDsrScale = static_cast<float>(maxScale);
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeDisableDsr(JNIEnv *env, jobject thiz, jlong handle)
+{
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper) return;
+    wrapper->dsrEnabled   = false;
+    wrapper->lastDsrScale = 1.0f;
+}
+
+JNIEXPORT jfloat JNICALL
+Java_com_sdk_video_RenderEngine_nativeGetDsrScale(JNIEnv *env, jobject thiz, jlong handle)
+{
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    return wrapper ? static_cast<jfloat>(wrapper->lastDsrScale) : 1.0f;
+}
+
+// ============================================================
+// 人脸 AI — 关键点检测
+// ============================================================
+
+JNIEXPORT jboolean JNICALL
+Java_com_sdk_video_RenderEngine_nativeLoadFaceLandmarkModel(
+    JNIEnv* env, jobject, jlong handle, jstring modelPath)
+{
+    EngineWrapper* w = reinterpret_cast<EngineWrapper*>(handle);
+    if (!w) return JNI_FALSE;
+    if (!w->faceLandmark)
+        w->faceLandmark = std::make_shared<ai::FaceLandmarkDetector>();
+    const char* path = env->GetStringUTFChars(modelPath, nullptr);
+    bool ok = w->faceLandmark->loadModel(path);
+    env->ReleaseStringUTFChars(modelPath, path);
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_sdk_video_RenderEngine_nativeGetFaceLandmarks(
+    JNIEnv* env, jobject, jlong handle)
+{
+    EngineWrapper* w = reinterpret_cast<EngineWrapper*>(handle);
+    if (!w || !w->faceLandmark) return nullptr;
+    auto result = w->faceLandmark->getLatestResult();
+    if (result.faceCount == 0) return nullptr;
+    // 返回 float[106*2]：x0,y0,x1,y1,...
+    const int N = ai::kFaceLandmarkCount * 2;
+    jfloatArray arr = env->NewFloatArray(N);
+    jfloat pts[N];
+    for (int i = 0; i < ai::kFaceLandmarkCount; ++i) {
+        pts[i*2+0] = result.faces[0].landmarks[i].x;
+        pts[i*2+1] = result.faces[0].landmarks[i].y;
+    }
+    env->SetFloatArrayRegion(arr, 0, N, pts);
+    return arr;
+}
+
+// ============================================================
+// 人脸重塑（大眼/瘦脸/V脸/瘦鼻/额头）
+// ============================================================
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeSetFaceReshape(
+    JNIEnv*, jobject, jlong handle,
+    jfloat eyeScale, jfloat faceSlim, jfloat noseSlim,
+    jfloat foreheadUp, jfloat chinV, jfloat mouthWidth)
+{
+    EngineWrapper* w = reinterpret_cast<EngineWrapper*>(handle);
+    if (!w) return;
+    if (!w->faceReshape) {
+        w->faceReshape = std::make_shared<FaceReshapeFilter>();
+        w->faceReshape->initialize();
+    }
+    w->faceReshape->setEyeScale   (eyeScale);
+    w->faceReshape->setFaceSlim   (faceSlim);
+    w->faceReshape->setNoseSlim   (noseSlim);
+    w->faceReshape->setForeheadUp (foreheadUp);
+    w->faceReshape->setChinV      (chinV);
+    w->faceReshape->setMouthWidth (mouthWidth);
+}
+
+// ============================================================
+// 美妆（口红/腮红/眼影/高光/修容/眉毛）
+// ============================================================
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeSetMakeup(
+    JNIEnv* env, jobject, jlong handle, jint layer,
+    jfloat r, jfloat g, jfloat b, jfloat intensity)
+{
+    EngineWrapper* w = reinterpret_cast<EngineWrapper*>(handle);
+    if (!w) return;
+    if (!w->makeup) {
+        w->makeup = std::make_shared<MakeupFilter>();
+        w->makeup->initialize();
+    }
+    switch (layer) {
+        case 0: w->makeup->setLipColor  (r, g, b, intensity); break;
+        case 1: w->makeup->setBlush     (r, g, b, intensity); break;
+        case 2: w->makeup->setEyeshadow (r, g, b, intensity); break;
+        case 3: w->makeup->setHighlight (intensity);          break;
+        case 4: w->makeup->setContour   (intensity);          break;
+        case 5: w->makeup->setEyebrow   (r, g, b, intensity); break;
+    }
+}
+
+// ============================================================
+// 发色染色
+// ============================================================
+
+JNIEXPORT jboolean JNICALL
+Java_com_sdk_video_RenderEngine_nativeLoadHairModel(
+    JNIEnv* env, jobject, jlong handle, jstring modelPath)
+{
+    EngineWrapper* w = reinterpret_cast<EngineWrapper*>(handle);
+    if (!w) return JNI_FALSE;
+    if (!w->hairSeg) {
+        w->hairSeg = std::make_shared<HairSegmentationFilter>();
+        w->hairSeg->initialize();
+    }
+    const char* path = env->GetStringUTFChars(modelPath, nullptr);
+    bool ok = w->hairSeg->loadModel(path);
+    env->ReleaseStringUTFChars(modelPath, path);
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeSetHairColor(
+    JNIEnv*, jobject, jlong handle, jfloat r, jfloat g, jfloat b,
+    jfloat colorIntensity, jfloat glossIntensity)
+{
+    EngineWrapper* w = reinterpret_cast<EngineWrapper*>(handle);
+    if (!w || !w->hairSeg) return;
+    w->hairSeg->setHairColor(r, g, b);
+    w->hairSeg->setColorIntensity(colorIntensity);
+    w->hairSeg->setGlossIntensity(glossIntensity);
+}
+
+// ============================================================
+// 特效包
+// ============================================================
+
+JNIEXPORT jstring JNICALL
+Java_com_sdk_video_RenderEngine_nativeLoadEffect(
+    JNIEnv* env, jobject, jlong handle, jstring effectRoot)
+{
+    EngineWrapper* w = reinterpret_cast<EngineWrapper*>(handle);
+    if (!w) return env->NewStringUTF("");
+    const char* root = env->GetStringUTFChars(effectRoot, nullptr);
+    std::string effectId = w->effectManager.loadEffect(root);
+    env->ReleaseStringUTFChars(effectRoot, root);
+    return env->NewStringUTF(effectId.c_str());
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeActivateEffect(
+    JNIEnv* env, jobject, jlong handle, jstring effectId)
+{
+    EngineWrapper* w = reinterpret_cast<EngineWrapper*>(handle);
+    if (!w) return;
+    const char* id = env->GetStringUTFChars(effectId, nullptr);
+    w->effectManager.activateEffect(id);
+    env->ReleaseStringUTFChars(effectId, id);
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeDeactivateAllEffects(
+    JNIEnv*, jobject, jlong handle)
+{
+    EngineWrapper* w = reinterpret_cast<EngineWrapper*>(handle);
+    if (w) w->effectManager.deactivateAll();
+}
+
+// ============================================================
+// RHI 后端选择 API
+// ============================================================
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeSetBackend(
+    JNIEnv* env, jobject /*thiz*/, jlong handle, jint backendType)
+{
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->filterEngine) return;
+    wrapper->filterEngine->setPreferredBackend(
+        static_cast<sdk::video::rhi::BackendType>(backendType));
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeGetActiveBackend(
+    JNIEnv* env, jobject /*thiz*/, jlong handle)
+{
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->filterEngine) return 1; // GLES fallback
+    return static_cast<jint>(wrapper->filterEngine->getActiveBackend());
+}
+
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativeGetGLESVersion(
+    JNIEnv* env, jobject /*thiz*/, jlong handle)
+{
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->filterEngine) return 30;
+    return static_cast<jint>(
+        wrapper->filterEngine->getContextManager().getGLESVersionInt());
 }
 
 } // extern "C"

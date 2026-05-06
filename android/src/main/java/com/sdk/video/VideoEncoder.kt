@@ -8,6 +8,9 @@ import kotlinx.coroutines.*
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * 纯异步、零阻塞的商业级音视频编码器。
@@ -31,9 +34,23 @@ class VideoEncoder(
 
     companion object {
         private const val TAG = "VideoEncoder"
-        private const val MIME_TYPE_VIDEO = MediaFormat.MIMETYPE_VIDEO_AVC
+        private const val MIME_TYPE_VIDEO_AVC  = MediaFormat.MIMETYPE_VIDEO_AVC
+        private const val MIME_TYPE_VIDEO_HEVC = MediaFormat.MIMETYPE_VIDEO_HEVC
+
+        /** Returns true if the device has a hardware HEVC encoder. */
+        fun isHevcHardwareEncoderAvailable(): Boolean {
+            return try {
+                val list = MediaCodecList(MediaCodecList.REGULAR_CODECS)
+                list.codecInfos.any { info ->
+                    info.isEncoder &&
+                    info.supportedTypes.any { it.equals(MIME_TYPE_VIDEO_HEVC, ignoreCase = true) } &&
+                    info.name.contains("c2.", ignoreCase = true).not() // prefer HW over SW
+                }
+            } catch (e: Exception) { false }
+        }
     }
 
+    private var videoMimeType: String = MIME_TYPE_VIDEO_AVC
     private var videoCodec: MediaCodec? = null
     private var audioCodec: MediaCodec? = null
     private var muxer: MediaMuxer? = null
@@ -56,6 +73,10 @@ class VideoEncoder(
     private var startTimeNs: Long = 0
     private var totalSamplesEncoded: Long = 0
 
+    // P0-2: Precise EOS signalling — replaces Thread.sleep(100)
+    private var videoEosLatch = CountDownLatch(1)
+    private val videoEosReached = AtomicBoolean(false)
+
     fun getStartTimeNs(): Long = startTimeNs
 
     // 独立协程作用域，专门用于从底层 RingBuffer 拉取音频 PCM
@@ -76,6 +97,15 @@ class VideoEncoder(
         try {
             Log.i(TAG, "Starting recording to: $outputPath")
             muxer = MediaMuxer(outputPath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+
+            // P0-2: Reset EOS latch for this recording session
+            videoEosLatch = CountDownLatch(1)
+            videoEosReached.set(false)
+
+            // P1-1: Prefer HEVC if device supports it and caller requested it
+            videoMimeType = if (config.useHevc && isHevcHardwareEncoderAvailable())
+                MIME_TYPE_VIDEO_HEVC else MIME_TYPE_VIDEO_AVC
+            Log.i(TAG, "Selected video codec: $videoMimeType")
 
             setupVideoCodec()
             setupAudioCodec()
@@ -104,7 +134,7 @@ class VideoEncoder(
     }
 
     private fun setupVideoCodec() {
-        val format = MediaFormat.createVideoFormat(MIME_TYPE_VIDEO, width, height)
+        val format = MediaFormat.createVideoFormat(videoMimeType, width, height)
         format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
         format.setInteger(MediaFormat.KEY_BIT_RATE, videoBitRate)
         format.setInteger(MediaFormat.KEY_FRAME_RATE, frameRate)
@@ -112,11 +142,16 @@ class VideoEncoder(
 
         optimizeCodecProfileAndBitrateMode(format)
 
-        videoCodec = MediaCodec.createEncoderByType(MIME_TYPE_VIDEO)
+        videoCodec = MediaCodec.createEncoderByType(videoMimeType)
         videoCodec?.setCallback(object : MediaCodec.Callback() {
             override fun onInputBufferAvailable(codec: MediaCodec, index: Int) {}
 
             override fun onOutputBufferAvailable(codec: MediaCodec, index: Int, info: MediaCodec.BufferInfo) {
+                // P0-2: Detect video EOS and signal the latch
+                if ((info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                    videoEosReached.set(true)
+                    videoEosLatch.countDown()
+                }
                 processOutputData(codec, index, info, isVideo = true)
             }
 
@@ -144,17 +179,23 @@ class VideoEncoder(
             for (codecInfo in codecList.codecInfos) {
                 if (!codecInfo.isEncoder) continue
                 val types = codecInfo.supportedTypes
-                if (!types.contains(MIME_TYPE_VIDEO)) continue
+                if (!types.contains(videoMimeType)) continue
 
-                val capabilities = codecInfo.getCapabilitiesForType(MIME_TYPE_VIDEO)
+                val capabilities = codecInfo.getCapabilitiesForType(videoMimeType)
 
                 val encoderCaps = capabilities.encoderCapabilities
                 if (encoderCaps != null && encoderCaps.isBitrateModeSupported(MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)) {
                     format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
                 }
 
+                // P1-1: Choose best profile for the selected codec
+                val targetProfile = if (videoMimeType == MIME_TYPE_VIDEO_HEVC)
+                    MediaCodecInfo.CodecProfileLevel.HEVCProfileMain
+                else
+                    MediaCodecInfo.CodecProfileLevel.AVCProfileHigh
+
                 for (profileLevel in capabilities.profileLevels) {
-                    if (profileLevel.profile == MediaCodecInfo.CodecProfileLevel.AVCProfileHigh) {
+                    if (profileLevel.profile == targetProfile) {
                         format.setInteger(MediaFormat.KEY_PROFILE, profileLevel.profile)
                         format.setInteger(MediaFormat.KEY_LEVEL, profileLevel.level)
                         return
@@ -167,7 +208,8 @@ class VideoEncoder(
     }
 
     private fun setupAudioCodec() {
-        val format = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, audioSampleRate, 1)
+        // P0-1: Fixed — was hardcoded to 1 (Mono), must be 2 (Stereo) to match Oboe/PCM pipeline
+        val format = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, audioSampleRate, 2)
         format.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
         format.setInteger(MediaFormat.KEY_BIT_RATE, audioBitRate)
         format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 16384)
@@ -210,7 +252,8 @@ class VideoEncoder(
                         // [PTS Drift Fix]: Use the total number of samples encoded as a stable clock.
                         // This prevents drift between audio and video by tying PTS to the actual data volume,
                         // starting from the synchronized system-time anchor.
-                        val samplesRead = readBytes / 2 // 16-bit Mono = 2 bytes per sample
+                        // P0-1: Stereo 16-bit = 4 bytes per frame (2 bytes/sample × 2 channels)
+                        val samplesRead = readBytes / 4 // stereo 16-bit frames
                         val pts = (startTimeNs + (totalSamplesEncoded * 1000000000L / audioSampleRate)) / 1000
                         totalSamplesEncoded += samplesRead
 
@@ -312,8 +355,14 @@ class VideoEncoder(
             Log.w(TAG, "Error signaling end of video stream: ${e.message}")
         }
 
-        // 稍微等待最后一帧写入，生产环境可考虑使用更加严谨的 EOS 标志等待
-        Thread.sleep(100)
+        // P0-2: Precise EOS wait — replaces Thread.sleep(100)
+        // Wait up to 500ms for the EOS output buffer from the video codec.
+        if (!videoEosReached.get()) {
+            val reached = videoEosLatch.await(500, TimeUnit.MILLISECONDS)
+            if (!reached) {
+                Log.w(TAG, "Video EOS not received within timeout; proceeding with stop anyway.")
+            }
+        }
 
         // 独立且严格释放视频编码器
         try {
