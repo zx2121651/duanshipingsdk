@@ -146,6 +146,11 @@ fun EditScreen(viewModel: AppViewModel) {
                             color = Color(0xFF888888), fontSize = 12.sp,
                             modifier = Modifier.padding(16.dp)
                         )
+                        VideoFilterType.PROP_OVERLAY -> Text(
+                            "Prop overlay uses the active sticker/effect package.",
+                            color = Color(0xFF888888), fontSize = 12.sp,
+                            modifier = Modifier.padding(16.dp)
+                        )
                     }
                 }
             }
@@ -223,4 +228,5 @@ private fun labelFor(t: VideoFilterType): String = when (t) {
     VideoFilterType.LUT3D             -> "3D LUT"
     VideoFilterType.DUAL_KAWASE_BLUR  -> "Dual Kawase"
     VideoFilterType.BLOOM             -> "Bloom"
+    VideoFilterType.PROP_OVERLAY      -> "Prop Overlay"
 }

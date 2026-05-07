@@ -277,6 +277,12 @@ Java_com_sdk_video_RenderEngine_nativeInit(JNIEnv *env, jobject thiz, jobject as
         wrapper->filterEngine->setAssetProvider(assetProvider);
     }
 
+    auto res = wrapper->filterEngine->initialize();
+    if (!res.isOk()) {
+        throwNativeException(env, res.getErrorCode(), res.getMessage());
+        return 0;
+    }
+
     auto oesFilter = std::make_shared<OES2RGBFilter>();
     auto addRes = wrapper->filterEngine->addFilterRaw(oesFilter);
     if (!addRes.isOk()) {
@@ -284,9 +290,9 @@ Java_com_sdk_video_RenderEngine_nativeInit(JNIEnv *env, jobject thiz, jobject as
         return 0;
     }
 
-    auto res = wrapper->filterEngine->initialize();
-    if (!res.isOk()) {
-        throwNativeException(env, res.getErrorCode(), res.getMessage());
+    auto pipelineRes = wrapper->filterEngine->buildCameraPipeline();
+    if (!pipelineRes.isOk()) {
+        throwNativeException(env, pipelineRes.getErrorCode(), "Failed to build camera pipeline: " + pipelineRes.getMessage());
         return 0;
     }
     return reinterpret_cast<jlong>(wrapper.release());

@@ -23,6 +23,7 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
         const val FILTER_TYPE_LUT3D = 7        // P1-2: 64x64x64 3D LUT
         const val FILTER_TYPE_DUAL_KAWASE_BLUR = 8 // Large-radius iterative Kawase blur
         const val FILTER_TYPE_BLOOM = 9            // Glow: threshold → blur → additive composite
+        const val FILTER_TYPE_PROP_OVERLAY = 10
     }
 
     private var nativeHandle: Long = 0

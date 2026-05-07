@@ -178,7 +178,7 @@ object CrashReporter {
 
     // ── ANR Watchdog ──────────────────────────────────────────────────────────
 
-    private inner class AnrWatchdog(private val thresholdMs: Long) : Thread("svdk-anr-watchdog") {
+    private class AnrWatchdog(private val thresholdMs: Long) : Thread("svdk-anr-watchdog") {
         @Volatile private var running = true
         @Volatile private var tick = 0L
         @Volatile private var tock = 0L

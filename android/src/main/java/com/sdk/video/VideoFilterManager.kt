@@ -213,6 +213,7 @@ class VideoFilterManager(private val context: android.content.Context,
                 VideoFilterType.LUT3D             -> RenderEngine.FILTER_TYPE_LUT3D
                 VideoFilterType.DUAL_KAWASE_BLUR  -> RenderEngine.FILTER_TYPE_DUAL_KAWASE_BLUR
                 VideoFilterType.BLOOM             -> RenderEngine.FILTER_TYPE_BLOOM
+                VideoFilterType.PROP_OVERLAY      -> RenderEngine.FILTER_TYPE_PROP_OVERLAY
             }
             renderEngine.addFilter(typeInt)
         }

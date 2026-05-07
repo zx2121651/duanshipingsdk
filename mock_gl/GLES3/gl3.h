@@ -67,6 +67,7 @@ typedef unsigned char GLboolean;
 
 // For GLContextManager.cpp
 #define GL_VERSION 0x1F02
+#define GL_RENDERER 0x1F01
 #define GL_NUM_EXTENSIONS 0x821D
 #define GL_EXTENSIONS 0x1F03
 #define GL_COLOR_BUFFER_BIT 0x00004000

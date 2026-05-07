@@ -3,14 +3,43 @@ package com.sdk.video.sample.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Divider
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -23,11 +52,11 @@ import androidx.navigation.NavController
 import com.sdk.video.sample.state.ExportState
 import com.sdk.video.sample.state.TimelineViewModel
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
 
-private val Orange  = Color(0xFFFF6B00)
-private val SurfaceDark  = Color(0xFF1A1A1A)
-private val SurfaceLight = Color(0xFF252525)
+private val Accent = Color(0xFF00D7FF)
+private val SurfaceDark = Color(0xFF1A1A1A)
 private val TextSec = Color(0xFF888888)
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,21 +66,21 @@ fun ExportScreen(
     timelineVm: TimelineViewModel
 ) {
     val exportProgress by timelineVm.exportProgress.collectAsState()
-    val exportState    by timelineVm.exportState.collectAsState()
-    val exportError    by timelineVm.exportError.collectAsState()
+    val exportState by timelineVm.exportState.collectAsState()
+    val exportError by timelineVm.exportError.collectAsState()
 
-    var selectedRes   by remember { mutableStateOf(1) }
-    var selectedFps   by remember { mutableStateOf(1) }
+    var selectedRes by remember { mutableStateOf(2) }
+    var selectedFps by remember { mutableStateOf(1) }
     var selectedCodec by remember { mutableStateOf(0) }
     var selectedQuality by remember { mutableStateOf(1) }
 
-    val resOptions     = listOf("480p" to Pair(854, 480), "720p" to Pair(1280, 720), "1080p" to Pair(1920, 1080))
-    val fpsOptions     = listOf("24fps", "30fps", "60fps")
-    val codecOptions   = listOf("H.264", "H.265")
+    val resOptions = listOf("720p" to Pair(1280, 720), "1080p" to Pair(1920, 1080), "2K" to Pair(2560, 1440), "4K" to Pair(3840, 2160))
+    val fpsOptions = listOf("24fps", "30fps", "60fps")
+    val codecOptions = listOf("H.264", "H.265")
     val qualityOptions = listOf(
-        Triple("流畅", "4 Mbps", 4_000_000),
-        Triple("高清", "8 Mbps", 8_000_000),
-        Triple("超清", "16 Mbps", 16_000_000)
+        Triple("标准", "6 Mbps", 6_000_000),
+        Triple("高清", "12 Mbps", 12_000_000),
+        Triple("超清", "24 Mbps", 24_000_000)
     )
 
     Scaffold(
@@ -63,10 +92,10 @@ fun ExportScreen(
                         Icon(Icons.Filled.ArrowBack, contentDescription = "返回", tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF111111))
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF101010))
             )
         },
-        containerColor = Color(0xFF0D0D0D)
+        containerColor = Color(0xFF0B0B0C)
     ) { padding ->
         when (exportState) {
             ExportState.EXPORTING -> ExportProgressView(
@@ -91,7 +120,7 @@ fun ExportScreen(
             )
 
             ExportState.ERROR -> ExportErrorView(
-                message = exportError ?: "未知错误",
+                message = exportError ?: "导出失败，请检查编码器或输出路径。",
                 onRetry = { timelineVm.resetExport() }
             )
 
@@ -122,25 +151,24 @@ fun ExportScreen(
 
                     SettingSection(title = "编码格式") {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            codecOptions.forEachIndexed { i, label ->
-                                val isH265 = i == 1
+                            codecOptions.forEachIndexed { index, label ->
                                 OptionChip(
-                                    label = if (isH265) "$label（需设备支持）" else label,
-                                    selected = selectedCodec == i,
-                                    onClick = { selectedCodec = i }
+                                    label = if (index == 1) "$label · 高压缩" else label,
+                                    selected = selectedCodec == index,
+                                    onClick = { selectedCodec = index }
                                 )
                             }
                         }
                     }
 
-                    SettingSection(title = "画质预设") {
+                    SettingSection(title = "画质") {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            qualityOptions.forEachIndexed { i, (label, sub, _) ->
+                            qualityOptions.forEachIndexed { index, (label, sub, _) ->
                                 QualityChip(
                                     label = label,
                                     subLabel = sub,
-                                    selected = selectedQuality == i,
-                                    onClick = { selectedQuality = i }
+                                    selected = selectedQuality == index,
+                                    onClick = { selectedQuality = index }
                                 )
                             }
                         }
@@ -157,36 +185,33 @@ fun ExportScreen(
 
                     Button(
                         onClick = {
-                            val (w, h) = resOptions[selectedRes].second
-                            val fps    = listOf(24, 30, 60)[selectedFps]
-                            val br     = qualityOptions[selectedQuality].third
-                            val ts     = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-                            val path   = "/sdcard/VideoSDK_$ts.mp4"
-                            timelineVm.startExport(path, w, h, fps, br)
+                            val (width, height) = resOptions[selectedRes].second
+                            val fps = listOf(24, 30, 60)[selectedFps]
+                            val bitrate = qualityOptions[selectedQuality].third
+                            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+                            val path = "/sdcard/VideoSDK_$timestamp.mp4"
+                            timelineVm.startExport(path, width, height, fps, bitrate)
                         },
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 20.dp)
                             .height(52.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                        contentPadding = PaddingValues(0.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
                         shape = RoundedCornerShape(26.dp)
                     ) {
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .background(
-                                    Brush.horizontalGradient(listOf(Orange, Color(0xFFFF9A3C))),
+                                    Brush.horizontalGradient(listOf(Accent, Color(0xFF7C5CFF))),
                                     RoundedCornerShape(26.dp)
                                 ),
                             contentAlignment = Alignment.Center
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(Icons.Filled.FileDownload, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
-                                Text("开始导出", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Icon(Icons.Filled.FileDownload, contentDescription = null, tint = Color.Black, modifier = Modifier.size(20.dp))
+                                Text("开始导出", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                             }
                         }
                     }
@@ -204,14 +229,14 @@ private fun ExportPreviewCard() {
             .fillMaxWidth()
             .height(180.dp)
             .padding(horizontal = 20.dp, vertical = 16.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(Color(0xFF1A1A1A)),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(Icons.Filled.Movie, contentDescription = null, tint = Color(0xFF444444), modifier = Modifier.size(48.dp))
+            Icon(Icons.Filled.Movie, contentDescription = null, tint = Color(0xFF555555), modifier = Modifier.size(48.dp))
             Spacer(Modifier.height(8.dp))
-            Text("导出预览区域", color = Color(0xFF555555), fontSize = 13.sp)
+            Text("预览当前时间线并选择导出规格", color = Color(0xFF777777), fontSize = 13.sp)
         }
     }
 }
@@ -233,8 +258,8 @@ private fun SettingSection(title: String, content: @Composable () -> Unit) {
 @Composable
 private fun OptionChipRow(options: List<String>, selectedIndex: Int, onSelect: (Int) -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        options.forEachIndexed { i, label ->
-            OptionChip(label = label, selected = selectedIndex == i, onClick = { onSelect(i) })
+        options.forEachIndexed { index, label ->
+            OptionChip(label = label, selected = selectedIndex == index, onClick = { onSelect(index) })
         }
     }
 }
@@ -244,13 +269,13 @@ private fun OptionChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(8.dp))
-            .background(if (selected) Orange else Color(0xFF1E1E1E))
-            .border(1.dp, if (selected) Orange else Color(0xFF333333), RoundedCornerShape(8.dp))
+            .background(if (selected) Accent else Color(0xFF1E1E1E))
+            .border(1.dp, if (selected) Accent else Color(0xFF333333), RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(label, color = Color.White, fontSize = 13.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+        Text(label, color = if (selected) Color.Black else Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -259,13 +284,13 @@ private fun QualityChip(label: String, subLabel: String, selected: Boolean, onCl
     Column(
         modifier = Modifier
             .clip(RoundedCornerShape(10.dp))
-            .background(if (selected) Orange.copy(alpha = 0.15f) else Color(0xFF1E1E1E))
-            .border(1.5.dp, if (selected) Orange else Color(0xFF333333), RoundedCornerShape(10.dp))
+            .background(if (selected) Accent.copy(alpha = 0.16f) else Color(0xFF1E1E1E))
+            .border(1.5.dp, if (selected) Accent else Color(0xFF333333), RoundedCornerShape(10.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(label, color = if (selected) Orange else Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        Text(label, color = if (selected) Accent else Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         Text(subLabel, color = TextSec, fontSize = 11.sp)
     }
 }
@@ -286,16 +311,13 @@ private fun ExportSummaryCard(res: String, fps: String, codec: String, bitrate: 
         SummaryRow("帧率", fps)
         SummaryRow("编码", codec)
         SummaryRow("码率", bitrate)
-        SummaryRow("输出路径", "/sdcard/VideoSDK_*.mp4")
+        SummaryRow("输出", "/sdcard/VideoSDK_*.mp4")
     }
 }
 
 @Composable
 private fun SummaryRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, color = TextSec, fontSize = 12.sp)
         Text(value, color = Color.White, fontSize = 12.sp)
     }
@@ -314,28 +336,18 @@ private fun ExportProgressView(progress: Float, onCancel: () -> Unit) {
             CircularProgressIndicator(
                 progress = progress,
                 modifier = Modifier.size(120.dp),
-                color = Orange,
+                color = Accent,
                 strokeWidth = 8.dp,
                 trackColor = Color(0xFF333333)
             )
-            Text(
-                text = "${(progress * 100).toInt()}%",
-                color = Color.White,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold
-            )
+            Text("${(progress * 100).toInt()}%", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.height(32.dp))
         Text("正在导出...", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
-        Text("请勿退出应用", color = TextSec, fontSize = 13.sp)
+        Text("后台导出队列后续可接入 WorkManager 和断点恢复。", color = TextSec, fontSize = 13.sp)
         Spacer(Modifier.height(32.dp))
-        OutlinedButton(
-            onClick = onCancel,
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF555555)),
-            shape = RoundedCornerShape(25.dp)
-        ) {
+        OutlinedButton(onClick = onCancel, shape = RoundedCornerShape(25.dp)) {
             Text("取消导出")
         }
     }
@@ -350,37 +362,23 @@ private fun ExportSuccessView(onEditAgain: () -> Unit, onBackHome: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Box(
-            modifier = Modifier
-                .size(80.dp)
-                .clip(androidx.compose.foundation.shape.CircleShape)
-                .background(Color(0xFF1A3A1A)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(56.dp))
-        }
+        Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = Color(0xFF20C997), modifier = Modifier.size(72.dp))
         Spacer(Modifier.height(24.dp))
-        Text("导出完成！", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Text("导出完成", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
-        Text("视频已保存到相册", color = TextSec, fontSize = 14.sp)
+        Text("成片已写入模拟输出路径。", color = TextSec, fontSize = 14.sp)
         Spacer(Modifier.height(40.dp))
         Button(
             onClick = onEditAgain,
             modifier = Modifier.fillMaxWidth().height(50.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Orange),
+            colors = ButtonDefaults.buttonColors(containerColor = Accent),
             shape = RoundedCornerShape(25.dp)
         ) {
-            Text("再次编辑", fontWeight = FontWeight.Bold)
+            Text("继续编辑", color = Color.Black, fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.height(12.dp))
-        OutlinedButton(
-            onClick = onBackHome,
-            modifier = Modifier.fillMaxWidth().height(50.dp),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF444444)),
-            shape = RoundedCornerShape(25.dp)
-        ) {
-            Text("返回首页")
+        OutlinedButton(onClick = onBackHome, modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(25.dp)) {
+            Text("回到创作台")
         }
     }
 }
@@ -398,12 +396,8 @@ private fun ExportErrorView(message: String, onRetry: () -> Unit) {
         Spacer(Modifier.height(8.dp))
         Text(message, color = TextSec, fontSize = 13.sp)
         Spacer(Modifier.height(32.dp))
-        Button(
-            onClick = onRetry,
-            colors = ButtonDefaults.buttonColors(containerColor = Orange),
-            shape = RoundedCornerShape(25.dp)
-        ) {
-            Text("重试")
+        Button(onClick = onRetry, colors = ButtonDefaults.buttonColors(containerColor = Accent), shape = RoundedCornerShape(25.dp)) {
+            Text("重试", color = Color.Black, fontWeight = FontWeight.Bold)
         }
     }
 }

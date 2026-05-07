@@ -15,6 +15,7 @@ set(CORE_SRC
         ../../../../core/src/Filter.cpp
         ../../../../core/src/FilterEngine.cpp
         ../../../../core/src/Filters.cpp
+        ../../../../core/src/PropOverlayFilter.cpp
         ../../../../core/src/FrameBuffer.cpp
         ../../../../core/src/FrameBufferPool.cpp
         ../../../../core/src/GLContextManager.cpp
@@ -41,6 +42,9 @@ set(CORE_SRC
         ../../../../core/src/ai/FaceReshapeFilter.cpp
         ../../../../core/src/ai/MakeupFilter.cpp
         ../../../../core/src/ai/HairSegmentationFilter.cpp
+        ../../../../core/src/ai/BodyPoseDetector.cpp
+        ../../../../core/src/ai/GestureRecognizer.cpp
+        ../../../../core/src/ai/StickerRenderer.cpp
         ../../../../core/src/EffectPlugin.cpp
         ../../../../core/src/rhi/GLTexture.cpp
         ../../../../core/src/rhi/GLRenderDevice.cpp

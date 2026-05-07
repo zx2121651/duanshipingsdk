@@ -8,8 +8,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Analytics
+import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -29,7 +30,7 @@ import androidx.navigation.compose.rememberNavController
 import com.sdk.video.sample.state.AppViewModel
 import com.sdk.video.sample.state.TimelineViewModel
 
-private val FULLSCREEN_ROUTES = setOf("import", "timeline_editor", "export", "text_editor")
+private val fullscreenRoutes = setOf("import", "timeline_editor", "export", "text_editor")
 
 private data class NavItem(
     val route: String,
@@ -37,29 +38,30 @@ private data class NavItem(
     val icon: androidx.compose.ui.graphics.vector.ImageVector
 )
 
-private val NAV_ITEMS = listOf(
-    NavItem("home",        "首页", Icons.Filled.Home),
-    NavItem("capture",     "拍摄", Icons.Filled.Videocam),
-    NavItem("diagnostics", "我的", Icons.Filled.Person),
+private val navItems = listOf(
+    NavItem("home", "创作", Icons.Filled.Home),
+    NavItem("capture", "拍摄", Icons.Filled.Videocam),
+    NavItem("effects", "特效", Icons.Filled.ContentCut),
+    NavItem("diagnostics", "诊断", Icons.Filled.Analytics),
 )
 
 @Composable
 fun HomeScaffold(appViewModel: AppViewModel) {
-    val navController  = rememberNavController()
+    val navController = rememberNavController()
     val timelineVm: TimelineViewModel = viewModel()
     val backStack by navController.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
-    val showBottomBar = currentRoute !in FULLSCREEN_ROUTES
+    val showBottomBar = currentRoute !in fullscreenRoutes
 
     Scaffold(
         bottomBar = {
             AnimatedVisibility(
                 visible = showBottomBar,
                 enter = slideInVertically { it },
-                exit  = slideOutVertically { it }
+                exit = slideOutVertically { it }
             ) {
                 NavigationBar(containerColor = Color(0xFF101010)) {
-                    NAV_ITEMS.forEach { item ->
+                    navItems.forEach { item ->
                         val selected = backStack?.destination?.hierarchy
                             ?.any { it.route == item.route } == true
                         NavigationBarItem(
@@ -93,13 +95,14 @@ fun HomeScaffold(appViewModel: AppViewModel) {
                 navController = navController,
                 startDestination = "home"
             ) {
-                composable("home")            { HomeScreen(navController, appViewModel, timelineVm) }
-                composable("capture")         { CaptureScreen(appViewModel) }
-                composable("diagnostics")     { DiagnosticsScreen(appViewModel) }
-                composable("import")          { ImportScreen(navController, timelineVm) }
+                composable("home") { HomeScreen(navController, appViewModel, timelineVm) }
+                composable("capture") { CaptureScreen(appViewModel) }
+                composable("effects") { EffectsScreen(appViewModel) }
+                composable("diagnostics") { DiagnosticsScreen(appViewModel) }
+                composable("import") { ImportScreen(navController, timelineVm) }
                 composable("timeline_editor") { TimelineEditorScreen(navController, timelineVm, appViewModel) }
-                composable("export")          { ExportScreen(navController, timelineVm) }
-                composable("text_editor")     { TextEditorScreen(navController, timelineVm) }
+                composable("export") { ExportScreen(navController, timelineVm) }
+                composable("text_editor") { TextEditorScreen(navController, timelineVm) }
             }
         }
     }

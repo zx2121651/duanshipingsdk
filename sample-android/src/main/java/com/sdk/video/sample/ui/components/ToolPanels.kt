@@ -7,20 +7,45 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoFixHigh
+import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Title
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sdk.video.sample.state.ColorParams
@@ -28,19 +53,19 @@ import com.sdk.video.sample.state.TimelineTool
 import com.sdk.video.sample.state.TimelineViewModel
 import com.sdk.video.timeline.TimelineManager
 
-private val Orange = Color(0xFFFF6B00)
+private val Accent = Color(0xFF00D7FF)
 private val PanelBg = Color(0xFF141414)
 private val ToolBarBg = Color(0xFF0F0F0F)
 
 data class ToolItem(val tool: TimelineTool, val icon: ImageVector, val label: String)
 
 val TOOL_ITEMS = listOf(
-    ToolItem(TimelineTool.COLOR,      Icons.Filled.Tune,         "调色"),
-    ToolItem(TimelineTool.TEXT,       Icons.Filled.Title,        "文字"),
-    ToolItem(TimelineTool.AUDIO,      Icons.Filled.MusicNote,    "音频"),
-    ToolItem(TimelineTool.EFFECTS,    Icons.Filled.AutoFixHigh,  "特效"),
-    ToolItem(TimelineTool.TRANSITION, Icons.Filled.Layers,       "转场"),
-    ToolItem(TimelineTool.SPEED,      Icons.Filled.Speed,        "变速"),
+    ToolItem(TimelineTool.COLOR, Icons.Filled.Tune, "调色"),
+    ToolItem(TimelineTool.TEXT, Icons.Filled.Title, "文字"),
+    ToolItem(TimelineTool.AUDIO, Icons.Filled.MusicNote, "音频"),
+    ToolItem(TimelineTool.EFFECTS, Icons.Filled.AutoFixHigh, "特效"),
+    ToolItem(TimelineTool.TRANSITION, Icons.Filled.Layers, "转场"),
+    ToolItem(TimelineTool.SPEED, Icons.Filled.Speed, "变速"),
 )
 
 @Composable
@@ -62,7 +87,7 @@ fun ToolBar(
             Column(
                 modifier = Modifier
                     .clip(RoundedCornerShape(10.dp))
-                    .background(if (isActive) Orange.copy(alpha = 0.15f) else Color.Transparent)
+                    .background(if (isActive) Accent.copy(alpha = 0.16f) else Color.Transparent)
                     .clickable { onToolClick(item.tool) }
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -71,12 +96,12 @@ fun ToolBar(
                 Icon(
                     item.icon,
                     contentDescription = item.label,
-                    tint = if (isActive) Orange else Color(0xFFCCCCCC),
+                    tint = if (isActive) Accent else Color(0xFFCCCCCC),
                     modifier = Modifier.size(22.dp)
                 )
                 Text(
                     item.label,
-                    color = if (isActive) Orange else Color(0xFFCCCCCC),
+                    color = if (isActive) Accent else Color(0xFFCCCCCC),
                     fontSize = 11.sp,
                     fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
                 )
@@ -92,21 +117,21 @@ fun ToolPanelContainer(
     onNavigateToText: () -> Unit
 ) {
     val colorParams by timelineVm.colorParams.collectAsState()
-    val speedFactor  by timelineVm.speedFactor.collectAsState()
+    val speedFactor by timelineVm.speedFactor.collectAsState()
 
     AnimatedVisibility(
         visible = activeTool != null,
         enter = expandVertically(expandFrom = Alignment.Top),
-        exit  = shrinkVertically(shrinkTowards = Alignment.Top)
+        exit = shrinkVertically(shrinkTowards = Alignment.Top)
     ) {
         when (activeTool) {
-            TimelineTool.COLOR      -> ColorGradingPanel(colorParams) { key, v -> timelineVm.setColorParam(key, v) }
-            TimelineTool.TEXT       -> TextToolPanel(onNavigateToText)
-            TimelineTool.AUDIO      -> AudioPanel(timelineVm)
-            TimelineTool.EFFECTS    -> EffectsToolPanel()
+            TimelineTool.COLOR -> ColorGradingPanel(colorParams) { key, value -> timelineVm.setColorParam(key, value) }
+            TimelineTool.TEXT -> TextToolPanel(onNavigateToText)
+            TimelineTool.AUDIO -> AudioPanel(timelineVm)
+            TimelineTool.EFFECTS -> EffectsToolPanel()
             TimelineTool.TRANSITION -> TransitionPanel(timelineVm)
-            TimelineTool.SPEED      -> SpeedPanel(speedFactor) { timelineVm.setSpeed(it) }
-            null -> {}
+            TimelineTool.SPEED -> SpeedPanel(speedFactor) { timelineVm.setSpeed(it) }
+            null -> Unit
         }
     }
 }
@@ -123,12 +148,12 @@ fun ColorGradingPanel(
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        PanelTitle("调色")
-        ColorSlider("亮度", params.brightness, -1f..1f)  { onParamChange("brightness", it) }
-        ColorSlider("对比度", params.contrast,   -1f..1f)  { onParamChange("contrast", it) }
-        ColorSlider("饱和度", params.saturation, -1f..1f)  { onParamChange("saturation", it) }
-        ColorSlider("色温",  params.temperature, -1f..1f)  { onParamChange("temperature", it) }
-        ColorSlider("锐化",  params.sharpen,      0f..1f)  { onParamChange("sharpen", it) }
+        PanelTitle("专业调色")
+        ColorSlider("亮度", params.brightness, -1f..1f) { onParamChange("brightness", it) }
+        ColorSlider("对比", params.contrast, -1f..1f) { onParamChange("contrast", it) }
+        ColorSlider("饱和", params.saturation, -1f..1f) { onParamChange("saturation", it) }
+        ColorSlider("色温", params.temperature, -1f..1f) { onParamChange("temperature", it) }
+        ColorSlider("锐化", params.sharpen, 0f..1f) { onParamChange("sharpen", it) }
     }
 }
 
@@ -149,14 +174,14 @@ private fun ColorSlider(
             onValueChange = onValueChange,
             valueRange = range,
             modifier = Modifier.weight(1f),
-            colors = SliderDefaults.colors(thumbColor = Orange, activeTrackColor = Orange)
+            colors = SliderDefaults.colors(thumbColor = Accent, activeTrackColor = Accent)
         )
         Text(
             "%.2f".format(value),
             color = Color(0xFF888888),
             fontSize = 11.sp,
-            modifier = Modifier.width(36.dp),
-            textAlign = androidx.compose.ui.text.style.TextAlign.End
+            modifier = Modifier.width(38.dp),
+            textAlign = TextAlign.End
         )
     }
 }
@@ -170,65 +195,58 @@ fun AudioPanel(timelineVm: TimelineViewModel) {
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        PanelTitle("音频")
+        PanelTitle("音频处理")
 
-        var fadeIn  by remember { mutableStateOf(false) }
+        var fadeIn by remember { mutableStateOf(false) }
         var fadeOut by remember { mutableStateOf(false) }
-        var noiseRed by remember { mutableStateOf(0f) }
+        var noiseReduction by remember { mutableStateOf(0f) }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            AudioSwitch(label = "淡入", checked = fadeIn) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            ToggleChip(label = "淡入", checked = fadeIn) {
                 fadeIn = it
                 if (it) timelineVm.setAudioFadeIn(500_000L)
             }
-            AudioSwitch(label = "淡出", checked = fadeOut) {
+            ToggleChip(label = "淡出", checked = fadeOut) {
                 fadeOut = it
                 if (it) timelineVm.setAudioFadeOut(500_000L)
             }
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Text("降噪", color = Color(0xFFCCCCCC), fontSize = 13.sp, modifier = Modifier.width(52.dp))
             Slider(
-                value = noiseRed,
+                value = noiseReduction,
                 onValueChange = {
-                    noiseRed = it
+                    noiseReduction = it
                     timelineVm.setNoiseReduction(it)
                 },
                 valueRange = 0f..1f,
                 modifier = Modifier.weight(1f),
-                colors = SliderDefaults.colors(thumbColor = Orange, activeTrackColor = Orange)
+                colors = SliderDefaults.colors(thumbColor = Accent, activeTrackColor = Accent)
             )
-            Text("%.0f%%".format(noiseRed * 100), color = Color(0xFF888888), fontSize = 11.sp, modifier = Modifier.width(36.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
+            Text("%.0f%%".format(noiseReduction * 100), color = Color(0xFF888888), fontSize = 11.sp, modifier = Modifier.width(38.dp), textAlign = TextAlign.End)
         }
     }
 }
 
 @Composable
-private fun AudioSwitch(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    Row(
+private fun ToggleChip(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Box(
         modifier = Modifier
             .clip(RoundedCornerShape(8.dp))
-            .background(if (checked) Orange.copy(alpha = 0.15f) else Color(0xFF1E1E1E))
-            .border(1.dp, if (checked) Orange else Color(0xFF333333), RoundedCornerShape(8.dp))
+            .background(if (checked) Accent.copy(alpha = 0.16f) else Color(0xFF1E1E1E))
+            .border(1.dp, if (checked) Accent else Color(0xFF333333), RoundedCornerShape(8.dp))
             .clickable { onCheckedChange(!checked) }
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Text(label, color = if (checked) Orange else Color(0xFFCCCCCC), fontSize = 13.sp)
+        Text(label, color = if (checked) Accent else Color(0xFFCCCCCC), fontSize = 13.sp)
     }
 }
 
 @Composable
 fun SpeedPanel(current: Float, onSpeedChange: (Float) -> Unit) {
-    val speeds = listOf(0.25f to "0.25×", 0.5f to "0.5×", 1f to "1×", 1.5f to "1.5×", 2f to "2×", 4f to "4×")
+    val speeds = listOf(0.25f to "0.25x", 0.5f to "0.5x", 1f to "1x", 1.5f to "1.5x", 2f to "2x", 4f to "4x")
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -237,32 +255,24 @@ fun SpeedPanel(current: Float, onSpeedChange: (Float) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         PanelTitle("变速")
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             speeds.forEach { (speed, label) ->
-                val isActive = (current == speed)
+                val isActive = current == speed
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .height(38.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(if (isActive) Orange else Color(0xFF1E1E1E))
-                        .border(1.dp, if (isActive) Orange else Color(0xFF333333), RoundedCornerShape(8.dp))
+                        .background(if (isActive) Accent else Color(0xFF1E1E1E))
+                        .border(1.dp, if (isActive) Accent else Color(0xFF333333), RoundedCornerShape(8.dp))
                         .clickable { onSpeedChange(speed) },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(label, color = Color.White, fontSize = 12.sp, fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal)
+                    Text(label, color = if (isActive) Color.Black else Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
-        Text(
-            "慢动作 / 快动作",
-            color = Color(0xFF666666),
-            fontSize = 11.sp,
-            modifier = Modifier.align(Alignment.CenterHorizontally)
-        )
+        Text("后续可扩展曲线变速、卡点变速和慢动作补帧。", color = Color(0xFF777777), fontSize = 11.sp)
     }
 }
 
@@ -270,11 +280,11 @@ fun SpeedPanel(current: Float, onSpeedChange: (Float) -> Unit) {
 fun TransitionPanel(timelineVm: TimelineViewModel) {
     val transitions = listOf(
         "无" to TimelineManager.TransitionType.NONE,
-        "淡入淡出" to TimelineManager.TransitionType.CROSSFADE,
+        "叠化" to TimelineManager.TransitionType.CROSSFADE,
         "闪白" to TimelineManager.TransitionType.FLASH,
-        "擦除" to TimelineManager.TransitionType.WIPE_LEFT,
-        "滑动" to TimelineManager.TransitionType.SLIDE_LEFT,
-        "缩放" to TimelineManager.TransitionType.ZOOM_IN,
+        "左擦除" to TimelineManager.TransitionType.WIPE_LEFT,
+        "左滑入" to TimelineManager.TransitionType.SLIDE_LEFT,
+        "放大" to TimelineManager.TransitionType.ZOOM_IN,
     )
     var selected by remember { mutableStateOf(TimelineManager.TransitionType.NONE) }
 
@@ -293,30 +303,12 @@ fun TransitionPanel(timelineVm: TimelineViewModel) {
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             transitions.forEach { (label, type) ->
-                TransitionChip(
-                    label = label,
-                    isSelected = selected == type
-                ) {
+                ToggleChip(label = label, checked = selected == type) {
                     selected = type
                     timelineVm.setTransition(type, 500_000L)
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun TransitionChip(label: String, isSelected: Boolean, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(if (isSelected) Orange else Color(0xFF1E1E1E))
-            .border(1.dp, if (isSelected) Orange else Color(0xFF333333), RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(label, color = Color.White, fontSize = 13.sp)
     }
 }
 
@@ -330,20 +322,10 @@ fun EffectsToolPanel() {
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         PanelTitle("特效")
-        Text("前往「拍摄」Tab 可实时预览特效，此处展示已加载包:", color = Color(0xFF888888), fontSize = 12.sp)
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            listOf("暖光滤镜", "可爱妆容", "粉色发色").forEach { name ->
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFF1E1E1E))
-                        .border(1.dp, Color(0xFF333333), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    Text(name, color = Color(0xFFCCCCCC), fontSize = 13.sp)
-                }
+        Text("展示 SDK 已规划的实时滤镜、道具贴纸、妆容和分割能力。", color = Color(0xFF888888), fontSize = 12.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("电影感", "发光描边", "背景分割", "贴纸跟随").forEach { name ->
+                ToggleChip(label = name, checked = false) {}
             }
         }
     }
@@ -358,16 +340,16 @@ fun TextToolPanel(onNavigateToText: () -> Unit) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        PanelTitle("文字")
+        PanelTitle("文字与字幕")
         Button(
             onClick = onNavigateToText,
             modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = Orange),
+            colors = ButtonDefaults.buttonColors(containerColor = Accent),
             shape = RoundedCornerShape(10.dp)
         ) {
-            Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+            Icon(Icons.Filled.Add, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
-            Text("添加文字 / 字幕", fontWeight = FontWeight.Bold)
+            Text("添加标题 / 字幕", color = Color.Black, fontWeight = FontWeight.Bold)
         }
     }
 }

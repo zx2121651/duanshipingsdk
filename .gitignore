@@ -2,6 +2,7 @@ android/build/
 build/
 build_*/
 .gradle/
+local.properties
 ios/build/
 android/.cxx/
 CMakeCache.txt

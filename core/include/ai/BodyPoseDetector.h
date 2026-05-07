@@ -31,6 +31,7 @@
 #include <memory>
 #include <cstdint>
 #include <string>
+#include <cmath>
 
 namespace sdk {
 namespace video {

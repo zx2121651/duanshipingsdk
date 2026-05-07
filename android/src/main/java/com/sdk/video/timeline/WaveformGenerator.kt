@@ -196,7 +196,7 @@ class WaveformGenerator(context: Context) {
             if (peakAbs > globalMax) globalMax = peakAbs
         }
         // Normalize
-        for (i in peaks.indices) peaks[i] /= globalMax
+        for (i in peaks.indices) peaks[i] = peaks[i] / globalMax
         return peaks
     }
 
