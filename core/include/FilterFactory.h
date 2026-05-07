@@ -2,6 +2,7 @@
 #include <memory>
 #include "Filter.h"
 #include "Filters.h"
+#include "PropOverlayFilter.h"
 #include "GLContextManager.h"
 #include "FrameBufferPool.h"
 
@@ -17,7 +18,10 @@ enum class FilterType {
     CINEMATIC_LOOKUP = 4,
     COMPUTE_BLUR = 5,
     NIGHT_VISION = 6,
-    LUT3D = 7           // P1-2: 64x64x64 3D LUT colour grading
+    LUT3D = 7,          // P1-2: 64x64x64 3D LUT colour grading
+    DUAL_KAWASE_BLUR = 8, // Iterative Kawase blur — large-radius, low-cost
+    BLOOM = 9,            // Glow: threshold → Kawase blur → additive composite
+    PROP_OVERLAY = 10     // Real-time prop/sticker overlay (RGBA sprite, alpha-blended)
 };
 
 class FilterFactory {
@@ -57,6 +61,15 @@ public:
 
             case FilterType::LUT3D:
                 return std::make_shared<LUT3DFilter>();
+
+            case FilterType::DUAL_KAWASE_BLUR:
+                return std::make_shared<DualKawaseBlurFilter>(pool);
+
+            case FilterType::BLOOM:
+                return std::make_shared<BloomFilter>(pool);
+
+            case FilterType::PROP_OVERLAY:
+                return std::make_shared<PropOverlayFilter>();
 
             default:
                 return nullptr;

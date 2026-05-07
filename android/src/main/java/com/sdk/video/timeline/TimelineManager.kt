@@ -255,6 +255,18 @@ class TimelineManager(val outputWidth: Int, val outputHeight: Int, val fps: Int)
         }
 
         @JvmStatic private external fun nativeLoadDraftStatic(filePath: String): Long
+
+        /**
+         * Static convenience wrapper — safe to call without constructing a full timeline.
+         * Uses a minimal (1×1 @1fps) throwaway instance; the JNI function is stateless.
+         */
+        fun queryIsSoftwareDecoderAvailable(): Boolean {
+            return try {
+                TimelineManager(1, 1, 1).isSoftwareDecoderAvailable()
+            } catch (_: Exception) {
+                false
+            }
+        }
     }
 
     // --- 底层 JNI 声明 ---

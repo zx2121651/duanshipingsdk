@@ -1,6 +1,7 @@
 #pragma once
 #include "Timeline.h"
 #include "Compositor.h"
+#include "AudioMixer.h"
 #include <string>
 #include <memory>
 #include <functional>
@@ -70,6 +71,13 @@ public:
                                std::shared_ptr<Compositor> compositor,
                                ProgressCallback onProgress,
                                CompletionCallback onComplete) = 0;
+
+    /**
+     * @brief 注入音频混音器（可选）
+     * 注入后，exportAsync 会同时编码音轨并 mux 进输出文件。
+     * 不调用此方法则输出为无声视频（向后兼容）。
+     */
+    virtual void setAudioMixer(std::shared_ptr<AudioMixer> mixer) {}
 
     /**
      * @brief 取消导出

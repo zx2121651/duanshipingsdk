@@ -16,10 +16,15 @@
 #endif
 
 #ifdef HAS_METAL
-#   include "mtl/MetalRenderDevice.h"
+#   include "../../include/rhi/metal/MetalRenderDevice.h"
 #endif
 
 #include <iostream>
+#include <cstdlib>
+#include <cstring>
+#ifdef __ANDROID__
+#   include <sys/system_properties.h>
+#endif
 
 namespace sdk {
 namespace video {
@@ -30,6 +35,31 @@ std::shared_ptr<IRenderDevice> RenderDeviceFactory::create(
     const GLContextManager& ctxManager,
     BackendType& chosen)
 {
+    // ----------------------------------------------------------------
+    // QA/debug: runtime backend override via env variable or system prop
+    //   setenv SDK_RHI_BACKEND=GLES|VULKAN|METAL  (Linux/macOS/Android)
+    //   set    SDK_RHI_BACKEND=GLES               (Windows)
+    //   adb shell setprop debug.sdk.rhi.backend GLES  (Android only)
+    // Only takes effect when preferred == AUTO.
+    // ----------------------------------------------------------------
+    if (preferred == BackendType::AUTO) {
+        const char* envVal = std::getenv("SDK_RHI_BACKEND");
+#ifdef __ANDROID__
+        char sysProp[PROP_VALUE_MAX] = {};
+        if (!envVal && __system_property_get("debug.sdk.rhi.backend", sysProp) > 0)
+            envVal = sysProp;
+#endif
+        if (envVal && *envVal) {
+            if      (!std::strcmp(envVal, "GLES"))   preferred = BackendType::GLES;
+            else if (!std::strcmp(envVal, "VULKAN")) preferred = BackendType::VULKAN;
+            else if (!std::strcmp(envVal, "METAL"))  preferred = BackendType::METAL;
+            // unknown value: ignore, fall through to platform-based AUTO
+            if (preferred != BackendType::AUTO)
+                std::cout << "RHI: ENV/prop override '" << envVal << "' -> "
+                          << backendTypeName(preferred) << std::endl;
+        }
+    }
+
     // ----------------------------------------------------------------
     // 解析 AUTO → 具体后端
     // ----------------------------------------------------------------
@@ -49,13 +79,13 @@ std::shared_ptr<IRenderDevice> RenderDeviceFactory::create(
     // ----------------------------------------------------------------
 #ifdef HAS_METAL
     if (resolved == BackendType::METAL) {
-        auto dev = MetalRenderDevice::tryCreate();
-        if (dev) {
+        auto dev = std::make_shared<sdk::video::rhi::MetalRenderDevice>();
+        if (dev->initialize()) {
             chosen = BackendType::METAL;
-            std::cout << "RHI: Backend selected → METAL" << std::endl;
+            std::cout << "RHI: Backend selected \u2192 METAL" << std::endl;
             return dev;
         }
-        std::cerr << "RHI: MetalRenderDevice::tryCreate() failed, fallback to GLES" << std::endl;
+        std::cerr << "RHI: MetalRenderDevice::initialize() failed, fallback to GLES" << std::endl;
         resolved = BackendType::GLES;
     }
 #else

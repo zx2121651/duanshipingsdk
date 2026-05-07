@@ -106,6 +106,8 @@ public:
 
     std::shared_ptr<ITexture> bindExternalHardwareBuffer(void* nativeBuffer) override;
 
+    RHICapabilities getCapabilities() const override;
+
     // Instance-level FBO cache management (replaces former static cache)
     GLuint getOrCreateFBO(uint32_t texId, uint32_t texWidth, uint32_t texHeight);
     void removeFBOFromCache(uint32_t texId);

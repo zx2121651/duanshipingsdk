@@ -19,10 +19,11 @@ public:
     ~VulkanBuffer() override;
 
     // IBuffer
-    void*  map() override;
+    void*  map(size_t offset, size_t size, BufferAccess access) override;
     void   unmap() override;
     size_t getSize() const override { return m_size; }
-    void   upload(const void* data, size_t size, size_t offset = 0) override;
+    BufferType getType() const override { return m_type; }
+    void   updateData(const void* data, size_t size, size_t offset = 0) override;
 
     VkBuffer handle() const { return m_buffer; }
 
@@ -31,8 +32,9 @@ private:
     VkBuffer m_buffer  = VK_NULL_HANDLE;
     std::shared_ptr<VulkanMemoryAllocator> m_allocator;
     VulkanMemoryAllocator::Allocation      m_alloc{};
-    size_t   m_size     = 0;
-    bool     m_hostVisible = false;
+    size_t     m_size       = 0;
+    BufferType m_type       = BufferType::VertexBuffer;
+    bool       m_hostVisible = false;
 };
 
 } // namespace rhi

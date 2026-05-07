@@ -20,7 +20,7 @@ VulkanBuffer::VulkanBuffer(VkDevice device,
                            std::shared_ptr<VulkanMemoryAllocator> allocator,
                            BufferType type, BufferUsage usage,
                            size_t size, const void* data)
-    : m_device(device), m_allocator(std::move(allocator)), m_size(size)
+    : m_device(device), m_allocator(std::move(allocator)), m_size(size), m_type(type)
 {
     VkBufferCreateInfo ci{};
     ci.sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -56,10 +56,10 @@ VulkanBuffer::~VulkanBuffer() {
     m_allocator->free(m_alloc);
 }
 
-void* VulkanBuffer::map() {
+void* VulkanBuffer::map(size_t offset, size_t size, BufferAccess /*access*/) {
     if (!m_hostVisible || m_alloc.memory == VK_NULL_HANDLE) return nullptr;
     void* ptr = nullptr;
-    vkMapMemory(m_device, m_alloc.memory, 0, m_size, 0, &ptr);
+    vkMapMemory(m_device, m_alloc.memory, offset, size == 0 ? m_size : size, 0, &ptr);
     return ptr;
 }
 
@@ -68,7 +68,7 @@ void VulkanBuffer::unmap() {
         vkUnmapMemory(m_device, m_alloc.memory);
 }
 
-void VulkanBuffer::upload(const void* data, size_t size, size_t offset) {
+void VulkanBuffer::updateData(const void* data, size_t size, size_t offset) {
     if (!m_hostVisible) return;
     void* mapped = nullptr;
     vkMapMemory(m_device, m_alloc.memory, offset, size, 0, &mapped);

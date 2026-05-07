@@ -1,3 +1,4 @@
+@file:OptIn(com.sdk.video.InternalApi::class)
 package com.sdk.video.export
 
 import android.content.ComponentName
@@ -6,10 +7,13 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.os.Build
 import android.os.IBinder
+import androidx.lifecycle.LiveData
+import androidx.work.*
 import com.sdk.video.RenderEngine
 import com.sdk.video.VideoExportConfig
 import com.sdk.video.timeline.TimelineExporter
 import com.sdk.video.timeline.TimelineManager
+import java.util.UUID
 
 /**
  * BackgroundExportManager — 后台视频导出公开 API
@@ -110,6 +114,36 @@ class BackgroundExportManager(private val context: Context) {
      */
     fun cancelExport() {
         exporter.cancel()
+        workRequestId?.let { WorkManager.getInstance(context).cancelWorkById(it) }
+    }
+
+    // -------------------------------------------------------------------------
+    // WorkManager overload — survives process death, respects Android 12+ limits
+    // -------------------------------------------------------------------------
+
+    private var workRequestId: UUID? = null
+
+    /**
+     * 通过 WorkManager 提交后台导出任务（推荐用于 Android 12+）。
+     *
+     * 与 [startExport] 的区别：
+     * - 进程被强杀后 WorkManager 自动重新调度 Worker。
+     * - 进度通过返回的 [LiveData]<[WorkInfo]> 观察（`workInfo.progress`）。
+     * - 不需要调用方管理 Service 生命周期。
+     *
+     * @param timeline    已构建的 [TimelineManager] 实例
+     * @param renderEngine 已初始化的 [RenderEngine] 实例
+     * @param config      导出参数（outputPath / width / height / fps / videoBitrate）
+     * @return            [LiveData]<[WorkInfo]>，可在 ViewModel/Fragment 中 observe
+     */
+    fun startExportViaWorkManager(
+        timeline:     TimelineManager,
+        renderEngine: RenderEngine,
+        config:       VideoExportConfig
+    ): LiveData<WorkInfo> {
+        val liveData = BackgroundExportWorker.enqueue(context, timeline, renderEngine, config)
+        workRequestId = null  // ID is managed inside BackgroundExportWorker.enqueue
+        return liveData
     }
 
     /**

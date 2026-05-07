@@ -50,6 +50,7 @@ public:
     std::shared_ptr<ITexture>       createMSAATexture(const TextureDesc& desc, int samples) override;
     void submit(ICommandBuffer* cmdBuffer) override;
     std::shared_ptr<ITexture> bindExternalHardwareBuffer(void* nativeBuffer) override;
+    RHICapabilities getCapabilities() const override;
 
     // Vulkan-specific
     VulkanContext& context() { return m_ctx; }

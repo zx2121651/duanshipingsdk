@@ -12,6 +12,44 @@ namespace sdk {
 namespace video {
 namespace rhi {
 
+// ---------------------------------------------------------------------------
+// BackendType — canonical definition (was previously in RenderDeviceFactory.h)
+// ---------------------------------------------------------------------------
+enum class BackendType {
+    AUTO   = 0,  ///< 自动选择（优先级：Metal > Vulkan > GLES）
+    GLES   = 1,  ///< OpenGL ES（3.0 / 3.1 / 3.2 三级梯级）
+    VULKAN = 2,  ///< Vulkan（Android NDK）
+    METAL  = 3   ///< Metal（iOS / macOS）
+};
+
+inline const char* backendTypeName(BackendType t) {
+    switch (t) {
+        case BackendType::AUTO:   return "AUTO";
+        case BackendType::GLES:   return "GLES";
+        case BackendType::VULKAN: return "VULKAN";
+        case BackendType::METAL:  return "METAL";
+        default:                  return "UNKNOWN";
+    }
+}
+
+// ---------------------------------------------------------------------------
+// RHICapabilities — backend capability snapshot, returned by getCapabilities()
+// Callers can query what the active backend supports without touching
+// GLContextManager fields directly.
+// ---------------------------------------------------------------------------
+struct RHICapabilities {
+    BackendType backend          = BackendType::GLES;
+    bool        computeShader    = false; ///< GLES 3.1+ compute with ≥256 invocations / Vulkan
+    bool        geometryShader   = false; ///< GLES 3.2 core or OES extension / Vulkan
+    bool        tessellation     = false; ///< GLES 3.2 core or OES extension / Vulkan
+    bool        msaa             = false; ///< maxMSAASamples >= 4
+    bool        fp16RenderTarget = false; ///< GL_RGBA16F as FBO attachment
+    bool        astc             = false; ///< GL_KHR_texture_compression_astc_ldr
+    int         maxMSAASamples   = 1;
+    int         glesVersionInt   = 30;    ///< 30/31/32; 0 for Vulkan/Metal
+    const char* rendererString   = "";    ///< GL_RENDERER or Metal device name
+};
+
 class IRenderDevice {
 public:
     virtual ~IRenderDevice() = default;
@@ -59,6 +97,12 @@ public:
 
     // External bindings
     virtual std::shared_ptr<ITexture> bindExternalHardwareBuffer(void* nativeBuffer) = 0;
+
+    /**
+     * @brief Query backend capability snapshot.
+     * Safe to call without an active GL context (returns conservative defaults).
+     */
+    [[nodiscard]] virtual RHICapabilities getCapabilities() const = 0;
 };
 
 } // namespace rhi

@@ -4,6 +4,8 @@
 #include <memory>
 #include "../../../../core/include/timeline/TimelineExporter.h"
 #include "../../../../core/include/timeline/Compositor.h"
+#include "../../../../core/include/timeline/AudioMixer.h"
+#include "../../../../core/include/timeline/AudioDecoder.h"
 
 using namespace sdk::video::timeline;
 
@@ -62,6 +64,16 @@ Java_com_sdk_video_timeline_TimelineExporter_nativeExportAsync(JNIEnv *env, jobj
     // 将 RenderEngine 中待命的 DSR 配置注入 Compositor
     if (wrapper->dsrEnabled) {
         compositor->setDsrConfig(wrapper->pendingDsr);
+    }
+
+    // 创建音频混音器（可选）：有平台解码器池时注入，无则静音导出
+    {
+        auto audioPool = sdk::video::timeline::createPlatformAudioDecoderPool();
+        if (audioPool) {
+            auto audioMixer = std::make_shared<sdk::video::timeline::AudioMixer>(
+                *timelinePtr, audioPool);
+            exporter->setAudioMixer(audioMixer);
+        }
     }
 
     // JNI Callbacks management

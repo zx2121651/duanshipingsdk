@@ -21,6 +21,8 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
         const val FILTER_TYPE_BILATERAL = 3 // Skin Smoothing
         const val FILTER_TYPE_NIGHT_VISION = 6
         const val FILTER_TYPE_LUT3D = 7        // P1-2: 64x64x64 3D LUT
+        const val FILTER_TYPE_DUAL_KAWASE_BLUR = 8 // Large-radius iterative Kawase blur
+        const val FILTER_TYPE_BLOOM = 9            // Glow: threshold → blur → additive composite
     }
 
     private var nativeHandle: Long = 0
@@ -421,6 +423,31 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     }
 
     // ----------------------------------------------------------------
+    // 磨皮美白 — 无需模型，立即可用
+    // ----------------------------------------------------------------
+
+    /**
+     * 启用磨皮美白效果（基于 YCbCr 皮肤检测 + 近似双边模糊，无需 TFLite）。
+     * 可在 init() 之后任意时刻调用；重复调用仅更新强度，不重建管线。
+     *
+     * @param smoothStrength 磨皮强度 [0.0, 1.0]，默认 0.6
+     * @param whitenStrength 美白强度 [0.0, 1.0]，默认 0.4
+     */
+    fun enableBeauty(smoothStrength: Float = 0.6f, whitenStrength: Float = 0.4f) {
+        handleLock.read {
+            if (nativeHandle != 0L)
+                nativeEnableBeauty(nativeHandle, smoothStrength, whitenStrength)
+        }
+    }
+
+    /** 关闭磨皮美白并从渲染管线移除 */
+    fun disableBeauty() {
+        handleLock.read {
+            if (nativeHandle != 0L) nativeDisableBeauty(nativeHandle)
+        }
+    }
+
+    // ----------------------------------------------------------------
     // 人脸 AI — 对标抖音
     // ----------------------------------------------------------------
 
@@ -529,6 +556,43 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
         }
     }
 
+    /**
+     * 设备 GL 能力快照（用于诊断页 UI）。
+     * 由 GLContextManager 嗅探后聚合返回，所有字段均反映真实硬件能力。
+     */
+    data class DeviceCapabilities(
+        val glesVersion: Int,         // 30 / 31 / 32
+        val computeShader: Boolean,   // 是否支持 Compute Shader
+        val fp16: Boolean,            // 是否支持 FP16 渲染目标（HDR 前置条件）
+        val astc: Boolean,            // 是否支持 ASTC 纹理压缩
+        val vulkan: Boolean,          // Vulkan 后端可用性
+        val metal: Boolean,           // Metal 后端可用性（Android 始终 false）
+        val maxMSAA: Int,             // glGetIntegerv(GL_MAX_SAMPLES)
+        val geometryShader: Boolean   // 是否支持几何着色器（GLES 3.2+）
+    )
+
+    /**
+     * 拉取设备能力快照。必须在引擎已 init 之后调用。
+     * 失败返回 null（引擎未初始化）。
+     */
+    fun getDeviceCapabilities(): DeviceCapabilities? {
+        handleLock.read {
+            if (nativeHandle == 0L) return null
+            val a = nativeGetDeviceCapabilities(nativeHandle) ?: return null
+            if (a.size < 8) return null
+            return DeviceCapabilities(
+                glesVersion    = a[0],
+                computeShader  = a[1] != 0,
+                fp16           = a[2] != 0,
+                astc           = a[3] != 0,
+                vulkan         = a[4] != 0,
+                metal          = a[5] != 0,
+                maxMSAA        = a[6],
+                geometryShader = a[7] != 0
+            )
+        }
+    }
+
     /** 禁用 DSR，恢复全分辨率渲染。 */
     fun disableDsr() {
         handleLock.read {
@@ -572,8 +636,11 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     private external fun nativeSetBackend(handle: Long, backendType: Int)
     private external fun nativeGetActiveBackend(handle: Long): Int
     private external fun nativeGetGLESVersion(handle: Long): Int
+    private external fun nativeGetDeviceCapabilities(handle: Long): IntArray?
 
     // ── 抖音对标 native 方法 ──────────────────────────────────────────
+    private external fun nativeEnableBeauty(handle: Long, smooth: Float, whiten: Float)
+    private external fun nativeDisableBeauty(handle: Long)
     private external fun nativeLoadFaceLandmarkModel(handle: Long, modelPath: String): Boolean
     private external fun nativeGetFaceLandmarks(handle: Long): FloatArray?
     private external fun nativeSetFaceReshape(handle: Long,

@@ -72,6 +72,9 @@ enum ErrorCode {
     ERR_AUDIO_CODEC_CONFIG_FAILED     = -3015, // 音频解码器配置失败
     ERR_AUDIO_CODEC_START_FAILED      = -3016, // 音频解码器启动失败
 
+    // --- [Category: Video Decoder (extended)] Range: -3020 ~ -3029 ---
+    ERR_DECODER_OPEN_FAILED = -3020,         // 解码器打开文件失败（路径无效/格式不支持）
+
     // --- [Category: Graph Compilation] (Recoverable) Range: -4000 ~ -4999 ---
     // 滤镜图构建错误，建议回滚到上一个有效图状态
     ERR_GRAPH_CYCLE_DETECTED = -4001,   // 渲染图中存在环路

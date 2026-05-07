@@ -57,6 +57,12 @@ class BackgroundExportService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_CANCEL) {
+            exporter?.cancel()
+            completeSelf()
+            return START_NOT_STICKY
+        }
+
         outputFileName = intent?.getStringExtra(EXTRA_OUTPUT_PATH)
             ?.let { File(it).name } ?: "video"
 
@@ -183,8 +189,9 @@ class BackgroundExportService : Service() {
         private const val POLL_INTERVAL_MS = 500L
 
         // State codes matching C++ TimelineExporter::State enum
+        // IDLE=0, STARTING=1, EXPORTING=2, COMPLETED=3, CANCELED=4, FAILED=5
         private const val STATE_COMPLETED = 3
-        private const val STATE_FAILED    = 4
-        private const val STATE_CANCELED  = 5
+        private const val STATE_CANCELED  = 4
+        private const val STATE_FAILED    = 5
     }
 }

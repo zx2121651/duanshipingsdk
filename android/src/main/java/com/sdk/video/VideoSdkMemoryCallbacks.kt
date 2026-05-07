@@ -1,3 +1,4 @@
+@file:OptIn(InternalApi::class)
 package com.sdk.video
 
 import android.content.ComponentCallbacks2

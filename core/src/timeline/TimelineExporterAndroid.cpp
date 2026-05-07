@@ -1,4 +1,6 @@
 #include "../../include/timeline/TimelineExporter.h"
+#include "../../include/timeline/AudioMixer.h"
+#include "../../include/timeline/SyncClock.h"
 
 #ifdef __ANDROID__
 #include <EGL/egl.h>
@@ -34,6 +36,12 @@ public:
     TimelineExporterAndroid()
         : m_width(0), m_height(0), m_fps(30), m_bitrate(0),
           m_state(State::IDLE), m_progress(0.0f), m_chunkDurationNs(0) {}
+
+    sdk::video::timeline::SyncClock m_syncClock;
+
+    void setAudioMixer(std::shared_ptr<AudioMixer> mixer) override {
+        m_audioMixer = std::move(mixer);
+    }
 
     ~TimelineExporterAndroid() override {
         cancel();
@@ -145,7 +153,8 @@ private:
 
         // --- 1. Resource Management Helpers (RAII-like) ---
         struct ResourceGuard {
-            AMediaCodec* encoder = nullptr;
+            AMediaCodec* encoder      = nullptr;
+            AMediaCodec* audioEncoder = nullptr;
             AMediaMuxer* muxer = nullptr;
             ANativeWindow* surface = nullptr;
             EGLDisplay display = EGL_NO_DISPLAY;
@@ -153,6 +162,7 @@ private:
             EGLContext eglContext = EGL_NO_CONTEXT;
             FILE* fp = nullptr;
             AMediaFormat* videoFormat = nullptr;
+            AMediaFormat* audioFormat = nullptr;
 
             ~ResourceGuard() {
                 if (eglContext != EGL_NO_CONTEXT) {
@@ -164,6 +174,10 @@ private:
                     AMediaCodec_stop(encoder);
                     AMediaCodec_delete(encoder);
                 }
+                if (audioEncoder) {
+                    AMediaCodec_stop(audioEncoder);
+                    AMediaCodec_delete(audioEncoder);
+                }
                 if (muxer) {
                     AMediaMuxer_stop(muxer);
                     AMediaMuxer_delete(muxer);
@@ -171,6 +185,7 @@ private:
                 if (surface) ANativeWindow_release(surface);
                 if (fp) fclose(fp);
                 if (videoFormat) AMediaFormat_delete(videoFormat);
+                if (audioFormat) AMediaFormat_delete(audioFormat);
             }
         } g;
 
@@ -199,6 +214,35 @@ private:
 
         status = AMediaCodec_start(g.encoder);
         if (status != AMEDIA_OK) return Result::error(ErrorCode::ERR_EXPORTER_ENCODER_INIT_FAILED, "Failed to start encoder");
+
+        // --- 2b. Configure AAC Audio Encoder (optional, non-fatal if unavailable) ---
+        constexpr int AAC_SAMPLE_RATE    = AudioMixer::TARGET_SAMPLE_RATE;  // 44100
+        constexpr int AAC_CHANNELS       = AudioMixer::TARGET_CHANNELS;     // 2
+        constexpr int AAC_FRAME_SAMPLES  = 1024;   // standard AAC-LC frame size
+        constexpr int AUDIO_BITRATE      = 128000;
+        if (m_audioMixer) {
+            AMediaFormat* af = AMediaFormat_new();
+            AMediaFormat_setString(af, AMEDIAFORMAT_KEY_MIME,         "audio/mp4a-latm");
+            AMediaFormat_setInt32 (af, AMEDIAFORMAT_KEY_SAMPLE_RATE,  AAC_SAMPLE_RATE);
+            AMediaFormat_setInt32 (af, AMEDIAFORMAT_KEY_CHANNEL_COUNT, AAC_CHANNELS);
+            AMediaFormat_setInt32 (af, AMEDIAFORMAT_KEY_BIT_RATE,     AUDIO_BITRATE);
+            AMediaFormat_setInt32 (af, AMEDIAFORMAT_KEY_AAC_PROFILE,  2);  // AAC-LC
+            g.audioEncoder = AMediaCodec_createEncoderByType("audio/mp4a-latm");
+            if (!g.audioEncoder) {
+                LOGE("AAC encoder unavailable — exporting video-only");
+            } else {
+                media_status_t ast = AMediaCodec_configure(g.audioEncoder, af, nullptr, nullptr, AMEDIACODEC_CONFIGURE_FLAG_ENCODE);
+                if (ast != AMEDIA_OK) {
+                    LOGE("AAC configure failed (%d) — exporting video-only", ast);
+                    AMediaCodec_delete(g.audioEncoder);
+                    g.audioEncoder = nullptr;
+                } else {
+                    AMediaCodec_start(g.audioEncoder);
+                    LOGI("AAC encoder started (%d Hz, %d ch, %d bps)", AAC_SAMPLE_RATE, AAC_CHANNELS, AUDIO_BITRATE);
+                }
+            }
+            AMediaFormat_delete(af);
+        }
 
         // --- 3. Setup Headless EGL Context ---
         g.display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
@@ -245,7 +289,13 @@ private:
         if (!g.muxer) return Result::error(ErrorCode::ERR_EXPORTER_MUXER_INIT_FAILED, "Failed to create muxer");
 
         ssize_t videoTrackIndex = -1;
-        bool muxerStarted = false;
+        ssize_t audioTrackIndex = -1;
+        bool muxerStarted      = false;
+        bool videoFormatReady  = false;
+        bool audioFormatReady  = !m_audioMixer || !g.audioEncoder;  // true when no audio path
+        bool audioEncoderEOS   = false;
+        int64_t audioPtsMicros = 0;
+        std::vector<int16_t> audioPcmBuf;
 
         // --- 5. Render Loop ---
         int64_t totalDurationNs = timeline->getTotalDuration();
@@ -254,6 +304,7 @@ private:
         int64_t frameDurationNs = 1000000000 / m_fps;
         int64_t currentTimeNs = 0;
         int64_t lastChunkStartNs = 0;
+        m_syncClock.reset();
         bool encoderEOS = false;
         bool inputEOS = false;
 
@@ -281,6 +332,23 @@ private:
                 }
                 eglSwapBuffers(g.display, g.eglSurface);
 
+                // Feed audio PCM for this video frame's time window
+                if (g.audioEncoder && m_audioMixer && !audioEncoderEOS) {
+                    auto pcm = m_audioMixer->mixAudioAtTime(currentTimeNs, frameDurationNs);
+                    audioPcmBuf.insert(audioPcmBuf.end(), pcm.begin(), pcm.end());
+                    while ((int)audioPcmBuf.size() >= AAC_FRAME_SAMPLES * AAC_CHANNELS) {
+                        ssize_t inIdx = AMediaCodec_dequeueInputBuffer(g.audioEncoder, 0);
+                        if (inIdx < 0) break;
+                        size_t inSz;
+                        uint8_t* inBuf = AMediaCodec_getInputBuffer(g.audioEncoder, inIdx, &inSz);
+                        size_t copyBytes = std::min(inSz, (size_t)(AAC_FRAME_SAMPLES * AAC_CHANNELS * sizeof(int16_t)));
+                        memcpy(inBuf, audioPcmBuf.data(), copyBytes);
+                        AMediaCodec_queueInputBuffer(g.audioEncoder, inIdx, 0, copyBytes, audioPtsMicros, 0);
+                        audioPcmBuf.erase(audioPcmBuf.begin(), audioPcmBuf.begin() + AAC_FRAME_SAMPLES * AAC_CHANNELS);
+                        audioPtsMicros += (int64_t)AAC_FRAME_SAMPLES * 1000000LL / AAC_SAMPLE_RATE;
+                    }
+                }
+
                 m_progress = static_cast<float>(currentTimeNs) / static_cast<float>(totalDurationNs);
                 if (onProgress) {
                     onProgress(m_progress);
@@ -293,6 +361,34 @@ private:
                         p_signalEndOfInputStream(g.encoder);
                     }
                     inputEOS = true;
+                }
+            }
+
+            // Drain audio encoder (interleaved with video drain below)
+            if (g.audioEncoder && !audioEncoderEOS) {
+                AMediaCodecBufferInfo aInfo;
+                ssize_t aIdx = AMediaCodec_dequeueOutputBuffer(g.audioEncoder, &aInfo, 0);
+                if (aIdx >= 0) {
+                    if (!(aInfo.flags & AMEDIACODEC_BUFFER_FLAG_CODEC_CONFIG) &&
+                        aInfo.size > 0 && muxerStarted && audioTrackIndex >= 0) {
+                        size_t aSz;
+                        uint8_t* aBuf = AMediaCodec_getOutputBuffer(g.audioEncoder, aIdx, &aSz);
+                        AMediaMuxer_writeSampleData(g.muxer, audioTrackIndex, aBuf, &aInfo);
+                        m_syncClock.updateAudioTs(aInfo.presentationTimeUs * 1000LL);
+                    }
+                    if (aInfo.flags & AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM) audioEncoderEOS = true;
+                    AMediaCodec_releaseOutputBuffer(g.audioEncoder, aIdx, false);
+                } else if (aIdx == AMEDIACODEC_INFO_OUTPUT_FORMAT_CHANGED && !audioFormatReady) {
+                    if (g.audioFormat) AMediaFormat_delete(g.audioFormat);
+                    g.audioFormat   = AMediaCodec_getOutputFormat(g.audioEncoder);
+                    audioTrackIndex = AMediaMuxer_addTrack(g.muxer, g.audioFormat);
+                    audioFormatReady = true;
+                    LOGI("Audio track added (index %zd)", audioTrackIndex);
+                    if (videoFormatReady) {
+                        AMediaMuxer_start(g.muxer);
+                        muxerStarted = true;
+                        LOGI("Muxer started (video+audio)");
+                    }
                 }
             }
 
@@ -335,6 +431,12 @@ private:
                     }
 
                     AMediaMuxer_writeSampleData(g.muxer, videoTrackIndex, buf, &info);
+                    m_syncClock.updateVideoTs(info.presentationTimeUs * 1000LL);
+                    if (!m_syncClock.isInSync()) {
+                        LOGW("A/V sync drift detected: smoothed=%lld ms (threshold=%lld ms)",
+                             (long long)(m_syncClock.getSmoothedOffsetNs() / 1'000'000LL),
+                             (long long)(sdk::video::timeline::SyncClock::SYNC_THRESHOLD_NS / 1'000'000LL));
+                    }
                 }
 
                 if (info.flags & AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM) {
@@ -344,11 +446,57 @@ private:
                 AMediaCodec_releaseOutputBuffer(g.encoder, outBufIdx, false);
             } else if (outBufIdx == AMEDIACODEC_INFO_OUTPUT_FORMAT_CHANGED) {
                 if (g.videoFormat) AMediaFormat_delete(g.videoFormat);
-                g.videoFormat = AMediaCodec_getOutputFormat(g.encoder);
+                g.videoFormat   = AMediaCodec_getOutputFormat(g.encoder);
                 videoTrackIndex = AMediaMuxer_addTrack(g.muxer, g.videoFormat);
-                AMediaMuxer_start(g.muxer);
-                muxerStarted = true;
+                videoFormatReady = true;
+                LOGI("Video track added (index %zd)", videoTrackIndex);
+                if (audioFormatReady) {
+                    AMediaMuxer_start(g.muxer);
+                    muxerStarted = true;
+                    LOGI("Muxer started (%s)", g.audioEncoder ? "video+audio" : "video-only");
+                }
             }
+        }
+
+        // --- 6. Flush remaining audio and drain AAC encoder to EOS ---
+        if (g.audioEncoder && !audioEncoderEOS) {
+            // Submit any buffered PCM with EOS flag
+            ssize_t inIdx = AMediaCodec_dequeueInputBuffer(g.audioEncoder, 50000);
+            if (inIdx >= 0) {
+                size_t inSz;
+                uint8_t* inBuf = AMediaCodec_getInputBuffer(g.audioEncoder, inIdx, &inSz);
+                size_t copyBytes = std::min(inSz, audioPcmBuf.size() * sizeof(int16_t));
+                if (copyBytes > 0) memcpy(inBuf, audioPcmBuf.data(), copyBytes);
+                AMediaCodec_queueInputBuffer(g.audioEncoder, inIdx, 0, copyBytes,
+                                             audioPtsMicros, AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM);
+            }
+            while (!audioEncoderEOS) {
+                AMediaCodecBufferInfo aInfo;
+                ssize_t aIdx = AMediaCodec_dequeueOutputBuffer(g.audioEncoder, &aInfo, 50000);
+                if (aIdx >= 0) {
+                    if (!(aInfo.flags & AMEDIACODEC_BUFFER_FLAG_CODEC_CONFIG) &&
+                        aInfo.size > 0 && muxerStarted && audioTrackIndex >= 0) {
+                        size_t aSz;
+                        uint8_t* aBuf = AMediaCodec_getOutputBuffer(g.audioEncoder, aIdx, &aSz);
+                        AMediaMuxer_writeSampleData(g.muxer, audioTrackIndex, aBuf, &aInfo);
+                        m_syncClock.updateAudioTs(aInfo.presentationTimeUs * 1000LL);
+                    }
+                    if (aInfo.flags & AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM) audioEncoderEOS = true;
+                    AMediaCodec_releaseOutputBuffer(g.audioEncoder, aIdx, false);
+                } else if (aIdx == AMEDIACODEC_INFO_OUTPUT_FORMAT_CHANGED && !audioFormatReady) {
+                    if (g.audioFormat) AMediaFormat_delete(g.audioFormat);
+                    g.audioFormat   = AMediaCodec_getOutputFormat(g.audioEncoder);
+                    audioTrackIndex = AMediaMuxer_addTrack(g.muxer, g.audioFormat);
+                    audioFormatReady = true;
+                    if (videoFormatReady && !muxerStarted) {
+                        AMediaMuxer_start(g.muxer);
+                        muxerStarted = true;
+                    }
+                } else {
+                    break;  // timeout — encoder may have already signaled EOS
+                }
+            }
+            LOGI("Audio encoder drained, EOS=%d", (int)audioEncoderEOS);
         }
 
         if (m_chunkDurationNs > 0 && m_state != State::CANCELED && m_onChunkReady) {
@@ -367,6 +515,8 @@ private:
 
     int64_t m_chunkDurationNs;
     ChunkCallback m_onChunkReady;
+
+    std::shared_ptr<AudioMixer> m_audioMixer;
 
     std::atomic<State> m_state;
     std::mutex m_stateMutex;

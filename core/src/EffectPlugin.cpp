@@ -145,10 +145,12 @@ EffectPluginDesc EffectPluginManager::parseManifest(const std::string& json) con
         return it != root.obj.end() ? it->second : empty;
     };
 
-    desc.id          = getStr(g("id"));
-    desc.name        = getStr(g("name"));
-    desc.version     = getStr(g("version"));
-    desc.effectType  = getStr(g("type"));
+    desc.id            = getStr(g("id"));
+    desc.name          = getStr(g("name"));
+    desc.version       = getStr(g("version"));
+    desc.effectType    = getStr(g("type"));
+    if (g("schema_version").type == JsonVal::Str)
+        desc.schemaVersion = getStr(g("schema_version"));
 
     auto& layers = g("layers");
     if (layers.type == JsonVal::Arr) {
@@ -167,11 +169,40 @@ EffectPluginDesc EffectPluginManager::parseManifest(const std::string& json) con
                 ld.assetPath = getStr(getL("lut"));
             else if (ld.type == EffectLayerType::Sticker) {
                 ld.assetPath = getStr(getL("texture"));
-                ld.stickerAnchor.name        = getStr(getL("anchor"));
-                ld.stickerAnchor.scale       = getF(getL("scale"));
-                ld.stickerAnchor.offsetX     = getF(getL("offset_x"));
-                ld.stickerAnchor.offsetY     = getF(getL("offset_y"));
-                ld.stickerAnchor.trackRotation = getL("track_rotation").b;
+
+                // ── anchor ─────────────────────────────────────────────────
+                ld.stickerAnchor.name    = getStr(getL("anchor"));
+                ld.stickerAnchor.scale   = getF(getL("scale"));
+                ld.stickerAnchor.offsetX = getF(getL("offset_x"));
+                ld.stickerAnchor.offsetY = getF(getL("offset_y"));
+                if (getL("track_rotation").type == JsonVal::Bool)
+                    ld.stickerAnchor.trackRotation = getL("track_rotation").b;
+
+                std::string ancType = getStr(getL("anchor_type"));
+                if (ancType == "body")
+                    ld.stickerAnchor.anchorType = StickerAnchorType::Body;
+                else if (ancType == "fixed") {
+                    ld.stickerAnchor.anchorType = StickerAnchorType::Fixed;
+                    ld.stickerAnchor.fixedNdcX  = getF(getL("fixed_x"));
+                    ld.stickerAnchor.fixedNdcY  = getF(getL("fixed_y"));
+                } else {
+                    ld.stickerAnchor.anchorType = StickerAnchorType::Face;
+                }
+
+                // ── animated frames ────────────────────────────────────────
+                auto& framesVal = getL("frames");
+                if (framesVal.type == JsonVal::Arr) {
+                    for (auto& fv : framesVal.arr)
+                        if (fv.type == JsonVal::Str)
+                            ld.animFrames.push_back(fv.str);
+                }
+                if (getL("frame_rate").type == JsonVal::Num)
+                    ld.animFps = getF(getL("frame_rate"));
+                if (getL("loop").type == JsonVal::Bool)
+                    ld.animLoop = getL("loop").b;
+
+                // ── gesture trigger ────────────────────────────────────────
+                ld.gestureTrigger = getStr(getL("gesture"));
             } else if (ld.type == EffectLayerType::Beauty) {
                 ld.eyeScale   = getF(getL("eyeScale"));
                 ld.faceSlim   = getF(getL("faceSlim"));
@@ -234,12 +265,20 @@ std::string EffectPluginManager::loadEffectFromJSON(
     }
     auto plugin = std::make_shared<EffectPlugin>(desc);
 
-    // 预加载贴纸纹理
+    // 预加载贴纸纹理（静态 + 动画帧序列）
     for (auto& layer : desc.layers) {
-        if (layer.type == EffectLayerType::Sticker && !layer.assetPath.empty()) {
-            std::string fullPath = effectRoot + "/" + layer.assetPath;
+        if (layer.type != EffectLayerType::Sticker) continue;
+        // static / first-frame texture
+        if (!layer.assetPath.empty()) {
             GLuint texId = loadTexture(effectRoot, layer.assetPath);
             if (texId) plugin->setStickerTexture(layer.assetPath, texId);
+        }
+        // animated frame textures
+        for (auto& framePath : layer.animFrames) {
+            if (!framePath.empty()) {
+                GLuint texId = loadTexture(effectRoot, framePath);
+                if (texId) plugin->setStickerTexture(framePath, texId);
+            }
         }
     }
     plugin->markReady();

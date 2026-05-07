@@ -21,7 +21,7 @@
         <!-- 后台视频导出 Foreground Service -->
         <service
             android:name="com.sdk.video.export.BackgroundExportService"
-            android:foregroundServiceType="mediaProcessing"
+            android:foregroundServiceType="dataSync"
             android:exported="false" />
 
     </application>

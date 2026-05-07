@@ -22,24 +22,7 @@ namespace sdk {
 namespace video {
 namespace rhi {
 
-/// RHI 后端类型
-enum class BackendType {
-    AUTO   = 0,  ///< 自动选择（优先级：Metal > Vulkan > GLES）
-    GLES   = 1,  ///< OpenGL ES（3.0 / 3.1 / 3.2 三级梯级）
-    VULKAN = 2,  ///< Vulkan（Android NDK，需要 HAS_VULKAN）
-    METAL  = 3   ///< Metal（iOS / macOS，需要 HAS_METAL）
-};
-
-/// BackendType 转可读字符串（日志用）
-inline const char* backendTypeName(BackendType t) {
-    switch (t) {
-        case BackendType::AUTO:   return "AUTO";
-        case BackendType::GLES:   return "GLES";
-        case BackendType::VULKAN: return "VULKAN";
-        case BackendType::METAL:  return "METAL";
-        default:                  return "UNKNOWN";
-    }
-}
+// BackendType and backendTypeName() are defined in IRenderDevice.h (included above).
 
 class RenderDeviceFactory {
 public:

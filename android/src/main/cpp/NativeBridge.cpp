@@ -19,9 +19,11 @@
 #include "../../../../core/include/Filters.h"
 #include "../../../../core/include/timeline/Compositor.h"
 #include "../../../../core/include/ai/FaceLandmarkDetector.h"
+#include "../../../../core/include/ai/TfliteInferenceEngine.h"
 #include "../../../../core/include/ai/FaceReshapeFilter.h"
 #include "../../../../core/include/ai/MakeupFilter.h"
 #include "../../../../core/include/ai/HairSegmentationFilter.h"
+#include "../../../../core/include/ai/BeautyFilter.h"
 #include "../../../../core/include/EffectPlugin.h"
 #include "OboeAudioEngine.h"
 
@@ -41,7 +43,19 @@ struct EngineWrapper {
     std::shared_ptr<FaceReshapeFilter>        faceReshape;
     std::shared_ptr<MakeupFilter>             makeup;
     std::shared_ptr<HairSegmentationFilter>   hairSeg;
+    std::shared_ptr<BeautyFilter>             beautyFilter;
     EffectPluginManager                       effectManager;
+
+    // TFLite delegate hint set by TfliteDelegateStrategy before loadModel()
+    sdk::video::ai::TfliteInferenceEngine::DelegateHint pendingDelegateHint
+        = sdk::video::ai::TfliteInferenceEngine::DelegateHint::GPU;
+    bool pendingDelegateHintSet = false;
+
+    // Pipeline-registration bookkeeping — true once the filter is in filterEngine
+    bool beautyEnabled          = false;
+    bool faceReshapeInPipeline  = false;
+    bool makeupInPipeline       = false;
+    bool hairSegInPipeline      = false;
 
 #ifndef WIN32
     // Recording state
@@ -185,6 +199,20 @@ struct EngineWrapper {
 };
 
 
+// Re-add all currently active AI filters to filterEngine.
+// Must be called on the GL thread after removeAllFilters() re-adds OES.
+static void rebuildAiPipeline(EngineWrapper* w) {
+    if (!w || !w->filterEngine) return;
+    if (w->beautyEnabled && w->beautyFilter)
+        w->filterEngine->addFilterRaw(w->beautyFilter);
+    if (w->faceReshapeInPipeline && w->faceReshape)
+        w->filterEngine->addFilterRaw(w->faceReshape);
+    if (w->makeupInPipeline && w->makeup)
+        w->filterEngine->addFilterRaw(w->makeup);
+    if (w->hairSegInPipeline && w->hairSeg)
+        w->filterEngine->addFilterRaw(w->hairSeg);
+}
+
 static jfieldID g_lastFrameTimeMsId = nullptr;
 
 
@@ -292,6 +320,15 @@ Java_com_sdk_video_RenderEngine_nativeProcessFrame(JNIEnv *env, jobject thiz, jl
     }
 
     Texture inTex = {static_cast<uint32_t>(textureId), static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
+
+    // Feed latest face landmarks into AI filters before the render pass
+    if (wrapper->faceLandmark) {
+        auto lr = wrapper->faceLandmark->getLatestResult();
+        if (wrapper->faceReshape && wrapper->faceReshapeInPipeline)
+            wrapper->faceReshape->setLandmarkResult(lr);
+        if (wrapper->makeup && wrapper->makeupInPipeline)
+            wrapper->makeup->setLandmarkResult(lr);
+    }
 
     // Unified ResultPayload unpacking and error propagation
     auto result = wrapper->filterEngine->processFrame(inTex, width, height);
@@ -415,7 +452,9 @@ Java_com_sdk_video_RenderEngine_nativeRemoveAllFilters(JNIEnv *env, jobject thiz
     auto res2 = wrapper->filterEngine->addFilterRaw(std::make_shared<OES2RGBFilter>());
     if (!res2.isOk()) {
         throwNativeException(env, res2.getErrorCode(), res2.getMessage());
+        return;
     }
+    rebuildAiPipeline(wrapper);
 }
 
 JNIEXPORT void JNICALL
@@ -575,6 +614,25 @@ Java_com_sdk_video_RenderEngine_nativeGetDsrScale(JNIEnv *env, jobject thiz, jlo
 }
 
 // ============================================================
+// TFLite Delegate 策略 — 由 TfliteDelegateStrategy.kt 在 loadModel 前调用
+// delegateCode: 0=GPU, 1=NNAPI, 2=XNNPACK, 3=CPU
+// ============================================================
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_ai_TfliteDelegateStrategy_nativeSetDelegateHint(
+    JNIEnv*, jobject, jlong handle, jint delegateCode)
+{
+    EngineWrapper* w = reinterpret_cast<EngineWrapper*>(handle);
+    if (!w) return;
+    // Store pending hint — applied on next loadModel() call per detector
+    using DH = sdk::video::ai::TfliteInferenceEngine::DelegateHint;
+    w->pendingDelegateHint     = static_cast<DH>(delegateCode);
+    w->pendingDelegateHintSet  = true;
+    // Retroactively apply if detectors are already allocated but model not loaded
+    if (w->faceLandmark) w->faceLandmark->setDelegateHint(w->pendingDelegateHint);
+}
+
+// ============================================================
 // 人脸 AI — 关键点检测
 // ============================================================
 
@@ -586,6 +644,9 @@ Java_com_sdk_video_RenderEngine_nativeLoadFaceLandmarkModel(
     if (!w) return JNI_FALSE;
     if (!w->faceLandmark)
         w->faceLandmark = std::make_shared<ai::FaceLandmarkDetector>();
+    // Apply any pending delegate hint before building the interpreter
+    if (w->pendingDelegateHintSet)
+        w->faceLandmark->setDelegateHint(w->pendingDelegateHint);
     const char* path = env->GetStringUTFChars(modelPath, nullptr);
     bool ok = w->faceLandmark->loadModel(path);
     env->ReleaseStringUTFChars(modelPath, path);
@@ -634,6 +695,10 @@ Java_com_sdk_video_RenderEngine_nativeSetFaceReshape(
     w->faceReshape->setForeheadUp (foreheadUp);
     w->faceReshape->setChinV      (chinV);
     w->faceReshape->setMouthWidth (mouthWidth);
+    if (!w->faceReshapeInPipeline && w->filterEngine) {
+        w->faceReshapeInPipeline = true;
+        w->filterEngine->addFilterRaw(w->faceReshape);
+    }
 }
 
 // ============================================================
@@ -659,6 +724,10 @@ Java_com_sdk_video_RenderEngine_nativeSetMakeup(
         case 4: w->makeup->setContour   (intensity);          break;
         case 5: w->makeup->setEyebrow   (r, g, b, intensity); break;
     }
+    if (!w->makeupInPipeline && w->filterEngine) {
+        w->makeupInPipeline = true;
+        w->filterEngine->addFilterRaw(w->makeup);
+    }
 }
 
 // ============================================================
@@ -678,6 +747,10 @@ Java_com_sdk_video_RenderEngine_nativeLoadHairModel(
     const char* path = env->GetStringUTFChars(modelPath, nullptr);
     bool ok = w->hairSeg->loadModel(path);
     env->ReleaseStringUTFChars(modelPath, path);
+    if (ok && !w->hairSegInPipeline && w->filterEngine) {
+        w->hairSegInPipeline = true;
+        w->filterEngine->addFilterRaw(w->hairSeg);
+    }
     return ok ? JNI_TRUE : JNI_FALSE;
 }
 
@@ -729,6 +802,41 @@ Java_com_sdk_video_RenderEngine_nativeDeactivateAllEffects(
 }
 
 // ============================================================
+// 磨皮美白（BeautyFilter — 无需 TFLite，立即可用）
+// ============================================================
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeEnableBeauty(
+    JNIEnv*, jobject, jlong handle, jfloat smooth, jfloat whiten)
+{
+    EngineWrapper* w = reinterpret_cast<EngineWrapper*>(handle);
+    if (!w) return;
+    if (!w->beautyFilter) {
+        w->beautyFilter = std::make_shared<BeautyFilter>();
+        w->beautyFilter->initialize();
+    }
+    w->beautyFilter->setParameter("smoothStrength", std::any(smooth));
+    w->beautyFilter->setParameter("whitenStrength", std::any(whiten));
+    if (!w->beautyEnabled && w->filterEngine) {
+        w->beautyEnabled = true;
+        w->filterEngine->addFilterRaw(w->beautyFilter);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeDisableBeauty(
+    JNIEnv*, jobject, jlong handle)
+{
+    EngineWrapper* w = reinterpret_cast<EngineWrapper*>(handle);
+    if (!w || !w->beautyEnabled || !w->filterEngine) return;
+    w->beautyEnabled = false;
+    // Rebuild pipeline: OES + active AI filters (beauty excluded)
+    w->filterEngine->removeAllFilters();
+    w->filterEngine->addFilterRaw(std::make_shared<OES2RGBFilter>());
+    rebuildAiPipeline(w);
+}
+
+// ============================================================
 // RHI 后端选择 API
 // ============================================================
 
@@ -759,6 +867,40 @@ Java_com_sdk_video_RenderEngine_nativeGetGLESVersion(
     if (!wrapper || !wrapper->filterEngine) return 30;
     return static_cast<jint>(
         wrapper->filterEngine->getContextManager().getGLESVersionInt());
+}
+
+// ============================================================
+// Device capability snapshot — aggregates all flags from
+// GLContextManager into a single jintArray for the diagnostics screen.
+// Layout (length = 8):
+//   [0] glesVersionInt          (30 / 31 / 32)
+//   [1] computeShaderSupported  (0 / 1)
+//   [2] fp16RenderTargetSupported (0 / 1)
+//   [3] astcSupported           (0 / 1)
+//   [4] vulkanSupported         (0 / 1)
+//   [5] metalSupported          (0 / 1)
+//   [6] maxMSAASamples          (1, 2, 4, 8 ...)
+//   [7] geometryShaderSupported (0 / 1)
+// ============================================================
+JNIEXPORT jintArray JNICALL
+Java_com_sdk_video_RenderEngine_nativeGetDeviceCapabilities(
+    JNIEnv* env, jobject /*thiz*/, jlong handle)
+{
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper || !wrapper->filterEngine) return nullptr;
+    auto& cm = wrapper->filterEngine->getContextManager();
+    jint vals[8];
+    vals[0] = static_cast<jint>(cm.getGLESVersionInt());
+    vals[1] = cm.isComputeShaderSupported()      ? 1 : 0;
+    vals[2] = cm.isFP16RenderTargetSupported()   ? 1 : 0;
+    vals[3] = cm.isASTCSupported()               ? 1 : 0;
+    vals[4] = cm.isVulkanSupported()             ? 1 : 0;
+    vals[5] = cm.isMetalSupported()              ? 1 : 0;
+    vals[6] = static_cast<jint>(cm.getMaxMSAASamples());
+    vals[7] = cm.isGeometryShaderSupported()     ? 1 : 0;
+    jintArray arr = env->NewIntArray(8);
+    env->SetIntArrayRegion(arr, 0, 8, vals);
+    return arr;
 }
 
 } // extern "C"

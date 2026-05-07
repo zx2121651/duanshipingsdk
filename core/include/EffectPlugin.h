@@ -69,21 +69,43 @@ enum class EffectLayerType {
     Particle,      ///< 粒子效果（几何着色器）
 };
 
+/** 贴纸锚点类型 */
+enum class StickerAnchorType {
+    Face, ///< 人脸关键点锚点（forehead/leftEye/rightEye/nose/mouth/chin）
+    Body, ///< 人体姿态关键点锚点（left_wrist/right_wrist/left_shoulder等 COCO 名称）
+    Fixed ///< 固定屏幕坐标（NDC），不跟踪任何关键点
+};
+
 struct StickerAnchor {
-    std::string name; ///< "forehead","leftEye","rightEye","nose","mouth","chin"
-    float offsetX = 0.f;
-    float offsetY = 0.f;
-    float scale   = 0.2f;
+    std::string      name;             ///< face anchor 或 body keypoint 名称
+    StickerAnchorType anchorType = StickerAnchorType::Face;
+    float offsetX       = 0.f;
+    float offsetY       = 0.f;
+    float scale         = 0.2f;
     bool  trackRotation = true;
+    // Fixed 模式下的屏幕 NDC 坐标
+    float fixedNdcX     = 0.f;
+    float fixedNdcY     = 0.f;
 };
 
 struct EffectLayerDesc {
     EffectLayerType type      = EffectLayerType::Unknown;
-    std::string     assetPath; ///< 相对于 effectRoot 的资源路径
+    std::string     assetPath; ///< 相对于 effectRoot 的资源路径（静态贴纸或首帧）
     float           intensity = 1.f;
 
-    // Sticker 特有
+    // ── Sticker 通用 ──────────────────────────────────────────────────
     StickerAnchor stickerAnchor;
+
+    // ── 动画贴纸（Animated Sticker）────────────────────────────────────
+    /// 帧序列相对路径列表（若非空则覆盖 assetPath）
+    std::vector<std::string> animFrames;
+    float animFps  = 24.f; ///< 动画帧率（默认 24 fps）
+    bool  animLoop = true;  ///< 是否循环播放（false = 播完停在最后一帧）
+
+    // ── 手势触发（Gesture Trigger）─────────────────────────────────────
+    /// 触发该层所需的手势名称（空字符串 = 始终激活）
+    /// 合法值："thumbs_up" | "wave" | "heart_hands" | "victory" | "hand_raise"
+    std::string gestureTrigger;
 
     // Beauty 特有
     float eyeScale   = 0.f;
@@ -107,7 +129,8 @@ struct EffectPluginDesc {
     std::string id;
     std::string name;
     std::string version;
-    std::string effectType; ///< "face_sticker" | "color_filter" | "beauty" etc.
+    std::string schemaVersion = "1.0"; ///< manifest 协议版本，用于向前兼容
+    std::string effectType; ///< "face_sticker" | "color_filter" | "beauty" | "body_sticker"
     std::vector<EffectLayerDesc> layers;
 };
 

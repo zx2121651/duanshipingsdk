@@ -2,13 +2,33 @@
 #include <string>
 #include <memory>
 #include <map>
+#include <vector>
 #include <algorithm>
 
 namespace sdk {
 namespace video {
 namespace timeline {
 
+// ---------------------------------------------------------------------------
+// 关键帧插值类型
+// ---------------------------------------------------------------------------
+enum class InterpolationType {
+    LINEAR    = 0, ///< 线性匀速（默认）
+    EASE_IN   = 1, ///< 加速进入（慢→快）
+    EASE_OUT  = 2, ///< 减速退出（快→慢）
+    EASE_IN_OUT=3, ///< 先加速后减速（平滑 S 曲线）
+    HOLD      = 4, ///< 保持当前值到下一帧（阶跃/跳切）
+};
+
+/** 单个关键帧数据：浮点值 + 出点插值类型 */
+struct KeyframeEntry {
+    float             value  = 0.f;
+    InterpolationType easing = InterpolationType::LINEAR;
+};
+
+// ---------------------------------------------------------------------------
 // 转场类型
+// ---------------------------------------------------------------------------
 enum class TransitionType {
     NONE,
     CROSSFADE,
@@ -101,12 +121,40 @@ public:
     const std::string& getOutTransitionName() const { return m_outTransitionName; }
     int64_t getOutTransitionDurationNs() const { return m_outTransitionDurationNs; }
 
-    // 关键帧控制
-    // 注意: 时间戳是相对于 Clip 的 timelineIn 而言的相对时间 (0 开始)
-    void addKeyframe(const std::string& paramName, int64_t relativeTimeNs, float value);
+    // ── 关键帧控制 ────────────────────────────────────────────────────────────
+    // 注意：时间戳是相对于 Clip 的 timelineIn 的相对时间（0 = clip 起点）
 
-    // 获取插值后的参数。如果没有关键帧，返回 defaultValue
-    float getInterpolatedParam(const std::string& paramName, int64_t relativeTimeNs, float defaultValue) const;
+    /**
+     * 添加或更新一个关键帧。
+     * @param easing  该帧到下一帧之间的插值方式（默认线性）
+     */
+    void addKeyframe(const std::string& paramName, int64_t relativeTimeNs,
+                     float value,
+                     InterpolationType easing = InterpolationType::LINEAR);
+
+    /** 删除指定参数的指定时间关键帧。 */
+    void removeKeyframe(const std::string& paramName, int64_t relativeTimeNs);
+
+    /** 清空某参数的全部关键帧。 */
+    void clearKeyframes(const std::string& paramName);
+
+    /**
+     * 获取插值后的参数值。
+     * 若无关键帧返回 defaultValue；边界外钳位到首/末关键帧值。
+     */
+    float getInterpolatedParam(const std::string& paramName,
+                               int64_t relativeTimeNs,
+                               float defaultValue) const;
+
+    /** 获取某参数所有关键帧（有序，按时间戳升序）。 */
+    std::vector<std::pair<int64_t, KeyframeEntry>>
+    getKeyframes(const std::string& paramName) const;
+
+    /** 参数是否有关键帧。 */
+    bool hasKeyframes(const std::string& paramName) const {
+        auto it = m_keyframes.find(paramName);
+        return it != m_keyframes.end() && !it->second.empty();
+    }
 
     // 快捷方式获取特定属性
     float getOpacity(int64_t relativeTimeNs) const { return getInterpolatedParam("opacity", relativeTimeNs, 1.0f); }
@@ -119,17 +167,16 @@ public:
     void  setPitchShift(float semitones) { m_pitchShiftSemitones = semitones; }
     float getPitchShift() const          { return m_pitchShiftSemitones; }
 
-    // 音量淡入：从静音线性升到当前 volume，自动写入 "volume" 关键帧
+    // 音量淡入：EASE_OUT 曲线（慢→快→稳定），自动写入 "volume" 关键帧
     void setFadeIn(int64_t durationNs) {
         m_fadeInNs = durationNs;
-        addKeyframe("volume", 0,           0.0f);
+        addKeyframe("volume", 0,           0.0f, InterpolationType::EASE_OUT);
         addKeyframe("volume", durationNs,  m_volume);
     }
-    // 音量淡出：相对 clip 起点的偏移时间由调用方传入（= clip_timeline_duration - fadeDuration）
-    // 调用示例：setFadeOut(clipTimelineDuration - fadeDurationNs, fadeDurationNs)
+    // 音量淡出：EASE_IN 曲线（稳定→快速衰减）
     void setFadeOut(int64_t startRelNs, int64_t durationNs) {
         m_fadeOutNs = durationNs;
-        addKeyframe("volume", startRelNs,              m_volume);
+        addKeyframe("volume", startRelNs,              m_volume, InterpolationType::EASE_IN);
         addKeyframe("volume", startRelNs + durationNs, 0.0f);
     }
     int64_t getFadeInDuration()  const { return m_fadeInNs; }
@@ -187,9 +234,9 @@ private:
         }
     }
 
-    // 数据结构：属性名 -> (相对时间戳 -> 参数值)
-    // std::map 自带按 Key (时间戳) 排序的特性，极大方便插值查找
-    std::map<std::string, std::map<int64_t, float>> m_keyframes;
+    // 数据结构：属性名 -> (相对时间戳 -> KeyframeEntry{value, easing})
+    // std::map 自带按 Key (时间戳) 排序的特性，便于插值查找
+    std::map<std::string, std::map<int64_t, KeyframeEntry>> m_keyframes;
 };
 
 using ClipPtr = std::shared_ptr<Clip>;

@@ -77,6 +77,20 @@ public:
         return m_strategy;
     }
 
+    /**
+     * @brief 精确帧 seek 模式开关（用于 scrub/seek 场景）。
+     *
+     * 开启后，下一次 getFrame() 调用将自动设置 requiresExactSeek=true，
+     * 并在返回后自动关闭（单次触发语义），避免影响正常播放性能。
+     *
+     * 线程安全。
+     */
+    void setExactSeekMode(bool enable) {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_exactSeekMode = enable;
+    }
+    bool isExactSeekMode() const { return m_exactSeekMode; }
+
 private:
     std::mutex m_mutex;
 
@@ -98,6 +112,7 @@ private:
     uint64_t m_accessCounter = 0;
     int m_activeDecoderCount = 0;
     DecoderFallbackStrategy m_strategy = DecoderFallbackStrategy::AUTO;
+    bool m_exactSeekMode = false;
 
     void evictDecodersIfNeeded();
 };

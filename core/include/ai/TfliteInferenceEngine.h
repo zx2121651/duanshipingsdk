@@ -60,6 +60,16 @@ public:
     TfliteInferenceEngine& operator=(const TfliteInferenceEngine&) = delete;
 
     /**
+     * Delegate 偏好提示（由 Kotlin TfliteDelegateStrategy 设置，在 loadModel() 之前调用）。
+     *   GPU=0, NNAPI=1, XNNPACK=2, CPU=3
+     */
+    enum class DelegateHint { GPU = 0, NNAPI = 1, XNNPACK = 2, CPU = 3 };
+
+    /** 设置 delegate 偏好；必须在 loadModel() 之前调用。默认 GPU（回退链：GPU→CPU）。 */
+    void setDelegateHint(DelegateHint hint) { m_delegateHint = hint; }
+    DelegateHint getDelegateHint() const    { return m_delegateHint; }
+
+    /**
      * 从文件路径加载模型。
      * @param modelPath  .tflite 文件的绝对路径（Android 侧通过 AssetManager 提前解压）
      * @return true = 成功；false = 失败（查看 getLastError()）
@@ -116,6 +126,7 @@ private:
     int  m_inputH    = 256;
     bool m_loaded    = false;
     std::string m_lastError;
+    DelegateHint m_delegateHint = DelegateHint::GPU;
 
     GLuint m_maskTextureId = 0;
     bool   m_maskTexInited = false;

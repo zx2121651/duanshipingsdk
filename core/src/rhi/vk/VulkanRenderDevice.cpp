@@ -209,6 +209,21 @@ std::shared_ptr<ITexture> VulkanRenderDevice::bindExternalHardwareBuffer(void* /
     return nullptr;
 }
 
+RHICapabilities VulkanRenderDevice::getCapabilities() const {
+    RHICapabilities caps;
+    caps.backend         = BackendType::VULKAN;
+    caps.computeShader   = true;  // Vulkan 1.0 mandates compute pipeline
+    caps.geometryShader  = true;  // Vulkan 1.0 mandatory feature
+    caps.tessellation    = true;  // Vulkan 1.0 mandatory feature
+    caps.msaa            = true;
+    caps.maxMSAASamples  = 8;     // Conservative: all Vulkan 1.0 HW supports 4x+ MSAA
+    caps.fp16RenderTarget= true;
+    caps.astc            = false; // Device-dependent; conservative default
+    caps.glesVersionInt  = 0;     // N/A for Vulkan
+    caps.rendererString  = "";
+    return caps;
+}
+
 } // namespace rhi
 } // namespace video
 } // namespace sdk

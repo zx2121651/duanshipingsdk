@@ -2,17 +2,20 @@
 // TimelineDraft.h — header-only serialize / deserialize for Timeline drafts.
 // Format: line-based text, ':'-delimited fields. No external deps required.
 //
-// Schema (one line per entity):
+// Schema v2 (one line per entity):
 //   SVDK_DRAFT:<version>:<width>:<height>:<fps>
 //   T:<zIndex>:<type>:<opacity>:<volume>
 //   C:<id>:<srcPath>:<mediaType>:<srcDurNs>:<trimInNs>:<trimOutNs>:<tlInNs>:
 //     <speed>:<volume>:<reversed>:<scale>:<rotation>:<tx>:<ty>:
 //     <inTransition>:<inTransDurNs>:<outTransition>:<outTransDurNs>
-//   K:<clipId>:<param>:<timeNs>:<value>
+//   K:<clipId>:<param>:<timeNs>:<value>:<easingInt>   (* easing new in v2)
+//   SUB:<clipId>:<text>:<tlInNs>:<srcDurNs>:<x>:<y>:<fontSize>:<textColor>:<bgColor>:<align>
+//   STICKER:<clipId>:<srcPath>:<srcDurNs>:<tlInNs>:<centerX>:<centerY>:<scale>:<rotation>
 
 #include "Timeline.h"
 #include "Track.h"
 #include "Clip.h"
+#include "SubtitleClip.h"
 #include <string>
 #include <sstream>
 #include <fstream>
@@ -23,7 +26,7 @@ namespace sdk {
 namespace video {
 namespace timeline {
 
-static constexpr int DRAFT_FORMAT_VERSION = 1;
+static constexpr int DRAFT_FORMAT_VERSION = 2;
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -73,6 +76,81 @@ inline std::string unescapeColons(const std::string& s) {
 } // namespace detail
 
 // ---------------------------------------------------------------------------
+// serialize helpers
+// ---------------------------------------------------------------------------
+namespace detail {
+
+inline void serializeClip(std::ostringstream& ss, const ClipPtr& clip) {
+    const std::string& clipId = clip->getId();
+    // ── Check for specialised subtypes ────────────────────────────────────
+    if (auto sub = std::dynamic_pointer_cast<SubtitleClip>(clip)) {
+        // SUB:<id>:<text>:<tlIn>:<srcDur>:<x>:<y>:<fontSize>:<textColor>:<bgColor>:<align>
+        ss << "SUB:"
+           << escapeColons(clipId)                   << ":"
+           << escapeColons(sub->getText())           << ":"
+           << sub->getTimelineIn()                   << ":"
+           << sub->getSourceDuration()               << ":"
+           << sub->style.x                           << ":"
+           << sub->style.y                           << ":"
+           << sub->style.fontSizePx                  << ":"
+           << sub->style.textColor                   << ":"
+           << sub->style.bgColor                     << ":"
+           << sub->style.alignment                   << "\n";
+        return;
+    }
+    if (auto stk = std::dynamic_pointer_cast<StickerClip>(clip)) {
+        // STICKER:<id>:<srcPath>:<srcDur>:<tlIn>:<cx>:<cy>:<scale>:<rot>
+        ss << "STICKER:"
+           << escapeColons(clipId)                   << ":"
+           << escapeColons(stk->getSourcePath())     << ":"
+           << stk->getSourceDuration()               << ":"
+           << stk->getTimelineIn()                   << ":"
+           << stk->centerX                           << ":"
+           << stk->centerY                           << ":"
+           << stk->stickerScale                      << ":"
+           << stk->stickerRotation                   << "\n";
+        return;
+    }
+    // ── Generic Clip ─────────────────────────────────────────────────────────
+    ss << "C:"
+       << escapeColons(clipId)                          << ":"
+       << escapeColons(clip->getSourcePath())           << ":"
+       << static_cast<int>(clip->getType())             << ":"
+       << clip->getSourceDuration()                     << ":"
+       << clip->getTrimIn()                             << ":"
+       << clip->getTrimOut()                            << ":"
+       << clip->getTimelineIn()                         << ":"
+       << clip->getSpeed()                              << ":"
+       << clip->getVolume(0)                            << ":"
+       << (clip->isReversed() ? 1 : 0)                 << ":"
+       << clip->getScale(0)                             << ":"
+       << 0.0f << ":" << 0.0f << ":" << 0.0f            << ":"
+       << escapeColons(clip->getInTransitionName())     << ":"
+       << clip->getInTransitionDurationNs()             << ":"
+       << escapeColons(clip->getOutTransitionName())    << ":"
+       << clip->getOutTransitionDurationNs()            << "\n";
+
+    // ── Keyframes (emit K: lines for every param that has KFs) ───────────
+    static const char* kTrackedParams[] = {
+        "opacity", "volume", "scale", "posX", "posY", "rotation", nullptr
+    };
+    for (int pi = 0; kTrackedParams[pi]; ++pi) {
+        const char* param = kTrackedParams[pi];
+        auto kfs = clip->getKeyframes(param);
+        for (const auto& [timeNs, entry] : kfs) {
+            ss << "K:"
+               << escapeColons(clipId) << ":"
+               << param               << ":"
+               << timeNs              << ":"
+               << entry.value         << ":"
+               << static_cast<int>(entry.easing) << "\n";
+        }
+    }
+}
+
+} // namespace detail
+
+// ---------------------------------------------------------------------------
 // serialize
 // ---------------------------------------------------------------------------
 inline std::string serializeTimeline(const Timeline& tl) {
@@ -80,8 +158,6 @@ inline std::string serializeTimeline(const Timeline& tl) {
     ss << "SVDK_DRAFT:" << DRAFT_FORMAT_VERSION << ":"
        << tl.getOutputWidth() << ":" << tl.getOutputHeight() << ":" << tl.getFps() << "\n";
 
-    // Iterate tracks by collecting via getTrack with a sentinel scan.
-    // Timeline exposes no iterator, so we probe z-indices 0..255.
     for (int z = 0; z <= 255; ++z) {
         TrackPtr track = tl.getTrack(z);
         if (!track) continue;
@@ -89,53 +165,9 @@ inline std::string serializeTimeline(const Timeline& tl) {
         ss << "T:" << z << ":" << static_cast<int>(track->getType()) << ":"
            << track->getOpacity() << ":" << track->getTrackVolume() << "\n";
 
-        // Get active clips — use a time range probe to collect all clips.
-        // Since Timeline exposes no direct clip iterator, we collect them
-        // by scanning clip list indirectly via the Track interface.
-        // Track exposes getClip(id) but not enumeration — add a workaround
-        // by casting to the concrete type through the public API.
-        // We use a sentinel large time range to trigger all clips via
-        // getActiveClipsAtTime scans — but that only returns currently-active ones.
-        //
-        // Implementation note: Track stores clips in a vector. We cannot iterate
-        // without a public accessor. We add a serialization-friend approach:
-        // Use the dedicated serializeTrackClips helper which accesses via index.
-        // Since we can't modify Track here without a header change, we use a
-        // time-range union scan across the full project duration.
-        std::vector<ClipPtr> seen;
-        int64_t totalDur = tl.getTotalDuration();
-        if (totalDur <= 0) totalDur = 1;
-        // Scan at regular intervals to discover all clips
-        int64_t step = 1000000000LL; // 1 second
-        for (int64_t t = 0; t <= totalDur + step; t += step) {
-            std::vector<ClipPtr> active;
-            track->getActiveClipsAtTime(t, active);
-            for (const auto& c : active) {
-                bool found = false;
-                for (const auto& s : seen) { if (s->getId() == c->getId()) { found = true; break; } }
-                if (!found) seen.push_back(c);
-            }
-        }
-
-        for (const auto& clip : seen) {
-            ss << "C:"
-               << detail::escapeColons(clip->getId())     << ":"
-               << detail::escapeColons(clip->getSourcePath()) << ":"
-               << static_cast<int>(clip->getType())       << ":"
-               << clip->getSourceDuration()               << ":"
-               << clip->getTrimIn()                       << ":"
-               << clip->getTrimOut()                      << ":"
-               << clip->getTimelineIn()                   << ":"
-               << clip->getSpeed()                        << ":"
-               << clip->getVolume(0)                      << ":"
-               << (clip->isReversed() ? 1 : 0)            << ":"
-               << clip->getScale(0)                       << ":"
-               << 0.0f << ":" << 0.0f << ":" << 0.0f      << ":"
-               << detail::escapeColons(clip->getInTransitionName())  << ":"
-               << clip->getInTransitionDurationNs()       << ":"
-               << detail::escapeColons(clip->getOutTransitionName()) << ":"
-               << clip->getOutTransitionDurationNs()      << "\n";
-        }
+        // O(n) direct iteration via getAllClips()
+        for (const auto& clip : track->getAllClips())
+            detail::serializeClip(ss, clip);
     }
     return ss.str();
 }
@@ -229,8 +261,45 @@ inline std::shared_ptr<Timeline> loadDraft(const std::string& filePath) {
             std::string param  = detail::unescapeColons(parts[2]);
             int64_t timeNs     = std::stoll(parts[3]);
             float   value      = std::stof(parts[4]);
+            // v2: optional 6th field = easing type (int)
+            InterpolationType easing = InterpolationType::LINEAR;
+            if (parts.size() >= 6) easing = static_cast<InterpolationType>(std::stoi(parts[5]));
             auto clip = currentTrack->getClip(clipId);
-            if (clip) clip->addKeyframe(param, timeNs, value);
+            if (clip) clip->addKeyframe(param, timeNs, value, easing);
+
+        } else if (tag == "SUB" && timeline && currentTrack) {
+            // SUB:<id>:<text>:<tlIn>:<srcDur>:<x>:<y>:<fontSize>:<textColor>:<bgColor>:<align>
+            if (parts.size() < 11) continue;
+            std::string id   = detail::unescapeColons(parts[1]);
+            std::string text = detail::unescapeColons(parts[2]);
+            int64_t tlIn     = std::stoll(parts[3]);
+            int64_t srcDur   = std::stoll(parts[4]);
+            auto sub = std::make_shared<SubtitleClip>(id, text);
+            sub->setTimelineIn(tlIn);
+            sub->setSourceDuration(srcDur);
+            sub->style.x          = std::stof(parts[5]);
+            sub->style.y          = std::stof(parts[6]);
+            sub->style.fontSizePx = std::stof(parts[7]);
+            sub->style.textColor  = static_cast<uint32_t>(std::stoul(parts[8]));
+            sub->style.bgColor    = static_cast<uint32_t>(std::stoul(parts[9]));
+            sub->style.alignment  = std::stoi(parts[10]);
+            currentTrack->addClip(sub);
+
+        } else if (tag == "STICKER" && timeline && currentTrack) {
+            // STICKER:<id>:<srcPath>:<srcDur>:<tlIn>:<cx>:<cy>:<scale>:<rot>
+            if (parts.size() < 9) continue;
+            std::string id  = detail::unescapeColons(parts[1]);
+            std::string src = detail::unescapeColons(parts[2]);
+            int64_t srcDur  = std::stoll(parts[3]);
+            int64_t tlIn    = std::stoll(parts[4]);
+            auto stk = std::make_shared<StickerClip>(id, src);
+            stk->setSourceDuration(srcDur);
+            stk->setTimelineIn(tlIn);
+            stk->centerX         = std::stof(parts[5]);
+            stk->centerY         = std::stof(parts[6]);
+            stk->stickerScale    = std::stof(parts[7]);
+            stk->stickerRotation = std::stof(parts[8]);
+            currentTrack->addClip(stk);
         }
     }
 

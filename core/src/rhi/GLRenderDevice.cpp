@@ -4,6 +4,7 @@
 #include "../../include/GLStateManager.h"
 #include <memory>
 #include <iostream>
+#include <sstream>
 #include <chrono>
 
 #ifdef __ANDROID__
@@ -11,13 +12,14 @@
     #include <EGL/egl.h>
     #include <EGL/eglext.h>
     #include <GLES2/gl2ext.h>
+    #include <GLES3/gl3.h>
+    #include <GLES3/gl32.h>  // geometry + tessellation shader enums
 #endif
 
 #ifdef __APPLE__
     #include <OpenGLES/ES3/gl.h>
-#else
+#elif !defined(__ANDROID__)
     #include <GLES3/gl3.h>
-
 #endif
 
 // We need an assertion macro
@@ -439,7 +441,7 @@ std::shared_ptr<IShaderResourceSet> GLRenderDevice::createShaderResourceSet() {
 std::shared_ptr<ITexture> GLRenderDevice::bindExternalHardwareBuffer(void* nativeBuffer) {
     std::lock_guard<std::mutex> lock(m_mutex);
 
-#ifdef __ANDROID__
+#if defined(__ANDROID__) && __ANDROID_API__ >= 26
     if (!nativeBuffer) return nullptr;
 
     AHardwareBuffer* ahwb = static_cast<AHardwareBuffer*>(nativeBuffer);
@@ -453,14 +455,30 @@ std::shared_ptr<ITexture> GLRenderDevice::bindExternalHardwareBuffer(void* nativ
         return nullptr;
     }
 
-    EGLClientBuffer clientBuffer = eglGetNativeClientBufferANDROID(ahwb);
+    // Load EGL extension function pointers (extensions — not in core EGL)
+    static auto s_eglGetNativeClientBufferANDROID =
+        (PFNEGLGETNATIVECLIENTBUFFERANDROIDPROC)eglGetProcAddress("eglGetNativeClientBufferANDROID");
+    static auto s_eglCreateImageKHR =
+        (PFNEGLCREATEIMAGEKHRPROC)eglGetProcAddress("eglCreateImageKHR");
+    static auto s_eglDestroyImageKHR =
+        (PFNEGLDESTROYIMAGEKHRPROC)eglGetProcAddress("eglDestroyImageKHR");
+    static auto s_glEGLImageTargetTexture2DOES =
+        (PFNGLEGLIMAGETARGETTEXTURE2DOESPROC)eglGetProcAddress("glEGLImageTargetTexture2DOES");
+
+    if (!s_eglGetNativeClientBufferANDROID || !s_eglCreateImageKHR ||
+        !s_eglDestroyImageKHR || !s_glEGLImageTargetTexture2DOES) {
+        std::cerr << "bindExternalHardwareBuffer: required EGL extensions unavailable" << std::endl;
+        return nullptr;
+    }
+
+    EGLClientBuffer clientBuffer = s_eglGetNativeClientBufferANDROID(ahwb);
     if (!clientBuffer) {
         std::cerr << "bindExternalHardwareBuffer: eglGetNativeClientBufferANDROID failed" << std::endl;
         return nullptr;
     }
 
     const EGLint imageAttribs[] = { EGL_IMAGE_PRESERVED_KHR, EGL_TRUE, EGL_NONE };
-    EGLImageKHR eglImage = eglCreateImageKHR(
+    EGLImageKHR eglImage = s_eglCreateImageKHR(
         display, EGL_NO_CONTEXT, EGL_NATIVE_BUFFER_ANDROID, clientBuffer, imageAttribs);
     if (eglImage == EGL_NO_IMAGE_KHR) {
         std::cerr << "bindExternalHardwareBuffer: eglCreateImageKHR failed" << std::endl;
@@ -470,18 +488,17 @@ std::shared_ptr<ITexture> GLRenderDevice::bindExternalHardwareBuffer(void* nativ
     GLuint id = 0;
     glGenTextures(1, &id);
     glBindTexture(GL_TEXTURE_EXTERNAL_OES, id);
-    glEGLImageTargetTexture2DOES(GL_TEXTURE_EXTERNAL_OES, eglImage);
+    s_glEGLImageTargetTexture2DOES(GL_TEXTURE_EXTERNAL_OES, eglImage);
     glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
 
-    eglDestroyImageKHR(display, eglImage);
+    s_eglDestroyImageKHR(display, eglImage);
 
-    // GLTexture does NOT own the handle here — AHardwareBuffer manages the backing memory
     auto tex = std::make_shared<GLTexture>(id, hwbDesc.width, hwbDesc.height);
-    tex->setOwnsHandle(true);  // We do own the GL texture object (not the HW buffer)
+    tex->setOwnsHandle(true);
     return tex;
 #else
     // Non-Android stub
@@ -533,6 +550,64 @@ void GLRenderDevice::processDeferredDeletions() {
         m_deletionQueue.front()();
         m_deletionQueue.pop();
     }
+}
+
+RHICapabilities GLRenderDevice::getCapabilities() const {
+    RHICapabilities caps;
+    caps.backend = BackendType::GLES;
+
+    const char* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+    caps.rendererString = renderer ? renderer : "";
+
+    // Parse GLES version (e.g. "OpenGL ES 3.1 ...")
+    const char* versionStr = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+    int major = 3, minor = 0;
+    if (versionStr) {
+        std::string vs(versionStr);
+        size_t pos = vs.find("OpenGL ES ");
+        if (pos != std::string::npos) {
+            std::stringstream ss(vs.substr(pos + 10));
+            char dot;
+            ss >> major >> dot >> minor;
+        }
+    }
+    caps.glesVersionInt = major * 10 + minor; // 30, 31, 32
+
+    // Geometry shader: GLES 3.2 core
+    caps.geometryShader = (major > 3 || (major == 3 && minor >= 2));
+    // Tessellation: GLES 3.2 core
+    caps.tessellation = caps.geometryShader;
+
+    // MSAA
+    glGetIntegerv(GL_MAX_SAMPLES, &caps.maxMSAASamples);
+    caps.msaa = (caps.maxMSAASamples >= 4);
+
+    // Compute shader: GLES 3.1+ with sufficient invocations
+#ifdef __ANDROID__
+    if (major > 3 || (major == 3 && minor >= 1)) {
+        GLint maxInv = 0;
+        glGetIntegerv(GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS, &maxInv);
+        caps.computeShader = (maxInv >= 256);
+    }
+#endif
+
+    // FP16 render target
+    auto hasExt = [&](const char* name) -> bool {
+        GLint n = 0; glGetIntegerv(GL_NUM_EXTENSIONS, &n);
+        for (GLint i = 0; i < n; ++i) {
+            const char* e = reinterpret_cast<const char*>(glGetStringi(GL_EXTENSIONS, i));
+            if (e && std::string(e) == name) return true;
+        }
+        return false;
+    };
+    caps.fp16RenderTarget = (major >= 3 && minor >= 2)
+        || hasExt("GL_OES_texture_half_float")
+        || hasExt("GL_EXT_color_buffer_half_float");
+
+    // ASTC
+    caps.astc = (major >= 3 && minor >= 2) || hasExt("GL_KHR_texture_compression_astc_ldr");
+
+    return caps;
 }
 
 } // namespace rhi

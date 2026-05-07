@@ -183,6 +183,105 @@ private:
     std::shared_ptr<rhi::IRenderDevice> m_device;
 };
 
+// ----------------------------------------------------------------------------
+// Dual Kawase Blur Filter
+//
+// Iterative 4-tap diagonal blur. N passes at offsets 0.5…(N-0.5)×blurOffset
+// deliver a high-quality large-radius blur at a fraction of Gaussian cost.
+//
+// Parameters (via setParameter):
+//   "iterations"  int   — pass count [1, 8], default 4
+//   "blurOffset"  float — per-pass texel step multiplier, default 1.0
+// ----------------------------------------------------------------------------
+class DualKawaseBlurFilter : public Filter {
+public:
+    std::string getVertexShaderName()   const override { return "default.vert"; }
+    std::string getFragmentShaderName() const override { return "kawase_blur.frag"; }
+
+    explicit DualKawaseBlurFilter(FrameBufferPool* pool);
+    ~DualKawaseBlurFilter() override;
+
+    Result initialize() override;
+    void   onProgramRecompiled() override;
+    void   release() override;
+
+    ResultPayload<Texture> processFrame(const Texture& inputTexture,
+                                        FrameBufferPtr outputFb) override;
+
+    void setIterations(int n)   { m_iterations = std::max(1, std::min(n, kMaxIterations)); }
+    void setBlurOffset(float v) { m_blurOffset  = std::max(0.1f, v); }
+
+protected:
+    void onDraw(const Texture&, FrameBufferPtr) override {}
+    std::string getVertexShaderSource()   const override;
+    std::string getFragmentShaderSource() const override;
+
+private:
+    FrameBufferPool* m_pool;
+    static constexpr int kMaxIterations = 8;
+    int   m_iterations = 4;
+    float m_blurOffset = 1.0f;
+
+    GLint m_locTexelSize = -1;
+    GLint m_locOffset    = -1;
+
+    void cacheUniforms();
+    void drawQuad();
+};
+
+// ----------------------------------------------------------------------------
+// Bloom Filter
+//
+// Pipeline: threshold extract → DualKawase blur → additive composite.
+//
+// Parameters (via setParameter):
+//   "threshold"   float [0, 1]    — luminance cutoff,   default 0.8
+//   "knee"        float [0, 0.5]  — soft-knee width,     default 0.1
+//   "intensity"   float           — bloom brightness,    default 0.6
+//   "iterations"  int             — kawase pass count,   default 4
+// ----------------------------------------------------------------------------
+class BloomFilter : public Filter {
+public:
+    std::string getVertexShaderName()   const override { return "default.vert"; }
+    std::string getFragmentShaderName() const override { return "bloom_threshold.frag"; }
+
+    explicit BloomFilter(FrameBufferPool* pool);
+    ~BloomFilter() override;
+
+    Result initialize() override;
+    void   release() override;
+
+    ResultPayload<Texture> processFrame(const Texture& inputTexture,
+                                        FrameBufferPtr outputFb) override;
+
+protected:
+    void onDraw(const Texture&, FrameBufferPtr) override {}
+    std::string getVertexShaderSource()   const override;
+    std::string getFragmentShaderSource() const override;
+
+private:
+    FrameBufferPool* m_pool;
+
+    GLuint m_kawaseProg = 0;  // compiled from kKawaseFragSrc
+    GLuint m_compProg   = 0;  // compiled from kCompositeFragSrc
+
+    // Threshold uniforms (m_programId)
+    GLint m_locThreshold = -1;
+    GLint m_locKnee      = -1;
+
+    // Kawase uniforms (m_kawaseProg)
+    GLint m_locKawaseInputTex  = -1;
+    GLint m_locKawaseTexelSize = -1;
+    GLint m_locKawaseOffset    = -1;
+
+    // Composite uniforms (m_compProg)
+    GLint m_locCompInputTex = -1;
+    GLint m_locBloomTex     = -1;
+    GLint m_locIntensity    = -1;
+
+    void drawQuad();
+};
+
 } // namespace video
 } // namespace sdk
 

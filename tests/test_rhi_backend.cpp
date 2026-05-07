@@ -6,11 +6,17 @@
  *   - GLES Tier 枚举值验证
  *   - GLRenderDevice GLES 3.2 API stub 不崩溃
  *   - GLContextManager GLES 三级梯级 API
+ *   - TC-R13: getCapabilities() backend 字段
+ *   - TC-R14: SDK_RHI_BACKEND ENV 覆盖（GLES）
+ *   - TC-R15: SDK_RHI_BACKEND ENV 覆盖（VULKAN 无 HAS_VULKAN → GLES 降级）
+ *   - TC-R16: getCapabilities() 幂等 + glesVersionInt 下限
  */
 
 #include <cassert>
 #include <iostream>
 #include <memory>
+#include <cstdlib>
+#include <cstring>
 
 // RHI interfaces
 #include "../core/include/rhi/RenderDeviceFactory.h"
@@ -199,6 +205,80 @@ static void test_shader_stage_enum() {
 }
 
 // -----------------------------------------------------------------------
+// TC-R13: getCapabilities() on GLRenderDevice returns GLES backend
+// -----------------------------------------------------------------------
+static void tc_r13_capabilities_gles_backend() {
+    auto dev = std::make_shared<GLRenderDevice>();
+    auto caps = dev->getCapabilities();
+    ASSERT_EQ(static_cast<int>(caps.backend), static_cast<int>(BackendType::GLES),
+              "TC-R13: GLRenderDevice caps.backend == GLES");
+    ASSERT_TRUE(caps.rendererString != nullptr,
+                "TC-R13: rendererString is non-null pointer");
+}
+
+// -----------------------------------------------------------------------
+// TC-R14: ENV SDK_RHI_BACKEND=GLES forces GLES even when AUTO is requested
+// -----------------------------------------------------------------------
+static void tc_r14_env_override_gles() {
+#ifdef _WIN32
+    _putenv_s("SDK_RHI_BACKEND", "GLES");
+#else
+    setenv("SDK_RHI_BACKEND", "GLES", 1);
+#endif
+    GLContextManager ctx;
+    BackendType chosen = BackendType::AUTO;
+    auto dev = RenderDeviceFactory::create(BackendType::AUTO, ctx, chosen);
+    ASSERT_TRUE(dev != nullptr,               "TC-R14: factory non-null with ENV=GLES");
+    ASSERT_EQ(static_cast<int>(chosen), static_cast<int>(BackendType::GLES),
+              "TC-R14: ENV SDK_RHI_BACKEND=GLES forces GLES on AUTO");
+#ifdef _WIN32
+    _putenv_s("SDK_RHI_BACKEND", "");
+#else
+    unsetenv("SDK_RHI_BACKEND");
+#endif
+}
+
+// -----------------------------------------------------------------------
+// TC-R15: ENV SDK_RHI_BACKEND=VULKAN without HAS_VULKAN falls back to GLES
+// -----------------------------------------------------------------------
+static void tc_r15_env_override_vulkan_fallback() {
+#ifdef _WIN32
+    _putenv_s("SDK_RHI_BACKEND", "VULKAN");
+#else
+    setenv("SDK_RHI_BACKEND", "VULKAN", 1);
+#endif
+    GLContextManager ctx;
+    BackendType chosen = BackendType::AUTO;
+    auto dev = RenderDeviceFactory::create(BackendType::AUTO, ctx, chosen);
+    ASSERT_TRUE(dev != nullptr,
+                "TC-R15: factory non-null even when VULKAN env set but unavailable");
+#ifndef HAS_VULKAN
+    ASSERT_EQ(static_cast<int>(chosen), static_cast<int>(BackendType::GLES),
+              "TC-R15: VULKAN env without HAS_VULKAN falls back to GLES");
+#endif
+#ifdef _WIN32
+    _putenv_s("SDK_RHI_BACKEND", "");
+#else
+    unsetenv("SDK_RHI_BACKEND");
+#endif
+}
+
+// -----------------------------------------------------------------------
+// TC-R16: getCapabilities() is idempotent; glesVersionInt >= 30
+// -----------------------------------------------------------------------
+static void tc_r16_capabilities_stable() {
+    auto dev = std::make_shared<GLRenderDevice>();
+    auto caps1 = dev->getCapabilities();
+    auto caps2 = dev->getCapabilities();
+    ASSERT_EQ(static_cast<int>(caps1.backend), static_cast<int>(caps2.backend),
+              "TC-R16: getCapabilities() backend field is idempotent");
+    ASSERT_TRUE(caps1.glesVersionInt >= 30,
+                "TC-R16: glesVersionInt >= 30 (GLES 3.0 minimum contract)");
+    ASSERT_TRUE(caps1.maxMSAASamples >= 1,
+                "TC-R16: maxMSAASamples >= 1 (default)");
+}
+
+// -----------------------------------------------------------------------
 int main() {
     std::cout << "========= test_rhi_backend =========\n";
 
@@ -214,6 +294,10 @@ int main() {
     test_gl_geometry_shader_stub();
     test_gl_msaa_texture_stub();
     test_shader_stage_enum();
+    tc_r13_capabilities_gles_backend();
+    tc_r14_env_override_gles();
+    tc_r15_env_override_vulkan_fallback();
+    tc_r16_capabilities_stable();
 
     std::cout << "\n=== Results: " << g_passed << " passed, "
               << g_failed << " failed ===\n";

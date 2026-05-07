@@ -1,0 +1,137 @@
+@file:OptIn(com.sdk.video.InternalApi::class)
+package com.sdk.video.ai
+
+import android.content.Context
+import android.util.Log
+import com.sdk.video.RenderEngine
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+
+/**
+ * AiFilterController — AI 滤镜统一控制器
+ *
+ * 封装"模型解压 → 路径传递 → Native 加载"全链路，隐藏 [ModelAssetManager] 和
+ * [RenderEngine] AI API 的细节。
+ *
+ * ## 设计约束
+ * - 模型解压在 IO 线程（通过 [ModelAssetManager.extractModel]），加载由调用方
+ *   保证在 GL 线程执行（`renderEngine.loadXxx` 内部无 GL 调用，可在任意线程调用）。
+ * - 所有回调均在 [scope] 内运行（默认 `Dispatchers.Default + SupervisorJob`）。
+ *
+ * ## 典型用法（ViewModel 中）
+ * ```kotlin
+ * val aiCtrl = AiFilterController(context, renderEngine)
+ * aiCtrl.enableFaceLandmarks { loaded ->
+ *     if (loaded) renderEngine.setFaceReshape(eyeScale = 0.3f)
+ * }
+ * aiCtrl.enableHairColoring {
+ *     if (it) renderEngine.setHairColor(0.3f, 0.15f, 0.05f)
+ * }
+ * ```
+ */
+class AiFilterController(
+    private val context: Context,
+    private val renderEngine: RenderEngine,
+    private val scope: CoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+) {
+    companion object {
+        private const val TAG = "AiFilterController"
+
+        const val ASSET_FACE_LANDMARK   = "models/face_landmark_stub.tflite"
+        const val ASSET_HAIR_MODEL      = "models/selfie_segmentation_stub.tflite"
+    }
+
+    private val assetManager = ModelAssetManager(context)
+
+    /** Current load state, observable by UI */
+    enum class AiModelState { IDLE, LOADING, READY, STUB, ERROR }
+
+    @Volatile var faceLandmarkState: AiModelState = AiModelState.IDLE
+        private set
+    @Volatile var hairModelState: AiModelState = AiModelState.IDLE
+        private set
+
+    // ── Face Landmark ─────────────────────────────────────────────────────────
+
+    /**
+     * Extracts and loads the face landmark model.
+     * On success, face-dependent features (reshape, makeup) become available.
+     * @param onResult  called on the coroutine dispatcher with `true` = loaded, `false` = stub/error
+     */
+    fun enableFaceLandmarks(onResult: ((Boolean) -> Unit)? = null) {
+        faceLandmarkState = AiModelState.LOADING
+        scope.launch {
+            when (val r = assetManager.extractModel(ASSET_FACE_LANDMARK)) {
+                is ModelAssetManager.ModelLoadResult.Ready -> {
+                    val ok = renderEngine.loadFaceLandmarkModel(r.path)
+                    faceLandmarkState = if (ok) AiModelState.READY else AiModelState.ERROR
+                    Log.i(TAG, "Face landmark model load=${ok}, path=${r.path}")
+                    onResult?.invoke(ok)
+                }
+                is ModelAssetManager.ModelLoadResult.Stub -> {
+                    faceLandmarkState = AiModelState.STUB
+                    Log.w(TAG, "Face landmark model is a stub. Replace ${r.assetName} with a real model.")
+                    onResult?.invoke(false)
+                }
+                is ModelAssetManager.ModelLoadResult.Error -> {
+                    faceLandmarkState = AiModelState.ERROR
+                    Log.e(TAG, "Face landmark load error: ${r.message}")
+                    onResult?.invoke(false)
+                }
+            }
+        }
+    }
+
+    // ── Hair Segmentation / Coloring ──────────────────────────────────────────
+
+    /**
+     * Extracts and loads the hair segmentation model.
+     * @param onResult  called with `true` = model ready, `false` = stub/error
+     */
+    fun enableHairColoring(onResult: ((Boolean) -> Unit)? = null) {
+        hairModelState = AiModelState.LOADING
+        scope.launch {
+            when (val r = assetManager.extractModel(ASSET_HAIR_MODEL)) {
+                is ModelAssetManager.ModelLoadResult.Ready -> {
+                    val ok = renderEngine.loadHairModel(r.path)
+                    hairModelState = if (ok) AiModelState.READY else AiModelState.ERROR
+                    Log.i(TAG, "Hair model load=${ok}, path=${r.path}")
+                    onResult?.invoke(ok)
+                }
+                is ModelAssetManager.ModelLoadResult.Stub -> {
+                    hairModelState = AiModelState.STUB
+                    Log.w(TAG, "Hair model is a stub. Replace ${r.assetName} with a real model.")
+                    onResult?.invoke(false)
+                }
+                is ModelAssetManager.ModelLoadResult.Error -> {
+                    hairModelState = AiModelState.ERROR
+                    Log.e(TAG, "Hair model load error: ${r.message}")
+                    onResult?.invoke(false)
+                }
+            }
+        }
+    }
+
+    // ── Beauty (no model required) ────────────────────────────────────────────
+
+    /** Enables skin smoothing + whitening immediately (no TFLite model needed). */
+    fun enableBeauty(smoothStrength: Float = 0.6f, whitenStrength: Float = 0.4f) {
+        renderEngine.enableBeauty(smoothStrength, whitenStrength)
+        Log.d(TAG, "Beauty enabled: smooth=$smoothStrength, whiten=$whitenStrength")
+    }
+
+    fun disableBeauty() {
+        renderEngine.disableBeauty()
+    }
+
+    // ── Cleanup ───────────────────────────────────────────────────────────────
+
+    /** Clears extracted model files from private storage (e.g., on logout/uninstall). */
+    fun clearModelCache() {
+        assetManager.clearCache()
+        faceLandmarkState = AiModelState.IDLE
+        hairModelState    = AiModelState.IDLE
+    }
+}

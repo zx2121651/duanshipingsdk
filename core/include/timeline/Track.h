@@ -51,6 +51,9 @@ public:
     // 获取当前时间点轨道上所有活跃的 Clips（支持 Overlap 转场）
     void getActiveClipsAtTime(int64_t timelineNs, std::vector<ClipPtr>& outClips) const;
 
+    /** 直接迭代轨道中的全部 Clips（用于序列化 / UI 遍历）。 */
+    const std::vector<ClipPtr>& getAllClips() const { return m_clips; }
+
     // ------------------------------------------------------------------------
     // 混合属性 (Blending Properties)
     // ------------------------------------------------------------------------

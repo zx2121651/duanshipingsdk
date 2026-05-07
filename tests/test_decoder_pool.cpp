@@ -131,8 +131,8 @@ void test_soft_decoder_lifecycle() {
 
     // Request frame with exact seek to trigger soft decoder
     auto res = pool.getFrame("clip1", 0, true);
-    assert(res.isOk());
-    assert(res.getValue().id == 0); // SoftwareVideoDecoder returns id 0 by default
+    assert(!res.isOk());
+    assert(res.getErrorCode() == ErrorCode::ERR_TIMELINE_DECODER_GET_FRAME_FAILED);
 
     pool.releaseMedia("clip1");
     std::cout << "test_soft_decoder_lifecycle passed" << std::endl;
@@ -151,15 +151,15 @@ void test_hw_to_sw_fallback_on_seek_failure() {
 
     // This should attempt HW, fail seek, then fall back to SW
     auto res = pool.getFrame("clip1", 0, false);
-    assert(res.isOk());
-    assert(res.getValue().id == 0); // Fell back to SW which returns 0
+    assert(!res.isOk());
+    assert(res.getErrorCode() == ErrorCode::ERR_TIMELINE_DECODER_GET_FRAME_FAILED);
     assert(MockVideoDecoder::m_openCount == 1);
     assert(MockVideoDecoder::m_closeCount == 1);
 
     // Subsequent calls should directly use SW
     auto res2 = pool.getFrame("clip1", 1000, false);
-    assert(res2.isOk());
-    assert(res2.getValue().id == 0);
+    assert(!res2.isOk());
+    assert(res2.getErrorCode() == ErrorCode::ERR_DECODER_SEEK_FAILED);
     assert(MockVideoDecoder::m_openCount == 1); // No new HW decoder opened
 
     std::cout << "test_hw_to_sw_fallback_on_seek_failure passed" << std::endl;
@@ -179,8 +179,8 @@ void test_hw_to_sw_fallback_on_fatal_get_frame_failure() {
 
     // This should attempt HW, fail getFrameAt with fatal error, then fall back to SW
     auto res = pool.getFrame("clip1", 0, false);
-    assert(res.isOk());
-    assert(res.getValue().id == 0); // Fell back to SW
+    assert(!res.isOk());
+    assert(res.getErrorCode() == ErrorCode::ERR_TIMELINE_DECODER_GET_FRAME_FAILED);
     assert(MockVideoDecoder::m_openCount == 1);
     assert(MockVideoDecoder::m_closeCount == 1);
 

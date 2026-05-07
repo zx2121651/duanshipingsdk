@@ -32,43 +32,73 @@ void Clip::setTransform(float scale, float rotation, float transX, float transY)
     m_transY = transY;
 }
 
-void Clip::addKeyframe(const std::string& paramName, int64_t relativeTimeNs, float value) {
-    m_keyframes[paramName][relativeTimeNs] = value;
+// ---------------------------------------------------------------------------
+// 缓动曲线辅助函数
+// ---------------------------------------------------------------------------
+static float applyEasing(float t, InterpolationType easing) {
+    switch (easing) {
+        case InterpolationType::EASE_IN:
+            return t * t;                                     // quadratic ease-in
+        case InterpolationType::EASE_OUT:
+            return 1.f - (1.f - t) * (1.f - t);              // quadratic ease-out
+        case InterpolationType::EASE_IN_OUT:
+            return t < 0.5f
+                ? 2.f * t * t
+                : 1.f - 2.f * (1.f - t) * (1.f - t);        // smooth S-curve
+        case InterpolationType::HOLD:
+            return 0.f;                                       // never reaches 1 (step at next KF)
+        default:
+            return t;                                         // LINEAR
+    }
 }
 
-float Clip::getInterpolatedParam(const std::string& paramName, int64_t relativeTimeNs, float defaultValue) const {
+void Clip::addKeyframe(const std::string& paramName, int64_t relativeTimeNs,
+                       float value, InterpolationType easing) {
+    m_keyframes[paramName][relativeTimeNs] = KeyframeEntry{value, easing};
+}
+
+void Clip::removeKeyframe(const std::string& paramName, int64_t relativeTimeNs) {
+    auto it = m_keyframes.find(paramName);
+    if (it != m_keyframes.end()) it->second.erase(relativeTimeNs);
+}
+
+void Clip::clearKeyframes(const std::string& paramName) {
+    m_keyframes.erase(paramName);
+}
+
+std::vector<std::pair<int64_t, KeyframeEntry>>
+Clip::getKeyframes(const std::string& paramName) const {
+    auto it = m_keyframes.find(paramName);
+    if (it == m_keyframes.end()) return {};
+    return { it->second.begin(), it->second.end() };
+}
+
+float Clip::getInterpolatedParam(const std::string& paramName,
+                                  int64_t relativeTimeNs,
+                                  float defaultValue) const {
     auto itParam = m_keyframes.find(paramName);
-    if (itParam == m_keyframes.end() || itParam->second.empty()) {
-        return defaultValue; // No keyframes for this param
-    }
+    if (itParam == m_keyframes.end() || itParam->second.empty())
+        return defaultValue;
 
     const auto& timeMap = itParam->second;
-
-    // upper_bound finds the first element whose key is > relativeTimeNs
     auto itNext = timeMap.upper_bound(relativeTimeNs);
 
-    if (itNext == timeMap.begin()) {
-        // Requested time is before the first keyframe, return the first value
-        return itNext->second;
-    }
+    if (itNext == timeMap.begin())
+        return itNext->second.value;    // before first keyframe
 
-    if (itNext == timeMap.end()) {
-        // Requested time is after the last keyframe, return the last value
-        auto itLast = timeMap.rbegin();
-        return itLast->second;
-    }
+    if (itNext == timeMap.end())
+        return timeMap.rbegin()->second.value;  // after last keyframe
 
-    // Interpolate between itPrev and itNext
-    auto itPrev = itNext;
-    --itPrev;
-
+    auto itPrev = std::prev(itNext);
     int64_t t0 = itPrev->first;
-    float v0 = itPrev->second;
     int64_t t1 = itNext->first;
-    float v1 = itNext->second;
+    float   v0 = itPrev->second.value;
+    float   v1 = itNext->second.value;
 
-    float ratio = static_cast<float>(relativeTimeNs - t0) / static_cast<float>(t1 - t0);
-    return v0 + (v1 - v0) * ratio;
+    float ratio = static_cast<float>(relativeTimeNs - t0)
+                / static_cast<float>(t1 - t0);
+    float easedRatio = applyEasing(ratio, itPrev->second.easing);
+    return v0 + (v1 - v0) * easedRatio;
 }
 
 } // namespace timeline

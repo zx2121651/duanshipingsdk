@@ -50,6 +50,21 @@ set(CORE_SRC
         ../../../../core/src/rhi/RenderDeviceFactory.cpp
 )
 
+add_library(video-sdk SHARED
+    NativeBridge.cpp
+    OboeAudioEngine.cpp
+    TimelineBridge.cpp
+    TimelineExporterBridge.cpp
+    TimelinePreviewBridge.cpp
+    ${CORE_SRC}
+)
+
+# 包含路径
+target_include_directories(video-sdk PRIVATE
+    ../../../../core/include
+    ${oboe_SOURCE_DIR}/include
+)
+
 # ---------------------------------------------------------------------------
 # Vulkan RHI 后端（默认开启，要求 NDK >= 25）
 # 如需禁用：在 gradle 或 CMake 调用层传入 -DWITH_VULKAN=OFF
@@ -69,20 +84,6 @@ if(WITH_VULKAN)
     message(STATUS "Android: Vulkan RHI backend ENABLED")
 endif()
 
-add_library(video-sdk SHARED
-    NativeBridge.cpp
-    OboeAudioEngine.cpp
-    TimelineBridge.cpp
-    TimelineExporterBridge.cpp
-    ${CORE_SRC}
-)
-
-# 包含路径
-target_include_directories(video-sdk PRIVATE
-    ../../../../core/include
-    ${oboe_SOURCE_DIR}/include
-)
-
 # ---------------------------------------------------------------------------
 # FFmpeg 软解集成（可选）
 #
@@ -98,7 +99,12 @@ target_include_directories(video-sdk PRIVATE
 #
 # 如果目录不存在，则跳过 FFmpeg 集成，SoftwareVideoDecoder 保持 stub 状态。
 # ---------------------------------------------------------------------------
-if(DEFINED FFMPEG_PREBUILT_DIR AND EXISTS "${FFMPEG_PREBUILT_DIR}/${ANDROID_ABI}/libavcodec.so")
+if(DEFINED FFMPEG_PREBUILT_DIR
+   AND EXISTS "${FFMPEG_PREBUILT_DIR}/include/libavcodec/avcodec.h"
+   AND EXISTS "${FFMPEG_PREBUILT_DIR}/${ANDROID_ABI}/libavcodec.so"
+   AND EXISTS "${FFMPEG_PREBUILT_DIR}/${ANDROID_ABI}/libavformat.so"
+   AND EXISTS "${FFMPEG_PREBUILT_DIR}/${ANDROID_ABI}/libavutil.so"
+   AND EXISTS "${FFMPEG_PREBUILT_DIR}/${ANDROID_ABI}/libswscale.so")
     message(STATUS "[video-sdk] FFmpeg prebuilt found at ${FFMPEG_PREBUILT_DIR}/${ANDROID_ABI} — enabling HAS_FFMPEG_DECODER")
 
     target_compile_definitions(video-sdk PRIVATE HAS_FFMPEG_DECODER)

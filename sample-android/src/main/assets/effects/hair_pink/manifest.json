@@ -1,0 +1,13 @@
+{
+  "id": "hair_pink",
+  "name": "粉色头发",
+  "version": "1.0",
+  "type": "segmentation",
+  "layers": [
+    { "type": "beauty", "eyeScale": 0.20 },
+    { "type": "segmentation",
+      "model": "models/hair.tflite",
+      "color":  [1.0, 0.40, 0.70],
+      "intensity": 0.70 }
+  ]
+}

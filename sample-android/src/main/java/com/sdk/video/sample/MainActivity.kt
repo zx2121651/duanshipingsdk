@@ -12,26 +12,19 @@ import android.util.Size
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.viewModels
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
 import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Text
-import androidx.compose.runtime.*
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import com.sdk.video.sample.state.AppViewModel
+import com.sdk.video.sample.ui.HomeScaffold
+import com.sdk.video.timeline.TimelineManager
 import kotlinx.coroutines.launch
 import java.io.File
 import java.text.SimpleDateFormat
@@ -43,97 +36,60 @@ import java.util.concurrent.Executors
 @OptIn(InternalApi::class)
 class MainActivity : ComponentActivity() {
 
-    private var filterManager by mutableStateOf<VideoFilterManager?>(null)
-    private var startupError by mutableStateOf<String?>(null)
+    private val viewModel: AppViewModel by viewModels()
 
+    private var filterManager: VideoFilterManager? = null
     private var activeCameraResolution: Size? = null
+    private var lastOutputFile: File? = null
+    private var cameraSelector: CameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
     private lateinit var cameraExecutor: ExecutorService
-
-    // Compose State
-    private var isRecordingState = mutableStateOf(false)
-    private var avgFrameTime = mutableStateOf(0f)
-    private var p50FrameTime = mutableStateOf(0f)
-    private var p90FrameTime = mutableStateOf(0f)
-    private var p99FrameTime = mutableStateOf(0f)
-    private var droppedFrames = mutableStateOf(0)
 
     companion object {
         private const val REQUEST_CODE_PERMISSIONS = 10
-        private val REQUIRED_PERMISSIONS = arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
+        private val REQUIRED_PERMISSIONS = arrayOf(
+            Manifest.permission.CAMERA,
+            Manifest.permission.RECORD_AUDIO
+        )
         private const val TAG = "MainActivity"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         cameraExecutor = Executors.newSingleThreadExecutor()
 
-        if (allPermissionsGranted()) {
-            startCamera()
-        } else {
-            ActivityCompat.requestPermissions(this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS)
-        }
+        // Wire recording actions + diagnostic info into the shared ViewModel.
+        viewModel.bindRecordingActions(
+            start = { startRecording() },
+            stop  = { stopRecording() }
+        )
+        viewModel.setSoftwareDecoderAvailable(TimelineManager.queryIsSoftwareDecoderAvailable())
 
-        setContent {
-            Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-                if (startupError != null) {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text("Startup Failed", color = Color.Red)
-                        Text(startupError ?: "Unknown Error", color = Color.White, modifier = Modifier.padding(16.dp))
-                        Button(onClick = {
-                            startupError = null
-                            startCamera()
-                        }) {
-                            Text("RETRY")
-                        }
-                    }
-                } else {
-                    // UI 层只接收 Facade，生命周期由下方的 CameraX 严格托管
-                    filterManager?.let { fm ->
-                        FilterCameraPreview(
-                            filterManager = fm,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
+        if (allPermissionsGranted()) startCamera()
+        else ActivityCompat.requestPermissions(
+            this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS)
 
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .padding(16.dp)
-                    ) {
-                        Text(
-                            text = "Avg: ${String.format("%.1f", avgFrameTime.value)} ms",
-                            color = if (avgFrameTime.value > 16) Color.Red else Color.Green
-                        )
-                        Text(text = "P50: ${String.format("%.1f", p50FrameTime.value)} ms", color = Color.White)
-                        Text(text = "P90: ${String.format("%.1f", p90FrameTime.value)} ms", color = Color.White)
-                        Text(text = "P99: ${String.format("%.1f", p99FrameTime.value)} ms", color = Color.White)
-                        Text(
-                            text = "Dropped: ${droppedFrames.value}",
-                            color = if (droppedFrames.value > 0) Color.Red else Color.White
-                        )
-                    }
-
-                    Button(
-                        onClick = {
-                            if (isRecordingState.value) stopRecording() else startRecording()
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isRecordingState.value) Color.DarkGray else Color.Red
-                        ),
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(32.dp)
-                    ) {
-                        Text(if (isRecordingState.value) "STOP RECORDING" else "START RECORDING")
-                    }
+        // React to camera-facing toggle from CaptureScreen.
+        lifecycleScope.launch {
+            viewModel.useFrontCamera.collect { useFront ->
+                val target = if (useFront) CameraSelector.DEFAULT_FRONT_CAMERA
+                             else           CameraSelector.DEFAULT_BACK_CAMERA
+                if (target != cameraSelector) {
+                    cameraSelector = target
+                    if (allPermissionsGranted()) startCamera()
                 }
             }
         }
+
+        setContent { HomeScaffold(viewModel) }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_CODE_PERMISSIONS && allPermissionsGranted()) startCamera()
     }
 
     private fun startCamera() {
@@ -142,7 +98,12 @@ class MainActivity : ComponentActivity() {
             val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
 
             val resolutionSelector = ResolutionSelector.Builder()
-                .setResolutionStrategy(ResolutionStrategy(Size(1080, 1920), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER))
+                .setResolutionStrategy(
+                    ResolutionStrategy(
+                        Size(1080, 1920),
+                        ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
+                    )
+                )
                 .setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY)
                 .build()
 
@@ -155,45 +116,30 @@ class MainActivity : ComponentActivity() {
                 Log.d(TAG, "CameraX negotiated resolution: ${resolution.width}x${resolution.height}")
                 activeCameraResolution = resolution
 
-                // 清除之前的实例（如果有），防止多开
-                // Fix Risk B: Capture old instance locally before releasing to prevent race conditions
+                // Tear down the previous engine before binding a new resolution.
                 val oldManager = filterManager
                 oldManager?.scope?.launch { oldManager.release() }
 
-                val newManager = VideoFilterManager(this@MainActivity, resolution.width, resolution.height)
+                val newManager = VideoFilterManager(
+                    this@MainActivity, resolution.width, resolution.height
+                )
 
-                // Observe unified performance metrics
-                newManager.scope.launch {
-                    newManager.performanceMetrics.collect { metrics ->
-                        metrics?.let {
-                            runOnUiThread {
-                                avgFrameTime.value = it.averageFrameTimeMs
-                                p50FrameTime.value = it.p50FrameTimeMs
-                                p90FrameTime.value = it.p90FrameTimeMs
-                                p99FrameTime.value = it.p99FrameTimeMs
-                                droppedFrames.value = it.droppedFrames
-                            }
-                        }
-                    }
-                }
+                // Publish to all screens via the shared ViewModel.
+                viewModel.bindFilterManager(newManager)
 
-                // 启动引擎的唯一合法入口 (移交 GLSurfaceView 内部初始化)
                 newManager.scope.launch {
                     try {
-                        // 摒弃不稳定的 delay(500)，改为事件驱动：挂起直到底层 GLSurfaceView 真正创建好 EGL Context 和 OES 纹理
                         val surface = newManager.awaitInputSurface()
-
-                        request.provideSurface(surface, cameraExecutor) { result ->
-                            // 核心逻辑：当 CameraX 确认销毁旧的 Surface 时，连带销毁其绑定的引擎 FBO 资源
+                        request.provideSurface(surface, cameraExecutor) {
                             surface.release()
                             newManager.release()
                         }
+                        viewModel.refreshDeviceCaps()
                     } catch (e: Exception) {
                         Log.e(TAG, "Failed to provide surface", e)
                         runOnUiThread {
-                            startupError = e.message ?: "Failed to initialize engine"
-                            filterManager = null
-                            Toast.makeText(this@MainActivity, "Engine Error: ${e.message}", Toast.LENGTH_LONG).show()
+                            Toast.makeText(this@MainActivity,
+                                "Engine Error: ${e.message}", Toast.LENGTH_LONG).show()
                         }
                     }
                 }
@@ -201,7 +147,6 @@ class MainActivity : ComponentActivity() {
                 filterManager = newManager
             }
 
-            val cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
             try {
                 cameraProvider.unbindAll()
                 cameraProvider.bindToLifecycle(this, cameraSelector, preview)
@@ -213,13 +158,10 @@ class MainActivity : ComponentActivity() {
         }, ContextCompat.getMainExecutor(this))
     }
 
-    private var lastOutputFile: File? = null
-
     private fun startRecording() {
         val safeSize = activeCameraResolution ?: return
         val fm = filterManager ?: return
 
-        // 优先使用 getExternalFilesDir 避免 Android 10+ 的 Scoped Storage 权限困扰
         val moviesDir = getExternalFilesDir(Environment.DIRECTORY_MOVIES)
         if (moviesDir != null && !moviesDir.exists()) moviesDir.mkdirs()
 
@@ -241,10 +183,13 @@ class MainActivity : ComponentActivity() {
             val result = fm.startVideoRecording(config)
             runOnUiThread {
                 if (result.isSuccess) {
-                    isRecordingState.value = true
-                    Toast.makeText(this@MainActivity, "Recording started", Toast.LENGTH_SHORT).show()
+                    viewModel.setRecordingState(true)
+                    Toast.makeText(this@MainActivity,
+                        "Recording started", Toast.LENGTH_SHORT).show()
                 } else {
-                    Toast.makeText(this@MainActivity, "Failed to start recording: ${result.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@MainActivity,
+                        "Failed to start recording: ${result.exceptionOrNull()?.message}",
+                        Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -254,19 +199,18 @@ class MainActivity : ComponentActivity() {
         val fm = filterManager
         fm?.scope?.launch {
             fm.stopVideoRecording()
-
-            // 录制结束后的完整性校验
             val file = lastOutputFile
-            val isSuccessful = file != null && file.exists() && file.length() > 0
-
+            val ok = file != null && file.exists() && file.length() > 0
             runOnUiThread {
-                isRecordingState.value = false
-                if (isSuccessful) {
-                    Toast.makeText(this@MainActivity, "Video saved: ${file?.name}\nSize: ${file?.length()?.div(1024)} KB", Toast.LENGTH_LONG).show()
+                viewModel.setRecordingState(false)
+                if (ok) {
+                    Toast.makeText(this@MainActivity,
+                        "Saved: ${file?.name}\n${file?.length()?.div(1024)} KB",
+                        Toast.LENGTH_LONG).show()
                     Log.i(TAG, "Recording successful: ${file?.absolutePath}")
                 } else {
-                    Toast.makeText(this@MainActivity, "Recording failed or file empty", Toast.LENGTH_LONG).show()
-                    Log.e(TAG, "Recording failed: file=${file?.absolutePath}, exists=${file?.exists()}, size=${file?.length()}")
+                    Toast.makeText(this@MainActivity,
+                        "Recording failed or file empty", Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -279,11 +223,8 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         cameraExecutor.shutdown()
-        // 兜底安全释放：即使 CameraX 没有正常触发 request.provideSurface 的销毁回调，
-        // 在 Activity 彻底死亡时也将 GL 资源清理干净。
-        filterManager?.let { fm ->
-            fm.release()
-        }
+        filterManager?.let { fm -> fm.release() }
         filterManager = null
+        viewModel.bindFilterManager(null)
     }
 }

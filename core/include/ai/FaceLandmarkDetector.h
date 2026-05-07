@@ -23,6 +23,7 @@
  */
 
 #include "../GLTypes.h"
+#include "TfliteInferenceEngine.h"
 #include <array>
 #include <vector>
 #include <mutex>
@@ -106,6 +107,18 @@ public:
     bool isLoaded() const { return m_loaded; }
     void release();
 
+    /**
+     * 设置 TFLite delegate 偏好（GPU/NNAPI/XNNPACK/CPU）。
+     * 必须在 loadModel() 之前调用；默认 GPU（回退链：GPU→CPU）。
+     * @param hint  TfliteInferenceEngine::DelegateHint 值（强转为 int 传入）
+     */
+    void setDelegateHint(sdk::video::ai::TfliteInferenceEngine::DelegateHint hint) {
+        m_delegateHint = hint;
+    }
+    sdk::video::ai::TfliteInferenceEngine::DelegateHint getDelegateHint() const {
+        return m_delegateHint;
+    }
+
     // ---- 推理 ----
 
     /**
@@ -162,6 +175,10 @@ private:
     };
     mutable std::mutex m_frameMutex;
     PendingFrame m_pendingFrame;
+
+    // Pending delegate hint — applied in loadModel / buildInterpreterInternal
+    TfliteInferenceEngine::DelegateHint m_delegateHint
+        = TfliteInferenceEngine::DelegateHint::GPU;
 
     // 性能统计
     float m_avgInferenceMs = 0.f;

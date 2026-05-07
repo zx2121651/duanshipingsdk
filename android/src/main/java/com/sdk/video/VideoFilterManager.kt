@@ -9,7 +9,9 @@ import kotlinx.coroutines.flow.*
 
 // 定义支持的视频滤镜类型枚举
 enum class VideoFilterType {
-    BRIGHTNESS, GAUSSIAN_BLUR, LOOKUP, BILATERAL, CINEMATIC_LOOKUP, COMPUTE_BLUR, NIGHT_VISION
+    BRIGHTNESS, GAUSSIAN_BLUR, LOOKUP, BILATERAL, CINEMATIC_LOOKUP, COMPUTE_BLUR,
+    NIGHT_VISION, LUT3D, DUAL_KAWASE_BLUR, BLOOM,
+    PROP_OVERLAY  // Real-time prop/sticker overlay — maps to FilterType::PROP_OVERLAY = 10
 }
 
 // 引擎运行状态，供上层 UI 监听，以便在发生错误或退化渲染时给出提示
@@ -201,17 +203,125 @@ class VideoFilterManager(private val context: android.content.Context,
     suspend fun addFilter(type: VideoFilterType): Result<Unit> {
         return runOnGLThread {
             val typeInt = when (type) {
-                VideoFilterType.BRIGHTNESS -> RenderEngine.FILTER_TYPE_BRIGHTNESS
-                VideoFilterType.GAUSSIAN_BLUR -> RenderEngine.FILTER_TYPE_GAUSSIAN_BLUR
-                VideoFilterType.LOOKUP -> RenderEngine.FILTER_TYPE_LOOKUP
-                VideoFilterType.BILATERAL -> RenderEngine.FILTER_TYPE_BILATERAL
-                VideoFilterType.CINEMATIC_LOOKUP -> 4
-                VideoFilterType.COMPUTE_BLUR -> 5
-                VideoFilterType.NIGHT_VISION -> RenderEngine.FILTER_TYPE_NIGHT_VISION
+                VideoFilterType.BRIGHTNESS        -> RenderEngine.FILTER_TYPE_BRIGHTNESS
+                VideoFilterType.GAUSSIAN_BLUR     -> RenderEngine.FILTER_TYPE_GAUSSIAN_BLUR
+                VideoFilterType.LOOKUP            -> RenderEngine.FILTER_TYPE_LOOKUP
+                VideoFilterType.BILATERAL         -> RenderEngine.FILTER_TYPE_BILATERAL
+                VideoFilterType.CINEMATIC_LOOKUP  -> 4
+                VideoFilterType.COMPUTE_BLUR      -> 5
+                VideoFilterType.NIGHT_VISION      -> RenderEngine.FILTER_TYPE_NIGHT_VISION
+                VideoFilterType.LUT3D             -> RenderEngine.FILTER_TYPE_LUT3D
+                VideoFilterType.DUAL_KAWASE_BLUR  -> RenderEngine.FILTER_TYPE_DUAL_KAWASE_BLUR
+                VideoFilterType.BLOOM             -> RenderEngine.FILTER_TYPE_BLOOM
             }
             renderEngine.addFilter(typeInt)
         }
     }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // 抖音对标 facade：Beauty / FaceReshape / Makeup / HairSeg / EffectPlugin
+    // 全部通过 GL 线程调度，保证与底层 RenderEngine 单线程契约一致。
+    // ──────────────────────────────────────────────────────────────────────
+
+    /** 开启美颜（磨皮 + 美白），无需模型即可使用。 */
+    suspend fun enableBeauty(smoothStrength: Float = 0.6f,
+                              whitenStrength: Float = 0.4f): Result<Unit> {
+        return runOnGLThread {
+            renderEngine.enableBeauty(smoothStrength, whitenStrength)
+            Result.success(Unit)
+        }
+    }
+
+    /** 关闭美颜，并重建管线（剔除 BeautyFilter）。 */
+    suspend fun disableBeauty(): Result<Unit> {
+        return runOnGLThread {
+            renderEngine.disableBeauty()
+            Result.success(Unit)
+        }
+    }
+
+    /**
+     * 加载人脸关键点 TFLite 模型。stub 模式下传任意路径都会返回 true。
+     */
+    suspend fun loadFaceLandmarkModel(modelPath: String): Result<Boolean> {
+        return runOnGLThread {
+            Result.success(renderEngine.loadFaceLandmarkModel(modelPath))
+        }
+    }
+
+    /** 设置人脸重塑参数（大眼/瘦脸/瘦鼻/抬额/V下巴/嘴宽）。 */
+    suspend fun setFaceReshape(eyeScale: Float = 0f,
+                                faceSlim: Float = 0f,
+                                noseSlim: Float = 0f,
+                                foreheadUp: Float = 0f,
+                                chinV: Float = 0f,
+                                mouthWidth: Float = 0f): Result<Unit> {
+        return runOnGLThread {
+            renderEngine.setFaceReshape(eyeScale, faceSlim, noseSlim,
+                                         foreheadUp, chinV, mouthWidth)
+            Result.success(Unit)
+        }
+    }
+
+    /** 设置某一层化妆参数（口红/腮红/眼影/高光/修容/眉）。 */
+    suspend fun setMakeup(layer: RenderEngine.MakeupLayer,
+                          r: Float, g: Float, b: Float,
+                          intensity: Float): Result<Unit> {
+        return runOnGLThread {
+            renderEngine.setMakeup(layer, r, g, b, intensity)
+            Result.success(Unit)
+        }
+    }
+
+    /** 加载头发分割 TFLite 模型。 */
+    suspend fun loadHairModel(modelPath: String): Result<Boolean> {
+        return runOnGLThread {
+            Result.success(renderEngine.loadHairModel(modelPath))
+        }
+    }
+
+    /** 设置头发染色目标颜色 + 染色/高光强度。 */
+    suspend fun setHairColor(r: Float, g: Float, b: Float,
+                              colorIntensity: Float = 0.7f,
+                              glossIntensity: Float = 0.3f): Result<Unit> {
+        return runOnGLThread {
+            renderEngine.setHairColor(r, g, b, colorIntensity, glossIntensity)
+            Result.success(Unit)
+        }
+    }
+
+    /**
+     * 加载特效包（解析 manifest.json + 注册到 EffectPluginManager）。
+     * @return 特效 id；失败时为空字符串。
+     */
+    suspend fun loadEffect(effectRoot: String): Result<String> {
+        return runOnGLThread {
+            Result.success(renderEngine.loadEffect(effectRoot))
+        }
+    }
+
+    /** 激活指定特效 id；传空字符串等同于 deactivate。 */
+    suspend fun activateEffect(effectId: String): Result<Unit> {
+        return runOnGLThread {
+            renderEngine.activateEffect(effectId)
+            Result.success(Unit)
+        }
+    }
+
+    /** 停用并清空全部已加载特效。 */
+    suspend fun deactivateAllEffects(): Result<Unit> {
+        return runOnGLThread {
+            renderEngine.deactivateAllEffects()
+            Result.success(Unit)
+        }
+    }
+
+    /**
+     * 同步获取设备能力（不需要 GL 线程；底层只是读取已嗅探好的字段）。
+     * 引擎未初始化时返回 null。
+     */
+    fun getDeviceCapabilities(): RenderEngine.DeviceCapabilities? =
+        renderEngine.getDeviceCapabilities()
 
     // 清空滤镜管线
     suspend fun removeAllFilters(): Result<Unit> {

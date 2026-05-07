@@ -819,5 +819,325 @@ void ComputeBlurFilter::onDraw(const Texture& /*inputTexture*/, FrameBufferPtr /
 
 #endif
 
+// ============================================================================
+// Shared inline shader sources for Dual Kawase Blur and Bloom
+// ============================================================================
+
+namespace {
+
+static const char* kKawaseVertSrc = R"(
+#version 300 es
+layout(location = 0) in vec4 position;
+layout(location = 1) in vec2 texCoord;
+out vec2 v_texCoord;
+void main() { gl_Position = position; v_texCoord = texCoord; }
+)";
+
+static const char* kKawaseFragSrc = R"(
+#version 300 es
+precision highp float;
+in vec2 v_texCoord;
+uniform sampler2D inputImageTexture;
+uniform vec2  u_texelSize;
+uniform float u_offset;
+out vec4 fragColor;
+void main() {
+    float d = u_offset;
+    vec4 s  = texture(inputImageTexture, v_texCoord + vec2(-d,-d) * u_texelSize);
+    s      += texture(inputImageTexture, v_texCoord + vec2(-d, d) * u_texelSize);
+    s      += texture(inputImageTexture, v_texCoord + vec2( d,-d) * u_texelSize);
+    s      += texture(inputImageTexture, v_texCoord + vec2( d, d) * u_texelSize);
+    fragColor = s * 0.25;
+}
+)";
+
+static const char* kBloomThreshFragSrc = R"(
+#version 300 es
+precision highp float;
+in vec2 v_texCoord;
+uniform sampler2D inputImageTexture;
+uniform float u_threshold;
+uniform float u_knee;
+out vec4 fragColor;
+void main() {
+    vec3  color = texture(inputImageTexture, v_texCoord).rgb;
+    float luma  = dot(color, vec3(0.2126, 0.7152, 0.0722));
+    float rq = clamp(luma - u_threshold + u_knee, 0.0, 2.0 * u_knee);
+    rq       = (rq * rq) / (4.0 * u_knee + 1.0e-5);
+    float w  = max(rq, luma - u_threshold) / max(luma, 1.0e-4);
+    fragColor = vec4(color * w, 1.0);
+}
+)";
+
+static const char* kBloomCompFragSrc = R"(
+#version 300 es
+precision highp float;
+in vec2 v_texCoord;
+uniform sampler2D inputImageTexture;
+uniform sampler2D u_bloomTex;
+uniform float     u_intensity;
+out vec4 fragColor;
+void main() {
+    vec3 orig  = texture(inputImageTexture, v_texCoord).rgb;
+    vec3 bloom = texture(u_bloomTex,        v_texCoord).rgb;
+    fragColor  = vec4(clamp(orig + bloom * u_intensity, 0.0, 1.0), 1.0);
+}
+)";
+
+} // anonymous namespace
+
+// ============================================================================
+// DualKawaseBlurFilter
+// ============================================================================
+
+DualKawaseBlurFilter::DualKawaseBlurFilter(FrameBufferPool* pool)
+    : m_pool(pool) {}
+
+DualKawaseBlurFilter::~DualKawaseBlurFilter() {
+    DualKawaseBlurFilter::release();
+}
+
+void DualKawaseBlurFilter::release() {
+    // m_programId is released by Filter::release()
+    Filter::release();
+}
+
+Result DualKawaseBlurFilter::initialize() {
+    auto res = Filter::initialize();
+    if (!res.isOk()) return res;
+    cacheUniforms();
+    return Result::ok();
+}
+
+void DualKawaseBlurFilter::onProgramRecompiled() {
+    cacheUniforms();
+}
+
+void DualKawaseBlurFilter::cacheUniforms() {
+    m_locTexelSize = glGetUniformLocation(m_programId, "u_texelSize");
+    m_locOffset    = glGetUniformLocation(m_programId, "u_offset");
+}
+
+std::string DualKawaseBlurFilter::getVertexShaderSource() const {
+    return kKawaseVertSrc;
+}
+
+std::string DualKawaseBlurFilter::getFragmentShaderSource() const {
+    return kKawaseFragSrc;
+}
+
+void DualKawaseBlurFilter::drawQuad() {
+    if (m_renderDevice && m_quadVao) {
+        auto cmd = m_renderDevice->createCommandBuffer();
+        cmd->bindVertexArray(m_quadVao.get());
+        cmd->draw(4);
+    } else {
+        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    }
+}
+
+ResultPayload<Texture> DualKawaseBlurFilter::processFrame(
+    const Texture& inputTexture, FrameBufferPtr outputFb)
+{
+    if (m_programId == 0)
+        return ResultPayload<Texture>::error(
+            ErrorCode::ERR_RENDER_INVALID_STATE, "DualKawaseBlurFilter: not initialized");
+    if (!outputFb)
+        return ResultPayload<Texture>::error(
+            ErrorCode::ERR_RENDER_INVALID_STATE, "DualKawaseBlurFilter: null outputFb");
+
+    // Read parameters
+    if (m_parameters.count("iterations"))
+        m_iterations = std::max(1, std::min(std::any_cast<int>(m_parameters.at("iterations")), kMaxIterations));
+    if (m_parameters.count("blurOffset"))
+        m_blurOffset = std::max(0.1f, std::any_cast<float>(m_parameters.at("blurOffset")));
+
+    const int W = static_cast<int>(inputTexture.width);
+    const int H = static_cast<int>(inputTexture.height);
+
+    // Acquire two ping-pong FBOs from the pool
+    auto fboA = m_pool->get(W, H);
+    auto fboB = m_pool->get(W, H);
+    if (!fboA || !fboB)
+        return ResultPayload<Texture>::error(
+            ErrorCode::ERR_RENDER_INVALID_STATE, "DualKawaseBlurFilter: pool exhausted");
+
+    GLStateManager::getInstance().useProgram(m_programId);
+    glActiveTexture(GL_TEXTURE0);
+    glUniform1i(m_inputImageTextureHandle, 0);
+    glUniform2f(m_locTexelSize, 1.0f / W, 1.0f / H);
+
+    GLuint srcTex = inputTexture.id;
+
+    for (int i = 0; i < m_iterations; ++i) {
+        const bool isLast = (i == m_iterations - 1);
+        FrameBufferPtr dst = isLast ? outputFb : ((i % 2 == 0) ? fboA : fboB);
+
+        dst->bind();
+        glViewport(0, 0, W, H);
+        GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, srcTex);
+        glUniform1f(m_locOffset, (i + 0.5f) * m_blurOffset);
+        drawQuad();
+        dst->unbind();
+
+        if (!isLast)
+            srcTex = dst->getTexture().id;
+    }
+
+    return ResultPayload<Texture>::ok(outputFb->getTexture());
+}
+
+// ============================================================================
+// BloomFilter
+// ============================================================================
+
+BloomFilter::BloomFilter(FrameBufferPool* pool)
+    : m_pool(pool) {}
+
+BloomFilter::~BloomFilter() {
+    BloomFilter::release();
+}
+
+void BloomFilter::release() {
+    if (m_kawaseProg) { glDeleteProgram(m_kawaseProg); m_kawaseProg = 0; }
+    if (m_compProg)   { glDeleteProgram(m_compProg);   m_compProg   = 0; }
+    Filter::release();
+}
+
+Result BloomFilter::initialize() {
+    // Filter::initialize() compiles m_programId = threshold program
+    auto res = Filter::initialize();
+    if (!res.isOk()) return res;
+
+    m_locThreshold = glGetUniformLocation(m_programId, "u_threshold");
+    m_locKnee      = glGetUniformLocation(m_programId, "u_knee");
+
+    // Compile kawase program
+    m_kawaseProg = createProgram(kKawaseVertSrc, kKawaseFragSrc);
+    if (!m_kawaseProg)
+        return Result::error(ErrorCode::ERR_INIT_SHADER_FAILED, "BloomFilter: kawase program failed");
+    m_locKawaseInputTex  = glGetUniformLocation(m_kawaseProg, "inputImageTexture");
+    m_locKawaseTexelSize = glGetUniformLocation(m_kawaseProg, "u_texelSize");
+    m_locKawaseOffset    = glGetUniformLocation(m_kawaseProg, "u_offset");
+
+    // Compile composite program
+    m_compProg = createProgram(kKawaseVertSrc, kBloomCompFragSrc);
+    if (!m_compProg)
+        return Result::error(ErrorCode::ERR_INIT_SHADER_FAILED, "BloomFilter: composite program failed");
+    m_locCompInputTex = glGetUniformLocation(m_compProg, "inputImageTexture");
+    m_locBloomTex     = glGetUniformLocation(m_compProg, "u_bloomTex");
+    m_locIntensity    = glGetUniformLocation(m_compProg, "u_intensity");
+
+    return Result::ok();
+}
+
+std::string BloomFilter::getVertexShaderSource() const {
+    return kKawaseVertSrc;
+}
+
+std::string BloomFilter::getFragmentShaderSource() const {
+    return kBloomThreshFragSrc;
+}
+
+void BloomFilter::drawQuad() {
+    if (m_renderDevice && m_quadVao) {
+        auto cmd = m_renderDevice->createCommandBuffer();
+        cmd->bindVertexArray(m_quadVao.get());
+        cmd->draw(4);
+    } else {
+        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    }
+}
+
+ResultPayload<Texture> BloomFilter::processFrame(
+    const Texture& inputTexture, FrameBufferPtr outputFb)
+{
+    if (!m_programId || !m_kawaseProg || !m_compProg)
+        return ResultPayload<Texture>::error(
+            ErrorCode::ERR_RENDER_INVALID_STATE, "BloomFilter: not initialized");
+    if (!outputFb)
+        return ResultPayload<Texture>::error(
+            ErrorCode::ERR_RENDER_INVALID_STATE, "BloomFilter: null outputFb");
+
+    // Read parameters
+    float threshold = 0.8f, knee = 0.1f, intensity = 0.6f;
+    int   iterations = 4;
+    if (m_parameters.count("threshold"))  threshold  = std::any_cast<float>(m_parameters.at("threshold"));
+    if (m_parameters.count("knee"))       knee       = std::any_cast<float>(m_parameters.at("knee"));
+    if (m_parameters.count("intensity"))  intensity  = std::any_cast<float>(m_parameters.at("intensity"));
+    if (m_parameters.count("iterations")) iterations = std::any_cast<int>  (m_parameters.at("iterations"));
+    iterations = std::max(1, std::min(iterations, 8));
+
+    const int W = static_cast<int>(inputTexture.width);
+    const int H = static_cast<int>(inputTexture.height);
+
+    // Acquire 3 FBOs: threshold result + 2 for kawase ping-pong
+    auto threshFbo = m_pool->get(W, H);
+    auto blurFboA  = m_pool->get(W, H);
+    auto blurFboB  = m_pool->get(W, H);
+    if (!threshFbo || !blurFboA || !blurFboB)
+        return ResultPayload<Texture>::error(
+            ErrorCode::ERR_RENDER_INVALID_STATE, "BloomFilter: pool exhausted");
+
+    // --- Pass 1: Threshold extraction ---
+    {
+        threshFbo->bind();
+        glViewport(0, 0, W, H);
+        GLStateManager::getInstance().useProgram(m_programId);
+        glActiveTexture(GL_TEXTURE0);
+        GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, inputTexture.id);
+        glUniform1i(m_inputImageTextureHandle, 0);
+        glUniform1f(m_locThreshold, threshold);
+        glUniform1f(m_locKnee, knee);
+        drawQuad();
+        threshFbo->unbind();
+    }
+
+    // --- Passes 2..N+1: Kawase blur on threshold result ---
+    {
+        GLStateManager::getInstance().useProgram(m_kawaseProg);
+        glActiveTexture(GL_TEXTURE0);
+        glUniform1i(m_locKawaseInputTex, 0);
+        glUniform2f(m_locKawaseTexelSize, 1.0f / W, 1.0f / H);
+
+        GLuint srcTex = threshFbo->getTexture().id;
+
+        for (int i = 0; i < iterations; ++i) {
+            FrameBufferPtr dst = (i % 2 == 0) ? blurFboA : blurFboB;
+            dst->bind();
+            glViewport(0, 0, W, H);
+            GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, srcTex);
+            glUniform1f(m_locKawaseOffset, (i + 0.5f));
+            drawQuad();
+            dst->unbind();
+            srcTex = dst->getTexture().id;
+        }
+
+        // blurred result is in blurFboA (even iterations) or blurFboB (odd)
+        GLuint blurredTex = ((iterations % 2 == 0) ? blurFboB : blurFboA)->getTexture().id;
+
+        // --- Pass N+2: Additive composite ---
+        outputFb->bind();
+        glViewport(0, 0, W, H);
+        GLStateManager::getInstance().useProgram(m_compProg);
+
+        glActiveTexture(GL_TEXTURE0);
+        GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, inputTexture.id);
+        glUniform1i(m_locCompInputTex, 0);
+
+        glActiveTexture(GL_TEXTURE1);
+        GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, blurredTex);
+        glUniform1i(m_locBloomTex, 1);
+
+        glUniform1f(m_locIntensity, intensity);
+        drawQuad();
+        outputFb->unbind();
+
+        glActiveTexture(GL_TEXTURE0);
+    }
+
+    return ResultPayload<Texture>::ok(outputFb->getTexture());
+}
+
 } // namespace video
 } // namespace sdk

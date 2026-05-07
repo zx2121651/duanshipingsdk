@@ -11,6 +11,7 @@
 
 #ifdef __ANDROID__
 // GL_EXT_disjoint_timer_query 函数指针
+#include <EGL/egl.h>
 #include <GLES3/gl3.h>
 // 运行时动态获取 EXT 函数指针
 typedef void  (*PFNGLGENQUERIESEXTPROC)      (GLsizei n, GLuint *ids);

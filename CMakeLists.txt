@@ -313,3 +313,18 @@ add_test(NAME test_rhi_backend COMMAND test_rhi_backend)
 add_executable(test_douyin_compat tests/test_douyin_compat.cpp)
 target_link_libraries(test_douyin_compat video_sdk_core)
 add_test(NAME test_douyin_compat COMMAND test_douyin_compat)
+
+# Phase B — 导出链路 E2E 测试
+add_executable(test_export_e2e tests/test_export_e2e.cpp tests/mocks/MockCompositor.cpp)
+target_link_libraries(test_export_e2e video_sdk_core)
+add_test(NAME test_export_e2e COMMAND test_export_e2e)
+
+# Phase C — 素材兼容测试套件
+add_executable(test_media_compat tests/test_media_compat.cpp)
+target_link_libraries(test_media_compat video_sdk_core)
+add_test(NAME test_media_compat COMMAND test_media_compat)
+
+# Phase E — Compute Blur 性能基准
+add_executable(test_compute_blur_perf tests/test_compute_blur_perf.cpp)
+target_link_libraries(test_compute_blur_perf video_sdk_core)
+add_test(NAME test_compute_blur_perf COMMAND test_compute_blur_perf)

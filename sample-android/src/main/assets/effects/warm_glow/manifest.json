@@ -1,0 +1,10 @@
+{
+  "id": "warm_glow",
+  "name": "暖光氛围",
+  "version": "1.0",
+  "type": "color_filter",
+  "layers": [
+    { "type": "beauty",       "eyeScale": 0.15, "faceSlim": 0.10 },
+    { "type": "color_filter", "lut": "luts/warm.cube", "intensity": 0.6 }
+  ]
+}
