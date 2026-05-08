@@ -10,7 +10,7 @@
 typedef unsigned int GLbitfield;
 #endif
 
-#if !defined(__APPLE__) && !defined(_MSC_VER)
+#if !defined(__APPLE__) && !defined(_MSC_VER) && !defined(USE_MOCK_GL)
 extern "C" {
     void* glMapBufferRange(GLenum target, GLintptr offset, GLsizeiptr length, GLbitfield access) __attribute__((weak));
     GLboolean glUnmapBuffer(GLenum target) __attribute__((weak));
