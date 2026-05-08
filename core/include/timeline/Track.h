@@ -1,5 +1,6 @@
 #pragma once
 #include "Clip.h"
+#include "BlendMode.h"
 #include <vector>
 #include <memory>
 
@@ -60,6 +61,10 @@ public:
     void setOpacity(float opacity) { m_opacity = opacity; }
     float getOpacity() const { return m_opacity; }
 
+    /** 设置该轨道与下层的合成混合模式（默认 NORMAL）。 */
+    void setBlendMode(BlendMode mode) { m_blendMode = mode; }
+    BlendMode getBlendMode() const    { return m_blendMode; }
+
     // 针对音频轨，也可以设置整条轨道的基准音量
     void setTrackVolume(float volume) { m_trackVolume = volume; }
     float getTrackVolume() const { return m_trackVolume; }
@@ -72,8 +77,9 @@ private:
 
     std::vector<ClipPtr> m_clips;
 
-    float m_opacity = 1.0f;
-    float m_trackVolume = 1.0f;
+    float     m_opacity     = 1.0f;
+    float     m_trackVolume = 1.0f;
+    BlendMode m_blendMode   = BlendMode::NORMAL;
 };
 
 using TrackPtr = std::shared_ptr<Track>;

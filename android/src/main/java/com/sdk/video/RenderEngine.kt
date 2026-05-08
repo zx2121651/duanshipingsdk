@@ -49,7 +49,7 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     @androidx.annotation.Keep
     private fun onNativeRenderError(errorCode: Int, errorMessage: String) {
         android.util.Log.e("RenderEngine", "FATAL NATIVE ERROR [$errorCode]: $errorMessage")
-        // 将故障讯号向外转发给负责业务逻辑的 Facade
+        // 将故障信号向外转发给负责业务逻辑的 Facade
         onRenderErrorListener?.invoke(errorCode, errorMessage)
     }
 
@@ -349,9 +349,9 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
      * 当平均帧时间超过目标 10% 时自动降低渲染分辨率，帧时间恢复后缓慢回升。
      * 配置在下一次 [TimelineExporter.exportAsync] 调用时生效。
      *
-     * @param targetFps  目标帧率（Hz），超过则低降分辨率
-     * @param minScale   允许的最低分辨率倉率（默认 0.5 = 50%）
-     * @param maxScale   允许的最高分辨率倉率（默认 1.0 = 原始分辨率）
+     * @param targetFps  目标帧率（Hz），超过则降低分辨率
+     * @param minScale   允许的最低分辨率倍率（默认 0.5 = 50%）
+     * @param maxScale   允许的最高分辨率倍率（默认 1.0 = 原始分辨率）
      */
     fun setDsrConfig(targetFps: Float, minScale: Float = 0.5f, maxScale: Float = 1.0f) {
         handleLock.read {
@@ -655,4 +655,157 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     private external fun nativeLoadEffect(handle: Long, effectRoot: String): String
     private external fun nativeActivateEffect(handle: Long, effectId: String)
     private external fun nativeDeactivateAllEffects(handle: Long)
+
+    // ── P1 补齐 native 方法 ──────────────────────────────────────────────
+    private external fun nativeLoadHandModel(handle: Long, modelPath: String): Boolean
+    private external fun nativeGetHandLandmarks(handle: Long): FloatArray?
+    private external fun nativeLoadSegModel(handle: Long, modelPath: String): Boolean
+    private external fun nativeSetSegMode(handle: Long, mode: Int, bgColorArgb: Int, blurStrength: Float)
+    private external fun nativeEnableChromaKey(handle: Long, hueCenter: Float, hueTol: Float, satMin: Float, edgeSoftness: Float)
+    private external fun nativeDisableChromaKey(handle: Long)
+    private external fun nativeSetFaceMorphStrength(handle: Long, effectIndex: Int, strength: Float)
+    private external fun nativeResetFaceMorph(handle: Long)
+    private external fun nativeSetBodyEffectStrength(handle: Long, effectIndex: Int, strength: Float)
+    private external fun nativeResetBodyEffect(handle: Long)
+    private external fun nativeUpdateBodyPose(handle: Long, poseData: FloatArray)
+    private external fun nativeGetExpressions(handle: Long): FloatArray?
+
+    // ── 手部关键点 ────────────────────────────────────────────────────────
+
+    /**
+     * 加载手部关键点模型（MediaPipe Hands .tflite）。
+     * @param modelPath  assets 解压后绝对路径
+     */
+    fun loadHandModel(modelPath: String): Boolean {
+        handleLock.read {
+            return if (nativeHandle != 0L) nativeLoadHandModel(nativeHandle, modelPath) else false
+        }
+    }
+
+    /**
+     * 获取最新帧手部关键点。
+     * @return FloatArray[1 + 2*21*3]，[0]=handCount；每只手 21点×(x,y,z)；无手时返回 null
+     */
+    fun getHandLandmarks(): FloatArray? {
+        handleLock.read {
+            return if (nativeHandle != 0L) nativeGetHandLandmarks(nativeHandle) else null
+        }
+    }
+
+    // ── 人像/人体分割 ─────────────────────────────────────────────────────
+
+    /**
+     * 加载人像分割模型（selfie_segmentation .tflite）。
+     */
+    fun loadSegmentationModel(modelPath: String): Boolean {
+        handleLock.read {
+            return if (nativeHandle != 0L) nativeLoadSegModel(nativeHandle, modelPath) else false
+        }
+    }
+
+    /**
+     * 设置分割背景处理模式。
+     * @param mode          0=模糊背景 1=纯色背景 2=透明 3=图片背景
+     * @param bgColorArgb   REPLACE_BG 模式的背景色（ARGB int）
+     * @param blurStrength  BLUR_BG 模式的模糊半径
+     */
+    fun setSegmentationMode(mode: Int, bgColorArgb: Int = 0xFF000000.toInt(), blurStrength: Float = 15f) {
+        handleLock.read {
+            if (nativeHandle != 0L) nativeSetSegMode(nativeHandle, mode, bgColorArgb, blurStrength)
+        }
+    }
+
+    // ── 绿幕/色度键 ───────────────────────────────────────────────────────
+
+    /**
+     * 启用绿幕抠像滤镜。
+     * @param hueCenter   色相中心 [0,1]，绿≈0.333，蓝≈0.667
+     * @param hueTol      色相容差（单侧）[0,0.5]
+     * @param satMin      饱和度下限 [0,1]
+     * @param edgeSoftness 边缘羽化 [0,1]
+     */
+    fun enableChromaKey(
+        hueCenter: Float = 0.333f,
+        hueTol: Float = 0.10f,
+        satMin: Float = 0.25f,
+        edgeSoftness: Float = 0.06f
+    ) {
+        handleLock.read {
+            if (nativeHandle != 0L)
+                nativeEnableChromaKey(nativeHandle, hueCenter, hueTol, satMin, edgeSoftness)
+        }
+    }
+
+    /** 关闭绿幕抠像，恢复原始渲染管线。 */
+    fun disableChromaKey() {
+        handleLock.read {
+            if (nativeHandle != 0L) nativeDisableChromaKey(nativeHandle)
+        }
+    }
+
+    // ── 人脸形变 ──────────────────────────────────────────────────────────
+
+    /**
+     * 设置人脸形变强度（须先加载人脸关键点模型）。
+     * @param effectIndex  0=瘦脸 1=大眼 2=瘦下颌 3=额头 4=瘦鼻 5=嘴型 6=眼距 7=下巴
+     * @param strength     强度 [0,1]
+     */
+    fun setFaceMorphStrength(effectIndex: Int, strength: Float) {
+        handleLock.read {
+            if (nativeHandle != 0L) nativeSetFaceMorphStrength(nativeHandle, effectIndex, strength)
+        }
+    }
+
+    /** 重置所有人脸形变强度为 0。 */
+    fun resetFaceMorph() {
+        handleLock.read {
+            if (nativeHandle != 0L) nativeResetFaceMorph(nativeHandle)
+        }
+    }
+
+    // ── 身体特效 ──────────────────────────────────────────────────────────
+
+    /**
+     * 设置身体特效强度。
+     * @param effectIndex  0=瘦身 1=长腿 2=小头 3=窄肩 4=提臀
+     * @param strength     强度 [0,1]
+     */
+    fun setBodyEffectStrength(effectIndex: Int, strength: Float) {
+        handleLock.read {
+            if (nativeHandle != 0L) nativeSetBodyEffectStrength(nativeHandle, effectIndex, strength)
+        }
+    }
+
+    /** 重置所有身体特效强度为 0。 */
+    fun resetBodyEffect() {
+        handleLock.read {
+            if (nativeHandle != 0L) nativeResetBodyEffect(nativeHandle)
+        }
+    }
+
+    /**
+     * 更新身体骨骼点数据（由 BodyPoseDetector 提供后调用）。
+     * @param poseData  FloatArray[17*3]，每组 (x, y, confidence)，COCO 17点格式
+     */
+    fun updateBodyPose(poseData: FloatArray) {
+        handleLock.read {
+            if (nativeHandle != 0L) nativeUpdateBodyPose(nativeHandle, poseData)
+        }
+    }
+
+    // ── 表情检测 ──────────────────────────────────────────────────────────
+
+    /**
+     * 获取当前帧表情检测结果（基于已加载的人脸关键点，无需额外模型）。
+     * @return FloatArray[12] 或 null（未检测到人脸）：
+     *   [0]=smiling [1]=mouthOpen [2]=blinkLeft [3]=blinkRight
+     *   [4]=browRaise [5]=winkLeft [6]=winkRight（以上 0/1）
+     *   [7]=smileIntensity [8]=mouthOpenness [9]=leftEyeOpenness
+     *   [10]=rightEyeOpenness [11]=browRaiseAmount（以上 [0,1]）
+     */
+    fun getExpressions(): FloatArray? {
+        handleLock.read {
+            return if (nativeHandle != 0L) nativeGetExpressions(nativeHandle) else null
+        }
+    }
 }

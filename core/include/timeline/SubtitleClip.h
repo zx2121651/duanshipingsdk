@@ -22,7 +22,7 @@ namespace timeline {
 class SubtitleClip : public Clip {
 public:
     SubtitleClip(const std::string& id, const std::string& text)
-        : Clip(id, "", Clip::MediaType::IMAGE), m_text(text)
+        : Clip(id, "", Clip::MediaType::TEXT), m_text(text)
     {}
 
     const std::string& getText() const { return m_text; }
@@ -47,7 +47,7 @@ public:
      * @param imagePath   静态图资源路径（PNG / JPEG / WEBP）
      */
     StickerClip(const std::string& id, const std::string& imagePath)
-        : Clip(id, imagePath, Clip::MediaType::IMAGE)
+        : Clip(id, imagePath, Clip::MediaType::STICKER)
     {}
 
     // 归一化中心点 [0,1]

@@ -26,6 +26,12 @@
 #include "../../../../core/include/ai/BeautyFilter.h"
 #include "../../../../core/include/EffectPlugin.h"
 #include "OboeAudioEngine.h"
+#include "../../../../core/include/ai/HandLandmarkDetector.h"
+#include "../../../../core/include/ai/SegmentationFilter.h"
+#include "../../../../core/include/ai/ChromaKeyFilter.h"
+#include "../../../../core/include/ai/FaceMorphFilter.h"
+#include "../../../../core/include/ai/BodyEffectFilter.h"
+#include "../../../../core/include/ai/ExpressionDetector.h"
 
 using namespace sdk::video;
 
@@ -56,6 +62,20 @@ struct EngineWrapper {
     bool faceReshapeInPipeline  = false;
     bool makeupInPipeline       = false;
     bool hairSegInPipeline      = false;
+
+    // ── P1 补齐：手部/人像分割/绿幕/人脸形变/身体特效/表情 ─────────────
+    std::shared_ptr<ai::HandLandmarkDetector>   handLandmark;
+    std::shared_ptr<ai::TfliteInferenceEngine>  segEngine;
+    std::shared_ptr<SegmentationFilter>         segFilter;
+    std::shared_ptr<ChromaKeyFilter>            chromaKey;
+    std::shared_ptr<ai::FaceMorphFilter>        faceMorph;
+    std::shared_ptr<ai::BodyEffectFilter>       bodyEffect;
+    std::unique_ptr<ai::ExpressionDetector>     exprDetector;
+
+    bool segInPipeline        = false;
+    bool chromaInPipeline     = false;
+    bool faceMorphInPipeline  = false;
+    bool bodyEffectInPipeline = false;
 
 #ifndef WIN32
     // Recording state
@@ -211,6 +231,10 @@ static void rebuildAiPipeline(EngineWrapper* w) {
         w->filterEngine->addFilterRaw(w->makeup);
     if (w->hairSegInPipeline && w->hairSeg)
         w->filterEngine->addFilterRaw(w->hairSeg);
+    if (w->segInPipeline       && w->segFilter)  w->filterEngine->addFilterRaw(w->segFilter);
+    if (w->chromaInPipeline    && w->chromaKey)  w->filterEngine->addFilterRaw(w->chromaKey);
+    if (w->faceMorphInPipeline && w->faceMorph)  w->filterEngine->addFilterRaw(w->faceMorph);
+    if (w->bodyEffectInPipeline&& w->bodyEffect) w->filterEngine->addFilterRaw(w->bodyEffect);
 }
 
 static jfieldID g_lastFrameTimeMsId = nullptr;
@@ -334,6 +358,8 @@ Java_com_sdk_video_RenderEngine_nativeProcessFrame(JNIEnv *env, jobject thiz, jl
             wrapper->faceReshape->setLandmarkResult(lr);
         if (wrapper->makeup && wrapper->makeupInPipeline)
             wrapper->makeup->setLandmarkResult(lr);
+        if (wrapper->faceMorph && wrapper->faceMorphInPipeline && lr.faceCount > 0)
+            wrapper->faceMorph->updateLandmarks(lr.faces[0]);
     }
 
     // Unified ResultPayload unpacking and error propagation
@@ -635,7 +661,10 @@ Java_com_sdk_video_ai_TfliteDelegateStrategy_nativeSetDelegateHint(
     w->pendingDelegateHint     = static_cast<DH>(delegateCode);
     w->pendingDelegateHintSet  = true;
     // Retroactively apply if detectors are already allocated but model not loaded
-    if (w->faceLandmark) w->faceLandmark->setDelegateHint(w->pendingDelegateHint);
+    if (w->faceLandmark)  w->faceLandmark->setDelegateHint(w->pendingDelegateHint);
+    if (w->hairSeg)       w->hairSeg->setDelegateHint(w->pendingDelegateHint);
+    if (w->handLandmark)  w->handLandmark->setDelegateHint(w->pendingDelegateHint);
+    if (w->segEngine)     w->segEngine->setDelegateHint(w->pendingDelegateHint);
 }
 
 // ============================================================
@@ -750,6 +779,8 @@ Java_com_sdk_video_RenderEngine_nativeLoadHairModel(
         w->hairSeg = std::make_shared<HairSegmentationFilter>();
         w->hairSeg->initialize();
     }
+    if (w->pendingDelegateHintSet)
+        w->hairSeg->setDelegateHint(w->pendingDelegateHint);
     const char* path = env->GetStringUTFChars(modelPath, nullptr);
     bool ok = w->hairSeg->loadModel(path);
     env->ReleaseStringUTFChars(modelPath, path);
@@ -906,6 +937,255 @@ Java_com_sdk_video_RenderEngine_nativeGetDeviceCapabilities(
     vals[7] = cm.isGeometryShaderSupported()     ? 1 : 0;
     jintArray arr = env->NewIntArray(8);
     env->SetIntArrayRegion(arr, 0, 8, vals);
+    return arr;
+}
+
+// ============================================================
+// 手部 21 关键点检测
+// ============================================================
+
+JNIEXPORT jboolean JNICALL
+Java_com_sdk_video_RenderEngine_nativeLoadHandModel(
+    JNIEnv* env, jobject, jlong handle, jstring modelPath)
+{
+    EngineWrapper* w = reinterpret_cast<EngineWrapper*>(handle);
+    if (!w) return JNI_FALSE;
+    if (!w->handLandmark)
+        w->handLandmark = std::make_shared<ai::HandLandmarkDetector>();
+    if (w->pendingDelegateHintSet)
+        w->handLandmark->setDelegateHint(w->pendingDelegateHint);
+    const char* path = env->GetStringUTFChars(modelPath, nullptr);
+    bool ok = w->handLandmark->loadModel(path);
+    env->ReleaseStringUTFChars(modelPath, path);
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
+
+// Returns float[1 + kMaxHands*kHandLandmarkCount*3]:
+//   [0]            handCount (cast to int)
+//   [1..63]        hand0: x0,y0,z0,...,x20,y20,z20
+//   [64..126]      hand1 (if handCount==2)
+JNIEXPORT jfloatArray JNICALL
+Java_com_sdk_video_RenderEngine_nativeGetHandLandmarks(
+    JNIEnv* env, jobject, jlong handle)
+{
+    EngineWrapper* w = reinterpret_cast<EngineWrapper*>(handle);
+    if (!w || !w->handLandmark) return nullptr;
+    auto result = w->handLandmark->getLatestResult();
+    if (result.handCount == 0) return nullptr;
+    const int stride = ai::kHandLandmarkCount * 3;
+    const int total  = 1 + ai::kMaxHands * stride;
+    jfloat buf[total];
+    buf[0] = static_cast<float>(result.handCount);
+    for (int h = 0; h < ai::kMaxHands; ++h) {
+        for (int i = 0; i < ai::kHandLandmarkCount; ++i) {
+            const auto& lm = result.hands[h].landmarks[i];
+            int base = 1 + h * stride + i * 3;
+            buf[base + 0] = lm.x;
+            buf[base + 1] = lm.y;
+            buf[base + 2] = lm.z;
+        }
+    }
+    jfloatArray arr = env->NewFloatArray(total);
+    env->SetFloatArrayRegion(arr, 0, total, buf);
+    return arr;
+}
+
+// ============================================================
+// 人像/人体分割
+// ============================================================
+
+JNIEXPORT jboolean JNICALL
+Java_com_sdk_video_RenderEngine_nativeLoadSegModel(
+    JNIEnv* env, jobject, jlong handle, jstring modelPath)
+{
+    EngineWrapper* w = reinterpret_cast<EngineWrapper*>(handle);
+    if (!w) return JNI_FALSE;
+    if (!w->segEngine)
+        w->segEngine = std::make_shared<ai::TfliteInferenceEngine>();
+    if (w->pendingDelegateHintSet)
+        w->segEngine->setDelegateHint(w->pendingDelegateHint);
+    const char* path = env->GetStringUTFChars(modelPath, nullptr);
+    bool ok = w->segEngine->loadModel(path);
+    env->ReleaseStringUTFChars(modelPath, path);
+    if (ok && !w->segFilter) {
+        w->segFilter = std::make_shared<SegmentationFilter>(w->segEngine);
+        w->segFilter->initialize();
+    }
+    if (ok && !w->segInPipeline && w->filterEngine) {
+        w->segInPipeline = true;
+        w->filterEngine->addFilterRaw(w->segFilter);
+    }
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
+
+// mode: 0=BLUR_BG, 1=REPLACE_BG, 2=TRANSPARENT, 3=IMAGE_BG
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeSetSegMode(
+    JNIEnv*, jobject, jlong handle, jint mode, jint bgColorArgb, jfloat blurStrength)
+{
+    EngineWrapper* w = reinterpret_cast<EngineWrapper*>(handle);
+    if (!w || !w->segFilter) return;
+    w->segFilter->setParameter("mode",         std::any(mode));
+    w->segFilter->setParameter("bgColor",      std::any(static_cast<uint32_t>(bgColorArgb)));
+    w->segFilter->setParameter("blurStrength", std::any(blurStrength));
+}
+
+// ============================================================
+// 绿幕/色度键
+// ============================================================
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeEnableChromaKey(
+    JNIEnv*, jobject, jlong handle,
+    jfloat hueCenter, jfloat hueTol, jfloat satMin, jfloat edgeSoftness)
+{
+    EngineWrapper* w = reinterpret_cast<EngineWrapper*>(handle);
+    if (!w) return;
+    if (!w->chromaKey) {
+        w->chromaKey = std::make_shared<ChromaKeyFilter>();
+        w->chromaKey->initialize();
+    }
+    w->chromaKey->setKeyColor(hueCenter, hueTol, satMin);
+    w->chromaKey->setEdgeSoftness(edgeSoftness);
+    if (!w->chromaInPipeline && w->filterEngine) {
+        w->chromaInPipeline = true;
+        w->filterEngine->addFilterRaw(w->chromaKey);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeDisableChromaKey(
+    JNIEnv*, jobject, jlong handle)
+{
+    EngineWrapper* w = reinterpret_cast<EngineWrapper*>(handle);
+    if (!w || !w->chromaInPipeline || !w->filterEngine) return;
+    w->chromaInPipeline = false;
+    w->chromaKey.reset();
+    w->filterEngine->removeAllFilters();
+    w->filterEngine->addFilterRaw(std::make_shared<OES2RGBFilter>());
+    rebuildAiPipeline(w);
+}
+
+// ============================================================
+// 人脸形变 (FaceMorphFilter)
+// effectIndex: 0=SLIM_FACE,1=BIG_EYES,2=SLIM_JAW,3=FOREHEAD,
+//              4=NOSE_SLIM,5=MOUTH_SIZE,6=EYE_DISTANCE,7=CHIN_SHAPE
+// ============================================================
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeSetFaceMorphStrength(
+    JNIEnv*, jobject, jlong handle, jint effectIndex, jfloat strength)
+{
+    EngineWrapper* w = reinterpret_cast<EngineWrapper*>(handle);
+    if (!w) return;
+    if (!w->faceMorph) {
+        w->faceMorph = std::make_shared<ai::FaceMorphFilter>();
+        w->faceMorph->initialize();
+    }
+    w->faceMorph->setStrength(
+        static_cast<ai::FaceMorphFilter::Effect>(effectIndex), strength);
+    if (!w->faceMorphInPipeline && w->filterEngine) {
+        w->faceMorphInPipeline = true;
+        w->filterEngine->addFilterRaw(w->faceMorph);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeResetFaceMorph(
+    JNIEnv*, jobject, jlong handle)
+{
+    EngineWrapper* w = reinterpret_cast<EngineWrapper*>(handle);
+    if (w && w->faceMorph) w->faceMorph->resetAll();
+}
+
+// ============================================================
+// 身体特效 (BodyEffectFilter)
+// effectIndex: 0=SLIM_BODY,1=LONG_LEGS,2=SMALL_HEAD,
+//              3=SLIM_SHOULDER,4=LIFT_BUTTOCKS
+// ============================================================
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeSetBodyEffectStrength(
+    JNIEnv*, jobject, jlong handle, jint effectIndex, jfloat strength)
+{
+    EngineWrapper* w = reinterpret_cast<EngineWrapper*>(handle);
+    if (!w) return;
+    if (!w->bodyEffect) {
+        w->bodyEffect = std::make_shared<ai::BodyEffectFilter>();
+        w->bodyEffect->initialize();
+    }
+    w->bodyEffect->setStrength(
+        static_cast<ai::BodyEffectFilter::Effect>(effectIndex), strength);
+    if (!w->bodyEffectInPipeline && w->filterEngine) {
+        w->bodyEffectInPipeline = true;
+        w->filterEngine->addFilterRaw(w->bodyEffect);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeResetBodyEffect(
+    JNIEnv*, jobject, jlong handle)
+{
+    EngineWrapper* w = reinterpret_cast<EngineWrapper*>(handle);
+    if (w && w->bodyEffect) w->bodyEffect->resetAll();
+}
+
+// poseData: float[17*3] = {x0,y0,conf0, x1,y1,conf1, ..., x16,y16,conf16} (COCO 17点)
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeUpdateBodyPose(
+    JNIEnv* env, jobject, jlong handle, jfloatArray poseData)
+{
+    EngineWrapper* w = reinterpret_cast<EngineWrapper*>(handle);
+    if (!w || !w->bodyEffect) return;
+    if (!poseData) return;
+    jsize len = env->GetArrayLength(poseData);
+    if (len < 17 * 3) return;
+    jfloat buf[17 * 3];
+    env->GetFloatArrayRegion(poseData, 0, 17 * 3, buf);
+    ai::BodyPoseResult pose;
+    pose.detected = true;
+    for (int i = 0; i < 17; ++i) {
+        pose.keypoints[i].x          = buf[i * 3 + 0];
+        pose.keypoints[i].y          = buf[i * 3 + 1];
+        pose.keypoints[i].confidence = buf[i * 3 + 2];
+    }
+    w->bodyEffect->updatePose(pose);
+}
+
+// ============================================================
+// 表情检测 (ExpressionDetector — 无需模型)
+// Returns float[12]:
+//   [0..6]  bool flags: smiling,mouthOpen,blinkL,blinkR,browRaise,winkL,winkR
+//   [7..11] intensities: smileIntensity,mouthOpenness,leftEyeOpen,rightEyeOpen,browRaise
+// ============================================================
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_sdk_video_RenderEngine_nativeGetExpressions(
+    JNIEnv* env, jobject, jlong handle)
+{
+    EngineWrapper* w = reinterpret_cast<EngineWrapper*>(handle);
+    if (!w || !w->faceLandmark) return nullptr;
+    if (!w->exprDetector)
+        w->exprDetector = std::make_unique<ai::ExpressionDetector>();
+    auto faceResult = w->faceLandmark->getLatestResult();
+    if (faceResult.faceCount == 0) return nullptr;
+    auto expr = w->exprDetector->detect(faceResult.faces[0]);
+    jfloat buf[12] = {
+        expr.smiling    ? 1.f : 0.f,
+        expr.mouthOpen  ? 1.f : 0.f,
+        expr.blinkLeft  ? 1.f : 0.f,
+        expr.blinkRight ? 1.f : 0.f,
+        expr.browRaise  ? 1.f : 0.f,
+        expr.winkLeft   ? 1.f : 0.f,
+        expr.winkRight  ? 1.f : 0.f,
+        expr.smileIntensity,
+        expr.mouthOpenness,
+        expr.leftEyeOpenness,
+        expr.rightEyeOpenness,
+        expr.browRaiseAmount
+    };
+    jfloatArray arr = env->NewFloatArray(12);
+    env->SetFloatArrayRegion(arr, 0, 12, buf);
     return arr;
 }
 

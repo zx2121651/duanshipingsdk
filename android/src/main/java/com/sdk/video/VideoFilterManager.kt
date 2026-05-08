@@ -404,6 +404,85 @@ class VideoFilterManager(private val context: android.content.Context,
             if (res == 0) Result.success(Unit) else Result.failure(VideoSdkError.fromNativeCode(res))
         }
     }
+
+    // ── 手部关键点 ────────────────────────────────────────────────────────
+
+    suspend fun loadHandModel(modelPath: String): Result<Unit> = runOnGLThread {
+        if (renderEngine.loadHandModel(modelPath)) Result.success(Unit)
+        else Result.failure(VideoSdkError.ModelLoadFailed("hand_landmark"))
+    }
+
+    /** 获取最新帧手部关键点（可在任意线程调用）。返回 null 表示未检测到手。 */
+    fun getHandLandmarks(): FloatArray? = renderEngine.getHandLandmarks()
+
+    // ── 人像分割 ──────────────────────────────────────────────────────────
+
+    suspend fun loadSegmentationModel(modelPath: String): Result<Unit> = runOnGLThread {
+        if (renderEngine.loadSegmentationModel(modelPath)) Result.success(Unit)
+        else Result.failure(VideoSdkError.ModelLoadFailed("segmentation"))
+    }
+
+    /** 0=模糊背景 1=纯色背景 2=透明 3=图片背景 */
+    suspend fun setSegmentationMode(
+        mode: Int,
+        bgColorArgb: Int = 0xFF000000.toInt(),
+        blurStrength: Float = 15f
+    ): Result<Unit> = runOnGLThread {
+        renderEngine.setSegmentationMode(mode, bgColorArgb, blurStrength)
+        Result.success(Unit)
+    }
+
+    // ── 绿幕/色度键 ───────────────────────────────────────────────────────
+
+    suspend fun enableChromaKey(
+        hueCenter: Float = 0.333f,
+        hueTol: Float = 0.10f,
+        satMin: Float = 0.25f,
+        edgeSoftness: Float = 0.06f
+    ): Result<Unit> = runOnGLThread {
+        renderEngine.enableChromaKey(hueCenter, hueTol, satMin, edgeSoftness)
+        Result.success(Unit)
+    }
+
+    suspend fun disableChromaKey(): Result<Unit> = runOnGLThread {
+        renderEngine.disableChromaKey()
+        Result.success(Unit)
+    }
+
+    // ── 人脸形变 ──────────────────────────────────────────────────────────
+
+    /** effectIndex: 0=瘦脸 1=大眼 2=下颌 3=额头 4=鼻翼 5=嘴型 6=眼距 7=下巴 */
+    suspend fun setFaceMorphStrength(effectIndex: Int, strength: Float): Result<Unit> = runOnGLThread {
+        renderEngine.setFaceMorphStrength(effectIndex, strength)
+        Result.success(Unit)
+    }
+
+    suspend fun resetFaceMorph(): Result<Unit> = runOnGLThread {
+        renderEngine.resetFaceMorph()
+        Result.success(Unit)
+    }
+
+    // ── 身体特效 ──────────────────────────────────────────────────────────
+
+    /** effectIndex: 0=瘦身 1=长腿 2=小头 3=窄肩 4=提臀 */
+    suspend fun setBodyEffectStrength(effectIndex: Int, strength: Float): Result<Unit> = runOnGLThread {
+        renderEngine.setBodyEffectStrength(effectIndex, strength)
+        Result.success(Unit)
+    }
+
+    suspend fun resetBodyEffect(): Result<Unit> = runOnGLThread {
+        renderEngine.resetBodyEffect()
+        Result.success(Unit)
+    }
+
+    /** poseData: FloatArray[17*3] COCO格式，由 BodyPoseDetector 产生后调用。 */
+    fun updateBodyPose(poseData: FloatArray) = renderEngine.updateBodyPose(poseData)
+
+    // ── 表情检测 ──────────────────────────────────────────────────────────
+
+    /** 无需模型，基于已加载的人脸关键点实时计算。返回 null 表示无人脸。 */
+    fun getExpressions(): FloatArray? = renderEngine.getExpressions()
+
     fun release() {
         // 1. 先停掉录制和音频，防止异步任务还在调用 renderEngine
         videoEncoder?.stopRecording()

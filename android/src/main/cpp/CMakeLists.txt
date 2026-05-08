@@ -45,6 +45,26 @@ set(CORE_SRC
         ../../../../core/src/ai/BodyPoseDetector.cpp
         ../../../../core/src/ai/GestureRecognizer.cpp
         ../../../../core/src/ai/StickerRenderer.cpp
+        ../../../../core/src/ai/HandLandmarkDetector.cpp
+        ../../../../core/src/ai/AutoSubtitleEngine.cpp
+        ../../../../core/src/ai/ChromaKeyFilter.cpp
+        ../../../../core/src/ai/ExpressionDetector.cpp
+        ../../../../core/src/ai/VideoStabilizer.cpp
+        ../../../../core/src/ai/ArFaceAnchor.cpp
+        ../../../../core/src/ai/ParticleSystem.cpp
+        ../../../../core/src/ai/ObjectTracker.cpp
+        ../../../../core/src/ai/FaceMorphFilter.cpp
+        ../../../../core/src/ai/BodyEffectFilter.cpp
+        ../../../../core/src/ai/DepthEstimator.cpp
+        ../../../../core/src/timeline/TemplateEngine.cpp
+        ../../../../core/src/timeline/SplitScreenCompositor.cpp
+        ../../../../core/src/timeline/SmartCropController.cpp
+        ../../../../core/src/timeline/HistogramAnalyzer.cpp
+        ../../../../core/src/timeline/ColorGradingFilter.cpp
+        ../../../../core/src/EffectPackageUpdater.cpp
+        ../../../../core/src/timeline/SmartCoverSelector.cpp
+        ../../../../core/src/timeline/DraftAutoSave.cpp
+        ../../../../core/src/audio/VoiceChangerFilter.cpp
         ../../../../core/src/EffectPlugin.cpp
         ../../../../core/src/rhi/GLTexture.cpp
         ../../../../core/src/rhi/GLRenderDevice.cpp

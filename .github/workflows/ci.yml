@@ -35,13 +35,18 @@ jobs:
         run: |
           cmake -B build/host \
             -DCMAKE_BUILD_TYPE=Debug \
-            -DBUILD_TESTS=ON \
+            -DUSE_MOCK_GL=ON \
             -G Ninja
         working-directory: ${{ github.workspace }}
 
-      - name: Build + run C++ tests
+      - name: Build C++ tests
         run: |
-          cmake --build build/host --target run_tests -j$(nproc)
+          cmake --build build/host -j$(nproc)
+        working-directory: ${{ github.workspace }}
+
+      - name: Run C++ tests
+        run: |
+          ctest --test-dir build/host --output-on-failure
         working-directory: ${{ github.workspace }}
 
       - name: Upload test results
@@ -49,7 +54,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: core-test-results
-          path: build/host/test-results/
+          path: build/host/Testing/
 
   # ── 2. Android Unit Tests (JVM/Mockito) ──────────────────────────────────
   android-unit-tests:
@@ -165,14 +170,15 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
 
       - name: Run Firebase Test Lab — Device Matrix
         uses: google-github-actions/run-gcloud@v2
         with:
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          project_id: ${{ secrets.FIREBASE_PROJECT_ID }}
           command: |
             firebase test android run \
+              --project "${{ secrets.FIREBASE_PROJECT_ID }}" \
               --type instrumentation \
               --app    sample-android/build/outputs/apk/debug/sample-android-debug.apk \
               --test   sample-android/build/outputs/apk/androidTest/debug/sample-android-debug-androidTest.apk \
@@ -181,14 +187,15 @@ jobs:
               --device model=panther,version=33,locale=en,orientation=portrait \
               --device model=bluejay,version=32,locale=zh,orientation=portrait \
               --timeout 5m \
-              --results-dir=gs://${{ secrets.GCP_BUCKET }}/ci/${{ github.sha }} \
+              --results-bucket "gs://${{ secrets.FIREBASE_PROJECT_ID }}-test-results" \
+              --results-dir "ci/${{ github.sha }}" \
               --num-flaky-test-attempts 1
 
       - name: Download test results
         if: always()
         run: |
           gsutil -m cp -r \
-            gs://${{ secrets.GCP_BUCKET }}/ci/${{ github.sha }}/ \
+            gs://${{ secrets.FIREBASE_PROJECT_ID }}-test-results/ci/${{ github.sha }}/ \
             firebase-results/
 
       - name: Upload Firebase results
@@ -200,38 +207,35 @@ jobs:
 
   # ── 5. Performance Baseline (micro-benchmarks, optional) ─────────────────
   perf-baseline:
-    name: "Performance Baseline"
+    name: "Core Performance Baseline"
     runs-on: ubuntu-22.04
-    needs: android-build
+    needs: core-tests
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK ${{ env.JAVA_VERSION }}
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: ${{ env.JAVA_VERSION }}
+      - name: Install CMake + Ninja
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y cmake ninja-build
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Configure host benchmark build
+        run: |
+          cmake -B build/perf \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DUSE_MOCK_GL=ON \
+            -G Ninja
 
-      - name: Cache Gradle
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: gradle-${{ hashFiles('**/*.gradle*') }}
-          restore-keys: gradle-
+      - name: Build benchmark target
+        run: cmake --build build/perf --target test_compute_blur_perf -j$(nproc)
 
-      - name: Run benchmark tests
-        run: ./gradlew :android:connectedAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.sdk.video.SdkPerformanceBenchmark
-        continue-on-error: true
+      - name: Run compute blur benchmark
+        run: ctest --test-dir build/perf -R test_compute_blur_perf --output-on-failure
+        continue-on-error: false
 
       - name: Upload benchmark results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: benchmark-results
-          path: android/build/outputs/androidTest-results/
+          path: build/perf/Testing/

@@ -37,6 +37,12 @@ public:
      */
     bool loadModel(const std::string& modelPath);
     bool loadModelFromBuffer(const void* data, size_t size);
+    void setDelegateHint(ai::TfliteInferenceEngine::DelegateHint hint) {
+        m_engine.setDelegateHint(hint);
+    }
+    ai::TfliteInferenceEngine::DelegateHint getDelegateHint() const {
+        return m_engine.getDelegateHint();
+    }
 
     /** 设置目标发色 RGB [0,1] */
     void setHairColor(float r, float g, float b);

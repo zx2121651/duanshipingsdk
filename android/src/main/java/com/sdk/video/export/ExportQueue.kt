@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -78,6 +79,7 @@ class ExportWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params)
         const val KEY_BITRATE      = "bitrate"
         const val KEY_COLOR_SPACE  = "color_space"
         const val KEY_CHUNK_MS     = "chunk_duration_ms"
+        const val KEY_ERROR_MESSAGE = "error_message"
     }
 
     override fun getForegroundInfo(): ForegroundInfo {
@@ -167,12 +169,15 @@ class ExportWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params)
                 Log.i("ExportWorker", "Export completed: $outputPath")
                 Result.success(Data.Builder().putString("output", outputPath).build())
             } else {
-                Log.e("ExportWorker", "Export failed: $jobId")
-                if (runAttemptCount < 2) Result.retry() else Result.failure()
+                val message = "Export executor returned false"
+                Log.e("ExportWorker", "Export failed: $jobId, $message")
+                if (runAttemptCount < 2) Result.retry()
+                else Result.failure(Data.Builder().putString(KEY_ERROR_MESSAGE, message).build())
             }
         } catch (e: Exception) {
             Log.e("ExportWorker", "Export exception: $jobId", e)
-            if (runAttemptCount < 2) Result.retry() else Result.failure()
+            if (runAttemptCount < 2) Result.retry()
+            else Result.failure(Data.Builder().putString(KEY_ERROR_MESSAGE, e.message).build())
         }
     }
 }
@@ -208,7 +213,7 @@ object ExportExecutor {
             chunkDurationMs: Long, resumePositionMs: Long,
             onProgress: (Float, Long) -> Unit
         ): Boolean {
-            Log.w("ExportExecutor", "No implementation registered — export will fail")
+            Log.w("ExportExecutor", "No implementation registered — register ExportExecutor before using ExportQueue")
             return false
         }
     }
@@ -369,20 +374,25 @@ class ExportQueue(private val context: Context) {
 
     private fun observeWork(jobId: String, requestId: UUID) {
         scope.launch {
-            workManager.getWorkInfoByIdLiveData(requestId)
-                // Observe on main thread not available in coroutine scope — use polling
-        }
-        // Use WorkManager's LiveData via a separate observer if needed in UI layer
-        workManager.getWorkInfoById(requestId).addListener(Runnable {
-            val info = workManager.getWorkInfoById(requestId).get() ?: return@Runnable
-            val newStatus = info.state.toJobStatus()
-            val progress  = info.progress.getFloat("progress", 0f)
-            _jobs.update { map ->
-                map.toMutableMap().also { m ->
-                    m[jobId] = m[jobId]?.copy(status = newStatus, progress = progress) ?: return@also
+            while (true) {
+                val info = runCatching { workManager.getWorkInfoById(requestId).get() }.getOrNull()
+                    ?: break
+                val newStatus = info.state.toJobStatus()
+                val progress = info.progress.getFloat("progress", 0f)
+                val errorMessage = info.outputData.getString(ExportWorker.KEY_ERROR_MESSAGE)
+                _jobs.update { map ->
+                    map.toMutableMap().also { m ->
+                        m[jobId] = m[jobId]?.copy(
+                            status = newStatus,
+                            progress = progress,
+                            errorMessage = errorMessage
+                        ) ?: return@also
+                    }
                 }
+                if (info.state.isFinished) break
+                delay(500)
             }
-        }, context.mainExecutor)
+        }
     }
 
     private fun WorkInfo.State.toJobStatus() = when (this) {

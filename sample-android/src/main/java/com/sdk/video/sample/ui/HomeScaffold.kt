@@ -39,10 +39,10 @@ private data class NavItem(
 )
 
 private val navItems = listOf(
-    NavItem("home", "创作", Icons.Filled.Home),
+    NavItem("home", "首页", Icons.Filled.Home),
     NavItem("capture", "拍摄", Icons.Filled.Videocam),
     NavItem("effects", "特效", Icons.Filled.ContentCut),
-    NavItem("diagnostics", "诊断", Icons.Filled.Analytics),
+    NavItem("diagnostics", "设置", Icons.Filled.Analytics),
 )
 
 @Composable

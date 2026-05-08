@@ -78,18 +78,18 @@ private data class DraftCard(
 )
 
 private val quickEntries = listOf(
-    QuickEntry(Icons.Filled.AutoAwesome, "AI 一键成片", "脚本、卡点、字幕", Color(0xFF7C5CFF), "import"),
-    QuickEntry(Icons.Filled.Subtitles, "智能字幕", "语音识别与样式", Color(0xFF20C997), "text_editor"),
-    QuickEntry(Icons.Filled.AutoFixHigh, "特效模板", "滤镜、妆容、道具", Color(0xFFFF5C8A), "effects"),
-    QuickEntry(Icons.Filled.GraphicEq, "音乐卡点", "节拍同步与分段", Color(0xFFFFB020), "capture"),
-    QuickEntry(Icons.Filled.Tune, "专业调色", "亮度、对比、锐化", Color(0xFF00BCD4), "timeline_editor"),
-    QuickEntry(Icons.Filled.Speed, "变速曲线", "慢动作与节奏", Color(0xFFFF7043), "timeline_editor"),
+    QuickEntry(Icons.Filled.AutoAwesome, "AI 一键成片", "自动剪辑、智能卡点和字幕生成", Color(0xFF7C5CFF), "import"),
+    QuickEntry(Icons.Filled.Subtitles, "智能字幕", "语音自动识别、样式一键匹配", Color(0xFF20C997), "text_editor"),
+    QuickEntry(Icons.Filled.AutoFixHigh, "热门特效", "滤镜、妆容、道具实时预览", Color(0xFFFF5C8A), "effects"),
+    QuickEntry(Icons.Filled.GraphicEq, "音乐卡点", "节拍检测、自动分段对齐", Color(0xFFFFB020), "capture"),
+    QuickEntry(Icons.Filled.Tune, "专业调色", "曲线、色轮、LUT、电影级色彩", Color(0xFF00BCD4), "timeline_editor"),
+    QuickEntry(Icons.Filled.Speed, "变速曲线", "慢动作、快进、曲线变速", Color(0xFFFF7043), "timeline_editor"),
 )
 
 private val draftCards = listOf(
-    DraftCard("城市 Vlog 调色版", "9 个片段 · 01:28 · 今天", Color(0xFF00D7FF)),
-    DraftCard("产品短片节奏版", "5 个片段 · 00:42 · 昨天", Color(0xFFFFB020)),
-    DraftCard("口播字幕模板", "3 个片段 · 02:10 · 本周", Color(0xFF7C5CFF)),
+    DraftCard("城市漫游·青橙胶片", "9 段 · 01:28 · 刚刚", Color(0xFF00D7FF)),
+    DraftCard("产品开箱·节奏卡点", "5 段 · 00:42 · 昨天", Color(0xFFFFB020)),
+    DraftCard("知识口播·字幕增强", "3 段 · 02:10 · 3天前", Color(0xFF7C5CFF)),
 )
 
 @Composable
@@ -138,8 +138,8 @@ private fun Header() {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text("VideoSDK 创作台", color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.Bold)
-            Text("拍摄、剪辑、特效、导出的一体化 Android Demo", color = TextSecondary, fontSize = 12.sp)
+            Text("创作中心", color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+            Text("拍摄 · 剪辑 · 特效 · 导出，一站式视频创作", color = TextSecondary, fontSize = 12.sp)
         }
         Box(
             modifier = Modifier
@@ -163,8 +163,8 @@ private fun HeroProjectActions(onNewProject: () -> Unit, onCapture: () -> Unit) 
             .background(Brush.horizontalGradient(listOf(Color(0xFF141E30), Color(0xFF111111))))
             .padding(18.dp)
     ) {
-        Text("从素材到成片", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        Text("对标剪映主流程：导入素材、时间线编辑、字幕特效、高清导出。", color = TextSecondary, fontSize = 12.sp)
+        Text("从素材到成片，一步到位", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text("导入素材、多轨剪辑、智能字幕、电影调色、高清导出", color = TextSecondary, fontSize = 12.sp)
         Spacer(Modifier.height(16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(
@@ -244,7 +244,7 @@ private fun ContinueEditingBanner(count: Int, onClick: () -> Unit) {
         Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Accent, modifier = Modifier.size(30.dp))
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text("继续编辑当前工程", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Text("继续编辑当前项目", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             Text("$count 个片段已在时间线中", color = TextSecondary, fontSize = 12.sp)
         }
         Text("打开", color = Accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
@@ -254,7 +254,7 @@ private fun ContinueEditingBanner(count: Int, onClick: () -> Unit) {
 @Composable
 private fun DraftSection(onOpenDraft: () -> Unit, onImportNew: () -> Unit) {
     Column(modifier = Modifier.padding(top = 18.dp)) {
-        SectionTitle("最近草稿", "模拟剪辑项目")
+        SectionTitle("最近草稿", "自动保存，随时续剪")
         draftCards.forEach { draft ->
             Row(
                 modifier = Modifier
@@ -288,7 +288,7 @@ private fun DraftSection(onOpenDraft: () -> Unit, onImportNew: () -> Unit) {
         ) {
             Icon(Icons.Filled.PhotoLibrary, contentDescription = null, tint = Accent, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
-            Text("导入素材新建工程", color = Accent)
+            Text("导入素材，新建项目", color = Accent)
         }
     }
 }
@@ -296,7 +296,7 @@ private fun DraftSection(onOpenDraft: () -> Unit, onImportNew: () -> Unit) {
 @Composable
 private fun CapabilityStrip() {
     Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
-        SectionTitle("SDK 对标能力", "拍摄 + 特效 + 编辑 + 导出")
+        SectionTitle("核心能力", "拍摄 · 特效 · 编辑 · 导出")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             listOf("实时美颜", "道具贴纸", "多轨编辑", "后台导出").forEachIndexed { index, text ->
                 val color = listOf(Accent, Accent2, Color(0xFFFFB020), Color(0xFF20C997))[index]

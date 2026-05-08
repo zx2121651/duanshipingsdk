@@ -20,6 +20,9 @@ sealed class VideoSdkError(message: String, val code: Int) : Exception("[$code] 
     class TimelineTrackNotFound : VideoSdkError("Timeline Track not found", -3002)
     class TimelineClipNotFound : VideoSdkError("Timeline Clip not found", -3003)
 
+    // 4000 - 4999: AI/Model errors
+    class ModelLoadFailed(val modelName: String) : VideoSdkError("Failed to load model: $modelName", -4001)
+
     // General or Unknown errors
     class UnknownNativeError(code: Int) : VideoSdkError("Unknown native error", code)
     class InvalidOperation(message: String) : VideoSdkError(message, -1)

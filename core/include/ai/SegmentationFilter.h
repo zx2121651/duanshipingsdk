@@ -4,8 +4,10 @@
  *
  * 人像分割滤镜 — 将 TfliteInferenceEngine 输出的 mask 纹理与原图合成：
  *
- *   模式 0 (BLUR_BG)   — 背景高斯模糊，前景保留原图
- *   模式 1 (REPLACE_BG) — 背景替换为纯色
+ *   模式 0 (BLUR_BG)      — 背景高斯模糊，前景保留原图
+ *   模式 1 (REPLACE_BG)   — 背景替换为纯色（bgColor 参数）
+ *   模式 2 (TRANSPARENT)  — 背景透明（RGBA alpha=0），适合导出带透明通道的叠加层
+ *   模式 3 (IMAGE_BG)     — 背景替换为指定纹理（bgImageTexId 参数）
  *
  * 接入现有 Filter 管线：
  *   processFrame(inputTexture, outputFb)
@@ -14,7 +16,8 @@
  *   auto seg = std::make_shared<SegmentationFilter>(inferenceEngine);
  *   seg->setParameter("mode", 0);                   // BLUR_BG
  *   seg->setParameter("blurStrength", 15.0f);        // 模糊半径
- *   seg->setParameter("bgColor", 0xFF000000u);       // REPLACE_BG 颜色
+ *   seg->setParameter("bgColor", 0xFF000000u);       // REPLACE_BG 颜色（ARGB）
+ *   seg->setBgImageTexture(bgTexId);                 // IMAGE_BG 背景纹理
  *   seg->processFrame(inputTexture, outputFb);
  */
 
@@ -28,10 +31,21 @@ namespace video {
 
 class SegmentationFilter : public Filter {
 public:
+    /** 背景处理模式（与 shader u_mode 保持一致）。 */
+    enum class Mode : int {
+        BLUR_BG     = 0,  ///< 高斯模糊背景
+        REPLACE_BG  = 1,  ///< 纯色背景
+        TRANSPARENT = 2,  ///< 背景透明（alpha=0）
+        IMAGE_BG    = 3,  ///< 图像纹理背景
+    };
+
     explicit SegmentationFilter(
         std::shared_ptr<ai::TfliteInferenceEngine> engine,
         FrameBufferPool* pool = nullptr);
     ~SegmentationFilter() override;
+
+    /** 设置 IMAGE_BG 模式下的背景纹理 ID（已上传到 GPU 的 GL 纹理）。 */
+    void setBgImageTexture(GLuint texId) { m_bgImageTexId = texId; }
 
     std::string getVertexShaderName()   const override { return "segmentation.vert"; }
     std::string getFragmentShaderName() const override { return "segmentation.frag"; }
@@ -53,14 +67,18 @@ private:
     FrameBufferPool* m_pool;
 
     // Uniform locations
-    GLuint m_locInputTex   = 0;
-    GLuint m_locMaskTex    = 0;
-    GLuint m_locMode       = 0;
-    GLuint m_locBgColor    = 0;
-    GLuint m_locEdgeSoften = 0;
+    GLuint m_locInputTex    = 0;
+    GLuint m_locMaskTex     = 0;
+    GLuint m_locMode        = 0;
+    GLuint m_locBgColor     = 0;
+    GLuint m_locEdgeSoften  = 0;
+    GLuint m_locBgImageTex  = 0;  ///< IMAGE_BG 模式背景纹理 uniform
 
     // Cached inference result
-    GLuint m_lastMaskTexId = 0;
+    GLuint m_lastMaskTexId  = 0;
+
+    // IMAGE_BG 模式：外部传入的背景纹理 ID
+    GLuint m_bgImageTexId   = 0;
 
     void cacheUniformLocations();
 };

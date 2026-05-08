@@ -34,6 +34,7 @@ import kotlinx.coroutines.launch
 class AiFilterController(
     private val context: Context,
     private val renderEngine: RenderEngine,
+    private val delegatePreference: TfliteDelegateStrategy.Preference = TfliteDelegateStrategy.Preference.AUTO,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 ) {
     companion object {
@@ -41,9 +42,12 @@ class AiFilterController(
 
         const val ASSET_FACE_LANDMARK   = "models/face_landmark_stub.tflite"
         const val ASSET_HAIR_MODEL      = "models/selfie_segmentation_stub.tflite"
+        const val ASSET_HAND_MODEL      = "models/hand_landmark_stub.tflite"
+        const val ASSET_SEG_MODEL       = "models/portrait_segmentation_stub.tflite"
     }
 
     private val assetManager = ModelAssetManager(context)
+    private val delegateStrategy = TfliteDelegateStrategy(context)
 
     /** Current load state, observable by UI */
     enum class AiModelState { IDLE, LOADING, READY, STUB, ERROR }
@@ -51,6 +55,10 @@ class AiFilterController(
     @Volatile var faceLandmarkState: AiModelState = AiModelState.IDLE
         private set
     @Volatile var hairModelState: AiModelState = AiModelState.IDLE
+        private set
+    @Volatile var handLandmarkState: AiModelState = AiModelState.IDLE
+        private set
+    @Volatile var segmentationState: AiModelState = AiModelState.IDLE
         private set
 
     // ── Face Landmark ─────────────────────────────────────────────────────────
@@ -65,6 +73,7 @@ class AiFilterController(
         scope.launch {
             when (val r = assetManager.extractModel(ASSET_FACE_LANDMARK)) {
                 is ModelAssetManager.ModelLoadResult.Ready -> {
+                    applyDelegateHint()
                     val ok = renderEngine.loadFaceLandmarkModel(r.path)
                     faceLandmarkState = if (ok) AiModelState.READY else AiModelState.ERROR
                     Log.i(TAG, "Face landmark model load=${ok}, path=${r.path}")
@@ -95,6 +104,7 @@ class AiFilterController(
         scope.launch {
             when (val r = assetManager.extractModel(ASSET_HAIR_MODEL)) {
                 is ModelAssetManager.ModelLoadResult.Ready -> {
+                    applyDelegateHint()
                     val ok = renderEngine.loadHairModel(r.path)
                     hairModelState = if (ok) AiModelState.READY else AiModelState.ERROR
                     Log.i(TAG, "Hair model load=${ok}, path=${r.path}")
@@ -126,12 +136,88 @@ class AiFilterController(
         renderEngine.disableBeauty()
     }
 
+    // ── Hand Landmark ─────────────────────────────────────────────────────────
+
+    /**
+     * 提取并加载手部 21 关键点模型（MediaPipe Hands .tflite）。
+     * 加载成功后，[RenderEngine.getHandLandmarks] 将返回关键点数据。
+     */
+    fun enableHandTracking(onResult: ((Boolean) -> Unit)? = null) {
+        handLandmarkState = AiModelState.LOADING
+        scope.launch {
+            when (val r = assetManager.extractModel(ASSET_HAND_MODEL)) {
+                is ModelAssetManager.ModelLoadResult.Ready -> {
+                    applyDelegateHint()
+                    val ok = renderEngine.loadHandModel(r.path)
+                    handLandmarkState = if (ok) AiModelState.READY else AiModelState.ERROR
+                    Log.i(TAG, "Hand landmark model load=$ok, path=${r.path}")
+                    onResult?.invoke(ok)
+                }
+                is ModelAssetManager.ModelLoadResult.Stub -> {
+                    handLandmarkState = AiModelState.STUB
+                    Log.w(TAG, "Hand model is a stub. Replace ${r.assetName} with a real model.")
+                    onResult?.invoke(false)
+                }
+                is ModelAssetManager.ModelLoadResult.Error -> {
+                    handLandmarkState = AiModelState.ERROR
+                    Log.e(TAG, "Hand model load error: ${r.message}")
+                    onResult?.invoke(false)
+                }
+            }
+        }
+    }
+
+    // ── Portrait Segmentation ─────────────────────────────────────────────────
+
+    /**
+     * 提取并加载人像分割模型。
+     * 加载成功后调用 [RenderEngine.setSegmentationMode] 选择背景处理方式。
+     * @param segMode  0=模糊背景（默认）1=纯色背景 2=透明 3=图片背景
+     */
+    fun enableSegmentation(
+        segMode: Int = 0,
+        bgColorArgb: Int = 0xFF000000.toInt(),
+        blurStrength: Float = 15f,
+        onResult: ((Boolean) -> Unit)? = null
+    ) {
+        segmentationState = AiModelState.LOADING
+        scope.launch {
+            when (val r = assetManager.extractModel(ASSET_SEG_MODEL)) {
+                is ModelAssetManager.ModelLoadResult.Ready -> {
+                    applyDelegateHint()
+                    val ok = renderEngine.loadSegmentationModel(r.path)
+                    if (ok) renderEngine.setSegmentationMode(segMode, bgColorArgb, blurStrength)
+                    segmentationState = if (ok) AiModelState.READY else AiModelState.ERROR
+                    Log.i(TAG, "Segmentation model load=$ok, mode=$segMode")
+                    onResult?.invoke(ok)
+                }
+                is ModelAssetManager.ModelLoadResult.Stub -> {
+                    segmentationState = AiModelState.STUB
+                    Log.w(TAG, "Segmentation model is a stub. Replace ${r.assetName} with a real model.")
+                    onResult?.invoke(false)
+                }
+                is ModelAssetManager.ModelLoadResult.Error -> {
+                    segmentationState = AiModelState.ERROR
+                    Log.e(TAG, "Segmentation model load error: ${r.message}")
+                    onResult?.invoke(false)
+                }
+            }
+        }
+    }
+
+    private fun applyDelegateHint() {
+        val delegate = delegateStrategy.select(delegatePreference)
+        delegateStrategy.applyToNative(renderEngine.getNativeHandle(), delegate)
+    }
+
     // ── Cleanup ───────────────────────────────────────────────────────────────
 
     /** Clears extracted model files from private storage (e.g., on logout/uninstall). */
     fun clearModelCache() {
         assetManager.clearCache()
-        faceLandmarkState = AiModelState.IDLE
-        hairModelState    = AiModelState.IDLE
+        faceLandmarkState  = AiModelState.IDLE
+        hairModelState     = AiModelState.IDLE
+        handLandmarkState  = AiModelState.IDLE
+        segmentationState  = AiModelState.IDLE
     }
 }

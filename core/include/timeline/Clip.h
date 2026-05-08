@@ -51,7 +51,9 @@ public:
     enum class MediaType {
         VIDEO,
         AUDIO,
-        IMAGE
+        IMAGE,
+        TEXT,    ///< 纯文字叠加层（SubtitleClip / 文字贴纸）
+        STICKER  ///< 贴纸 / GIF / 动效叠加层（StickerClip）
     };
 
     Clip(const std::string& id, const std::string& sourcePath, MediaType type);

@@ -1,0 +1,83 @@
+{
+  "id": "travel_highlights",
+  "name": "旅行精华",
+  "version": 1,
+  "duration_ms": 20000,
+  "fps": 30,
+  "width": 1080,
+  "height": 1920,
+  "slots": [
+    {
+      "id": "v0",
+      "type": "image",
+      "duration_ms": 2500,
+      "transition": "zoom_in",
+      "trans_dur_ms": 400,
+      "fit": "crop_center"
+    },
+    {
+      "id": "v1",
+      "type": "video",
+      "duration_ms": 5000,
+      "transition": "wipe_up",
+      "trans_dur_ms": 500,
+      "fit": "crop_center"
+    },
+    {
+      "id": "v2",
+      "type": "image",
+      "duration_ms": 2500,
+      "transition": "crossfade",
+      "trans_dur_ms": 400,
+      "fit": "letterbox"
+    },
+    {
+      "id": "v3",
+      "type": "video",
+      "duration_ms": 5000,
+      "transition": "slide_left",
+      "trans_dur_ms": 500,
+      "fit": "crop_center"
+    },
+    {
+      "id": "v4",
+      "type": "image",
+      "duration_ms": 5000,
+      "transition": "fade_black",
+      "trans_dur_ms": 800,
+      "fit": "crop_center"
+    }
+  ],
+  "subtitles": [
+    {
+      "id": "sub_0",
+      "text": "旅行，是最美的相遇",
+      "start_ms": 0,
+      "end_ms": 3000,
+      "font_size": 60,
+      "color": 4294967295,
+      "y": 0.12,
+      "align": 1
+    },
+    {
+      "id": "sub_1",
+      "text": "每一处风景都值得铭记",
+      "start_ms": 15000,
+      "end_ms": 20000,
+      "font_size": 56,
+      "color": 4294967295,
+      "y": 0.88,
+      "align": 1
+    }
+  ],
+  "audio": {
+    "type": "music",
+    "path": "assets/music/travel.mp3",
+    "loop": false,
+    "volume": 0.75
+  },
+  "lut": {
+    "path": "assets/luts/cinematic.png",
+    "intensity": 0.65
+  }
+}

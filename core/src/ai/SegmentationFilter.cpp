@@ -43,6 +43,7 @@ precision highp float;
 in vec2 v_texCoord;
 uniform sampler2D texInput;
 uniform sampler2D texMask;
+uniform sampler2D texBgImage;
 uniform int       u_mode;
 uniform vec4      u_bgColor;
 uniform float     u_edgeSoften;
@@ -53,8 +54,17 @@ void main() {
     float softRange = u_edgeSoften * 0.15;
     float alpha = smoothstep(0.5 - softRange, 0.5 + softRange, fg);
     if (u_mode == 1) {
+        // REPLACE_BG: pure colour background
         fragColor = mix(u_bgColor, orig, alpha);
+    } else if (u_mode == 2) {
+        // TRANSPARENT: background alpha = 0
+        fragColor = vec4(orig.rgb, alpha);
+    } else if (u_mode == 3) {
+        // IMAGE_BG: texture background
+        vec4 bgPixel = texture(texBgImage, v_texCoord);
+        fragColor = mix(bgPixel, orig, alpha);
     } else {
+        // BLUR_BG (mode 0): darken background as placeholder (real blur = 2-pass)
         fragColor = mix(vec4(orig.rgb * 0.15, orig.a), orig, alpha);
     }
 }
@@ -93,6 +103,7 @@ void SegmentationFilter::cacheUniformLocations() {
     m_locMode       = glGetUniformLocation(m_programId, "u_mode");
     m_locBgColor    = glGetUniformLocation(m_programId, "u_bgColor");
     m_locEdgeSoften = glGetUniformLocation(m_programId, "u_edgeSoften");
+    m_locBgImageTex = glGetUniformLocation(m_programId, "texBgImage");
 }
 
 // ---------------------------------------------------------------------------
@@ -167,6 +178,12 @@ void SegmentationFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outp
     GLStateManager::getInstance().activeTexture(GL_TEXTURE1);
     GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, m_lastMaskTexId);
     glUniform1i(m_locMaskTex, 1);
+
+    // texBgImage — slot 2 (IMAGE_BG mode; bind 0 when unused)
+    GLStateManager::getInstance().activeTexture(GL_TEXTURE2);
+    GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D,
+        m_bgImageTexId ? m_bgImageTexId : 0);
+    glUniform1i(m_locBgImageTex, 2);
 
     // mode
     int mode = 0;
