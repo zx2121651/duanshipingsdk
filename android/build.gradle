@@ -89,6 +89,7 @@ android {
     }
 
     testOptions {
+        unitTests.returnDefaultValues = true
         unitTests.all {
             testLogging {
                 events "passed", "skipped", "failed", "standardOut", "standardError"
@@ -179,6 +180,7 @@ dependencies {
     implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0'
 
     testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20231013'
     testImplementation 'org.mockito:mockito-core:5.11.0'
     // mock-maker-inline: enables mocking of final Kotlin classes & mockConstruction
     // (Mockito 5.x includes inline support; resource file activates it — see

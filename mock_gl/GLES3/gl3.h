@@ -135,7 +135,7 @@ inline void glBindFramebuffer(GLenum, GLuint) {}
 // For GLContextManager.cpp
 inline const unsigned char* glGetString(GLenum) { return nullptr; }
 inline const unsigned char* glGetStringi(GLenum, GLuint) { return nullptr; }
-inline void glGetIntegerv(GLenum, GLint* params) { if (params) *params = 0; }
+inline void glGetIntegerv(GLenum pname, GLint* params) { if (params) { if (pname == 0x8D57) *params = 4; else *params = 0; } }
 inline void glViewport(GLint, GLint, GLsizei, GLsizei) {}
 inline void glClearColor(GLfloat, GLfloat, GLfloat, GLfloat) {}
 inline void glClear(GLuint) {}
@@ -292,9 +292,9 @@ inline void  glCullFace(GLenum) {}
 inline void  glColorMask(GLboolean, GLboolean, GLboolean, GLboolean) {}
 inline void  glScissor(GLint, GLint, GLsizei, GLsizei) {}
 inline GLenum glGetError() { return 0; }
-inline void  glDetachShader(GLuint, GLuint) {}
-inline void* glMapBufferRange(GLenum, GLintptr, GLsizeiptr, GLbitfield) { return nullptr; }
-inline GLboolean glUnmapBuffer(GLenum) { return GL_TRUE; }
+
+
+
 
 // --- 3D Texture support (GLES 3.0) ---
 #ifndef GL_TEXTURE_3D
@@ -344,3 +344,8 @@ extern "C" {
 #ifdef __cplusplus
 }
 #endif
+
+extern "C" inline void glDetachShader(GLuint program, GLuint shader) {}
+extern "C" inline void* glMapBufferRange(GLenum target, GLintptr offset, GLsizeiptr length, GLbitfield access) { return nullptr; }
+extern "C" inline GLboolean glUnmapBuffer(GLenum target) { return 1; }
+extern "C" inline void glUniformMatrix3fv(GLint location, GLsizei count, GLboolean transpose, const GLfloat *value) {}

@@ -6,7 +6,7 @@
 #define GL_COMPUTE_SHADER 0x91B9
 #endif
 
-#if !defined(__APPLE__) && !defined(_MSC_VER)
+#if !defined(__APPLE__) && !defined(_MSC_VER) && !defined(USE_MOCK_GL)
 extern "C" {
     void glDetachShader(GLuint program, GLuint shader) __attribute__((weak));
 }

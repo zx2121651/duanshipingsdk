@@ -54,8 +54,33 @@ FaceLandmarkDetector::~FaceLandmarkDetector() {
 
 void FaceLandmarkDetector::release() {
     m_stopThread.store(true);
-    m_framePending.store(true); // 唤醒检测线程
-    if (m_detectThread.joinable()) m_detectThread.join();
+    m_framePending.store(true);
+    if (m_detectThread.joinable()) {
+        m_detectThread.join();
+    }
+
+#ifdef HAS_TFLITE
+    if (m_impl) {
+        if (m_impl->interpreter) {
+            TfLiteInterpreterDelete(m_impl->interpreter);
+            m_impl->interpreter = nullptr;
+        }
+#   ifdef HAS_TFLITE_GPU_DELEGATE
+        if (m_impl->gpuDelegate) {
+            TfLiteGpuDelegateV2Delete(m_impl->gpuDelegate);
+            m_impl->gpuDelegate = nullptr;
+        }
+#   endif
+        if (m_impl->options) {
+            TfLiteInterpreterOptionsDelete(m_impl->options);
+            m_impl->options = nullptr;
+        }
+        if (m_impl->model) {
+            TfLiteModelDelete(m_impl->model);
+            m_impl->model = nullptr;
+        }
+    }
+#endif
     m_loaded = false;
 }
 
@@ -64,7 +89,7 @@ void FaceLandmarkDetector::release() {
 // ---------------------------------------------------------------------------
 bool FaceLandmarkDetector::loadModel(const std::string& modelPath) {
 #ifdef HAS_TFLITE
-    m_impl->model = tflite::FlatBufferModel::BuildFromFile(modelPath.c_str());
+    m_impl->model = TfLiteModelCreateFromFile(modelPath.c_str());
     if (!m_impl->model) {
         LOGE("FaceLandmarkDetector: failed to load model: %s", modelPath.c_str());
         return false;
@@ -84,9 +109,7 @@ bool FaceLandmarkDetector::loadModelFromBuffer(const void* data, size_t size) {
     m_impl->modelBuffer.assign(
         static_cast<const uint8_t*>(data),
         static_cast<const uint8_t*>(data) + size);
-    m_impl->model = tflite::FlatBufferModel::BuildFromBuffer(
-        reinterpret_cast<const char*>(m_impl->modelBuffer.data()),
-        m_impl->modelBuffer.size());
+    m_impl->model = TfLiteModelCreate(m_impl->modelBuffer.data(), m_impl->modelBuffer.size());
     if (!m_impl->model) {
         LOGE("FaceLandmarkDetector: failed to build model from buffer");
         return false;
@@ -103,30 +126,35 @@ bool FaceLandmarkDetector::loadModelFromBuffer(const void* data, size_t size) {
 
 #ifdef HAS_TFLITE
 bool FaceLandmarkDetector::buildInterpreterInternal() {
-    tflite::ops::builtin::BuiltinOpResolver resolver;
-    tflite::InterpreterBuilder builder(*m_impl->model, resolver);
-    builder(&m_impl->interpreter);
-    if (!m_impl->interpreter) return false;
+    m_impl->options = TfLiteInterpreterOptionsCreate();
+    TfLiteInterpreterOptionsSetNumThreads(m_impl->options, 2);
 
-#ifdef HAS_TFLITE_GPU_DELEGATE
+#   ifdef HAS_TFLITE_GPU_DELEGATE
     TfLiteGpuDelegateOptionsV2 opts = TfLiteGpuDelegateOptionsV2Default();
     opts.inference_preference = TFLITE_GPU_INFERENCE_PREFERENCE_FAST_SINGLE_ANSWER;
-    auto* delegate = TfLiteGpuDelegateV2Create(&opts);
-    if (m_impl->interpreter->ModifyGraphWithDelegate(delegate) != kTfLiteOk)
+    m_impl->gpuDelegate = TfLiteGpuDelegateV2Create(&opts);
+    if (m_impl->gpuDelegate) {
+        TfLiteInterpreterOptionsAddDelegate(m_impl->options, m_impl->gpuDelegate);
+    } else {
         LOGW("FaceLandmarkDetector: GPU delegate failed, falling back to CPU");
-#endif
+    }
+#   endif
 
-    m_impl->interpreter->SetNumThreads(2);
-    if (m_impl->interpreter->AllocateTensors() != kTfLiteOk) {
+    m_impl->interpreter = TfLiteInterpreterCreate(m_impl->model, m_impl->options);
+    if (!m_impl->interpreter) return false;
+
+    if (TfLiteInterpreterAllocateTensors(m_impl->interpreter) != kTfLiteOk) {
         LOGE("FaceLandmarkDetector: AllocateTensors failed");
         return false;
     }
 
-    auto* inputTensor  = m_impl->interpreter->input_tensor(0);
-    m_impl->inputW     = inputTensor->dims->data[2];
-    m_impl->inputH     = inputTensor->dims->data[1];
-    m_impl->inputTensorIdx  = m_impl->interpreter->inputs()[0];
-    m_impl->outputTensorIdx = m_impl->interpreter->outputs()[0];
+    const TfLiteTensor* inputTensor = TfLiteInterpreterGetInputTensor(m_impl->interpreter, 0);
+    m_impl->inputW = TfLiteTensorDim(inputTensor, 2);
+    m_impl->inputH = TfLiteTensorDim(inputTensor, 1);
+
+    // TFLite C API doesn't expose tensor indices easily, we just use 0 for input and 0 for output in runTFLite
+    m_impl->inputTensorIdx = 0;
+    m_impl->outputTensorIdx = 0;
 
     LOGI("FaceLandmarkDetector: model input %dx%d", m_impl->inputW, m_impl->inputH);
     m_impl->ready = true;
@@ -253,25 +281,25 @@ LandmarkFrameResult FaceLandmarkDetector::runTFLite(
     }
 
     // 2. 填充输入 tensor（float 归一化 or uint8）
-    auto* inputTensor = m_impl->interpreter->tensor(m_impl->inputTensorIdx);
-    if (inputTensor->type == kTfLiteFloat32) {
-        float* inp = m_impl->interpreter->typed_input_tensor<float>(0);
+    TfLiteTensor* inputTensor = TfLiteInterpreterGetInputTensor(m_impl->interpreter, 0);
+    if (TfLiteTensorType(inputTensor) == kTfLiteFloat32) {
+        float* inp = (float*)TfLiteTensorData(inputTensor);
         for (int i = 0; i < mw * mh * 3; ++i)
             inp[i] = resized[i] / 255.0f;
     } else {
-        uint8_t* inp = m_impl->interpreter->typed_input_tensor<uint8_t>(0);
+        uint8_t* inp = (uint8_t*)TfLiteTensorData(inputTensor);
         std::memcpy(inp, resized.data(), resized.size());
     }
 
     // 3. Invoke
-    if (m_impl->interpreter->Invoke() != kTfLiteOk) return result;
+    if (TfLiteInterpreterInvoke(m_impl->interpreter) != kTfLiteOk) return result;
 
     // 4. 解码输出
-    float* out = m_impl->interpreter->typed_output_tensor<float>(0);
-    auto* outTensor = m_impl->interpreter->tensor(m_impl->outputTensorIdx);
+    TfLiteTensor* outTensor = TfLiteInterpreterGetOutputTensor(m_impl->interpreter, 0);
+    float* out = (float*)TfLiteTensorData(outTensor);
     int outLen = 1;
-    for (int d = 0; d < outTensor->dims->size; ++d)
-        outLen *= outTensor->dims->data[d];
+    for (int d = 0; d < TfLiteTensorNumDims(outTensor); ++d)
+        outLen *= TfLiteTensorDim(outTensor, d);
 
     if (outLen >= kFaceLandmarkCount * 2) {
         result.faceCount = 1;
