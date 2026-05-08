@@ -25,10 +25,7 @@
 #include <algorithm>
 
 #ifdef HAS_TFLITE
-#   include "tensorflow/lite/interpreter.h"
-#   include "tensorflow/lite/kernels/register.h"
-#   include "tensorflow/lite/model.h"
-#   include "tensorflow/lite/optional_debug_tools.h"
+#   include "tensorflow/lite/c/c_api.h"
 #   ifdef HAS_TFLITE_GPU_DELEGATE
 #       include "tensorflow/lite/delegates/gpu/delegate.h"
 #   endif
@@ -66,7 +63,7 @@ TfliteInferenceEngine::~TfliteInferenceEngine() {
 // ---------------------------------------------------------------------------
 bool TfliteInferenceEngine::loadModel(const std::string& modelPath) {
 #ifdef HAS_TFLITE
-    m_impl->model = tflite::FlatBufferModel::BuildFromFile(modelPath.c_str());
+    m_impl->model = TfLiteModelCreateFromFile(modelPath.c_str());
     if (!m_impl->model) {
         m_lastError = "TfliteInferenceEngine: cannot load model from " + modelPath;
         LOGE("%s", m_lastError.c_str());
@@ -86,9 +83,7 @@ bool TfliteInferenceEngine::loadModelFromBuffer(const void* modelData, size_t mo
     m_impl->modelBuffer.assign(
         static_cast<const uint8_t*>(modelData),
         static_cast<const uint8_t*>(modelData) + modelSize);
-    m_impl->model = tflite::FlatBufferModel::BuildFromBuffer(
-        reinterpret_cast<const char*>(m_impl->modelBuffer.data()),
-        m_impl->modelBuffer.size());
+    m_impl->model = TfLiteModelCreate(m_impl->modelBuffer.data(), m_impl->modelBuffer.size());
     if (!m_impl->model) {
         m_lastError = "TfliteInferenceEngine: cannot build model from buffer";
         return false;
@@ -106,45 +101,37 @@ bool TfliteInferenceEngine::loadModelFromBuffer(const void* modelData, size_t mo
 // ---------------------------------------------------------------------------
 #ifdef HAS_TFLITE
 bool TfliteInferenceEngine::buildInterpreter() {
-    m_impl->resolver = std::make_unique<tflite::ops::builtin::BuiltinOpResolver>();
-    tflite::InterpreterBuilder builder(*m_impl->model, *m_impl->resolver);
-
-    if (builder(&m_impl->interpreter) != kTfLiteOk || !m_impl->interpreter) {
-        m_lastError = "TfliteInferenceEngine: InterpreterBuilder failed";
-        return false;
-    }
-
-    // 线程数：2（中端机平衡延迟 vs 功耗）
-    m_impl->interpreter->SetNumThreads(2);
+    m_impl->options = TfLiteInterpreterOptionsCreate();
+    TfLiteInterpreterOptionsSetNumThreads(m_impl->options, 2);
 
 #   ifdef HAS_TFLITE_GPU_DELEGATE
-    // GPU Delegate（Android）
     TfLiteGpuDelegateOptionsV2 opts = TfLiteGpuDelegateOptionsV2Default();
     opts.inference_preference = TFLITE_GPU_INFERENCE_PREFERENCE_FAST_SINGLE_ANSWER;
     opts.inference_priority1  = TFLITE_GPU_INFERENCE_PRIORITY_MIN_LATENCY;
     m_impl->gpuDelegate = TfLiteGpuDelegateV2Create(&opts);
-    if (m_impl->gpuDelegate &&
-        m_impl->interpreter->ModifyGraphWithDelegate(m_impl->gpuDelegate) == kTfLiteOk) {
+    if (m_impl->gpuDelegate) {
+        TfLiteInterpreterOptionsAddDelegate(m_impl->options, m_impl->gpuDelegate);
         LOGI("TfliteInferenceEngine: GPU delegate enabled");
     } else {
         LOGW("TfliteInferenceEngine: GPU delegate failed, falling back to CPU");
-        if (m_impl->gpuDelegate) {
-            TfLiteGpuDelegateV2Delete(m_impl->gpuDelegate);
-            m_impl->gpuDelegate = nullptr;
-        }
     }
 #   endif
 
-    if (m_impl->interpreter->AllocateTensors() != kTfLiteOk) {
+    m_impl->interpreter = TfLiteInterpreterCreate(m_impl->model, m_impl->options);
+    if (!m_impl->interpreter) {
+        m_lastError = "TfliteInferenceEngine: TfLiteInterpreterCreate failed";
+        return false;
+    }
+
+    if (TfLiteInterpreterAllocateTensors(m_impl->interpreter) != kTfLiteOk) {
         m_lastError = "TfliteInferenceEngine: AllocateTensors failed";
         return false;
     }
 
-    // 读取模型输入尺寸
-    const TfLiteTensor* inputTensor = m_impl->interpreter->input_tensor(0);
-    if (inputTensor->dims->size >= 3) {
-        m_inputH = inputTensor->dims->data[1];
-        m_inputW = inputTensor->dims->data[2];
+    const TfLiteTensor* inputTensor = TfLiteInterpreterGetInputTensor(m_impl->interpreter, 0);
+    if (TfLiteTensorNumDims(inputTensor) >= 3) {
+        m_inputH = TfLiteTensorDim(inputTensor, 1);
+        m_inputW = TfLiteTensorDim(inputTensor, 2);
     }
 
     m_loaded = true;
@@ -173,8 +160,8 @@ InferenceResult TfliteInferenceEngine::runInference(
     resizeRGBA(inputPixels, inputW, inputH, resized.data(), m_inputW, m_inputH);
 
     // 2. 填充输入 tensor（float32，归一化到 [0,1]）
-    TfLiteTensor* inputTensor = m_impl->interpreter->input_tensor(0);
-    float* inputData = inputTensor->data.f;
+    TfLiteTensor* inputTensor = TfLiteInterpreterGetInputTensor(m_impl->interpreter, 0);
+    float* inputData = (float*)TfLiteTensorData(inputTensor);
     const int numPixels = m_inputW * m_inputH;
     for (int i = 0; i < numPixels; ++i) {
         inputData[i * 3 + 0] = resized[i * 4 + 0] / 255.0f;
@@ -183,15 +170,15 @@ InferenceResult TfliteInferenceEngine::runInference(
     }
 
     // 3. 推理
-    if (m_impl->interpreter->Invoke() != kTfLiteOk) {
+    if (TfLiteInterpreterInvoke(m_impl->interpreter) != kTfLiteOk) {
         result.errorMessage = "TfliteInferenceEngine: Invoke() failed";
         return result;
     }
 
     // 4. 读取输出（selfie-segmentation 输出为 float[1][H][W][1] or [1][H][W][2]）
-    const TfLiteTensor* outputTensor = m_impl->interpreter->output_tensor(0);
-    const float* outputData = outputTensor->data.f;
-    int outChannels = outputTensor->dims->data[outputTensor->dims->size - 1];
+    const TfLiteTensor* outputTensor = TfLiteInterpreterGetOutputTensor(m_impl->interpreter, 0);
+    const float* outputData = (const float*)TfLiteTensorData(outputTensor);
+    int outChannels = TfLiteTensorDim(outputTensor, TfLiteTensorNumDims(outputTensor) - 1);
 
     // 提取前景通道（index 1 for 2-channel, index 0 for 1-channel）
     int fgChannel = (outChannels >= 2) ? 1 : 0;
@@ -308,15 +295,25 @@ void TfliteInferenceEngine::releaseGLResources() {
 void TfliteInferenceEngine::release() {
     releaseGLResources();
 #ifdef HAS_TFLITE
-#   ifdef HAS_TFLITE_GPU_DELEGATE
-    if (m_impl && m_impl->gpuDelegate) {
-        TfLiteGpuDelegateV2Delete(m_impl->gpuDelegate);
-        m_impl->gpuDelegate = nullptr;
-    }
-#   endif
     if (m_impl) {
-        m_impl->interpreter.reset();
-        m_impl->model.reset();
+        if (m_impl->interpreter) {
+            TfLiteInterpreterDelete(m_impl->interpreter);
+            m_impl->interpreter = nullptr;
+        }
+#   ifdef HAS_TFLITE_GPU_DELEGATE
+        if (m_impl->gpuDelegate) {
+            TfLiteGpuDelegateV2Delete(m_impl->gpuDelegate);
+            m_impl->gpuDelegate = nullptr;
+        }
+#   endif
+        if (m_impl->options) {
+            TfLiteInterpreterOptionsDelete(m_impl->options);
+            m_impl->options = nullptr;
+        }
+        if (m_impl->model) {
+            TfLiteModelDelete(m_impl->model);
+            m_impl->model = nullptr;
+        }
     }
 #endif
     m_loaded = false;

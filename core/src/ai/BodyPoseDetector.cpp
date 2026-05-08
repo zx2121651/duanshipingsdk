@@ -9,10 +9,10 @@
 #include <cmath>
 
 #ifdef HAS_TFLITE
-#include "tensorflow/lite/interpreter.h"
-#include "tensorflow/lite/kernels/register.h"
-#include "tensorflow/lite/model.h"
-#include "tensorflow/lite/optional_debug_tools.h"
+#include "tensorflow/lite/c/c_api.h"
+#ifdef HAS_TFLITE_GPU_DELEGATE
+#include "tensorflow/lite/delegates/gpu/delegate.h"
+#endif
 #endif
 
 namespace sdk {
@@ -54,7 +54,7 @@ void BodyPoseDetector::release() {
 // ---------------------------------------------------------------------------
 bool BodyPoseDetector::loadModel(const std::string& modelPath) {
 #ifdef HAS_TFLITE
-    m_impl->model = tflite::FlatBufferModel::BuildFromFile(modelPath.c_str());
+    m_impl->model = TfLiteModelCreateFromFile(modelPath.c_str());
     if (!m_impl->model) {
         LOGE("BodyPoseDetector: failed to load model from %s", modelPath.c_str());
         return false;
@@ -77,9 +77,7 @@ bool BodyPoseDetector::loadModelFromBuffer(const void* data, size_t size) {
     m_impl->modelBuffer.assign(
         static_cast<const uint8_t*>(data),
         static_cast<const uint8_t*>(data) + size);
-    m_impl->model = tflite::FlatBufferModel::BuildFromBuffer(
-        reinterpret_cast<const char*>(m_impl->modelBuffer.data()),
-        m_impl->modelBuffer.size());
+    m_impl->model = TfLiteModelCreate(m_impl->modelBuffer.data(), m_impl->modelBuffer.size());
     if (!m_impl->model) {
         LOGE("BodyPoseDetector: failed to build model from buffer");
         return false;
@@ -99,17 +97,36 @@ bool BodyPoseDetector::loadModelFromBuffer(const void* data, size_t size) {
 
 #ifdef HAS_TFLITE
 bool BodyPoseDetector::buildInterpreterInternal() {
-    tflite::InterpreterBuilder builder(*m_impl->model, m_impl->resolver);
-    builder(&m_impl->interpreter);
-    if (!m_impl->interpreter) {
-        LOGE("BodyPoseDetector: interpreter build failed");
-        return false;
+    m_impl->options = TfLiteInterpreterOptionsCreate();
+    TfLiteInterpreterOptionsSetNumThreads(m_impl->options, 2);
+
+#ifdef HAS_TFLITE_GPU_DELEGATE
+    TfLiteGpuDelegateOptionsV2 opts = TfLiteGpuDelegateOptionsV2Default();
+    opts.inference_preference = TFLITE_GPU_INFERENCE_PREFERENCE_FAST_SINGLE_ANSWER;
+    m_impl->gpuDelegate = TfLiteGpuDelegateV2Create(&opts);
+    if (m_impl->gpuDelegate) {
+        TfLiteInterpreterOptionsAddDelegate(m_impl->options, m_impl->gpuDelegate);
+    } else {
+        LOGW("BodyPoseDetector: GPU delegate failed, falling back to CPU");
     }
-    m_impl->interpreter->SetNumThreads(2);
-    if (m_impl->interpreter->AllocateTensors() != kTfLiteOk) {
+#endif
+
+    m_impl->interpreter = TfLiteInterpreterCreate(m_impl->model, m_impl->options);
+    if (!m_impl->interpreter) return false;
+
+    if (TfLiteInterpreterAllocateTensors(m_impl->interpreter) != kTfLiteOk) {
         LOGE("BodyPoseDetector: AllocateTensors failed");
         return false;
     }
+
+    const TfLiteTensor* inputTensor = TfLiteInterpreterGetInputTensor(m_impl->interpreter, 0);
+    m_impl->inputW = TfLiteTensorDim(inputTensor, 2);
+    m_impl->inputH = TfLiteTensorDim(inputTensor, 1);
+
+    LOGI("BodyPoseDetector: model input %dx%d", m_impl->inputW, m_impl->inputH);
+    m_impl->ready = true;
+    m_loaded = true;
+    startDetectThread();
     return true;
 }
 #endif
@@ -230,7 +247,7 @@ PoseFrameResult BodyPoseDetector::runTFLite(const uint8_t* rgba,
         }
     }
 
-    if (m_impl->interpreter->Invoke() != kTfLiteOk) return result;
+    if (TfLiteInterpreterInvoke(m_impl->interpreter) != kTfLiteOk) return result;
 
     // MoveNet output: float32 [1, 1, 17, 3] — (y, x, score)
     auto* out = m_impl->interpreter->output_tensor(0);
