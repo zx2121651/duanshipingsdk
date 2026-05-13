@@ -17,15 +17,6 @@ enum class BarrierType {
     Pipeline
 };
 
-enum class PrimitiveTopology {
-    PointList,
-    LineList,
-    LineStrip,
-    TriangleList,
-    TriangleStrip,
-    TriangleFan
-};
-
 enum class IndexType {
     UInt16,
     UInt32

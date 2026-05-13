@@ -140,16 +140,20 @@ public:
 
         m_fmtCtx = avformat_alloc_context();
         if (!m_fmtCtx)
-            return Result::error(ErrorCode::ERR_TIMELINE_SOFT_DECODER_UNIMPLEMENTED,
+            return Result::error(ErrorCode::ERR_DECODER_OPEN_FAILED,
                 "FFmpegVideoDecoder: avformat_alloc_context failed");
 
-        if (avformat_open_input(&m_fmtCtx, filePath.c_str(), nullptr, nullptr) < 0)
-            return Result::error(ErrorCode::ERR_TIMELINE_SOFT_DECODER_UNIMPLEMENTED,
+        if (avformat_open_input(&m_fmtCtx, filePath.c_str(), nullptr, nullptr) < 0) {
+            m_fmtCtx = nullptr; // avformat_open_input already freed it on failure
+            return Result::error(ErrorCode::ERR_DECODER_OPEN_FAILED,
                 "FFmpegVideoDecoder: cannot open " + filePath);
+        }
 
-        if (avformat_find_stream_info(m_fmtCtx, nullptr) < 0)
-            return Result::error(ErrorCode::ERR_TIMELINE_SOFT_DECODER_UNIMPLEMENTED,
+        if (avformat_find_stream_info(m_fmtCtx, nullptr) < 0) {
+            close();
+            return Result::error(ErrorCode::ERR_DECODER_OPEN_FAILED,
                 "FFmpegVideoDecoder: cannot find stream info: " + filePath);
+        }
 
         m_videoStreamIdx = -1;
         for (unsigned i = 0; i < m_fmtCtx->nb_streams; ++i) {
@@ -158,9 +162,11 @@ public:
                 break;
             }
         }
-        if (m_videoStreamIdx < 0)
-            return Result::error(ErrorCode::ERR_TIMELINE_SOFT_DECODER_UNIMPLEMENTED,
+        if (m_videoStreamIdx < 0) {
+            close();
+            return Result::error(ErrorCode::ERR_DECODER_OPEN_FAILED,
                 "FFmpegVideoDecoder: no video stream in " + filePath);
+        }
 
         AVStream* stream = m_fmtCtx->streams[m_videoStreamIdx];
         m_timeBase = stream->time_base;
@@ -169,26 +175,34 @@ public:
         m_srcFmt   = static_cast<AVPixelFormat>(stream->codecpar->format);
 
         const AVCodec* codec = avcodec_find_decoder(stream->codecpar->codec_id);
-        if (!codec)
-            return Result::error(ErrorCode::ERR_TIMELINE_SOFT_DECODER_UNIMPLEMENTED,
+        if (!codec) {
+            close();
+            return Result::error(ErrorCode::ERR_DECODER_OPEN_FAILED,
                 "FFmpegVideoDecoder: no decoder for codec_id");
+        }
 
         m_codecCtx = avcodec_alloc_context3(codec);
-        if (!m_codecCtx)
-            return Result::error(ErrorCode::ERR_TIMELINE_SOFT_DECODER_UNIMPLEMENTED,
+        if (!m_codecCtx) {
+            close();
+            return Result::error(ErrorCode::ERR_DECODER_OPEN_FAILED,
                 "FFmpegVideoDecoder: avcodec_alloc_context3 failed");
+        }
 
-        if (avcodec_parameters_to_context(m_codecCtx, stream->codecpar) < 0)
-            return Result::error(ErrorCode::ERR_TIMELINE_SOFT_DECODER_UNIMPLEMENTED,
+        if (avcodec_parameters_to_context(m_codecCtx, stream->codecpar) < 0) {
+            close();
+            return Result::error(ErrorCode::ERR_DECODER_OPEN_FAILED,
                 "FFmpegVideoDecoder: avcodec_parameters_to_context failed");
+        }
 
         // 帧级并行解码（适合 H.264/H.265）
         m_codecCtx->thread_count = 2;
         m_codecCtx->thread_type  = FF_THREAD_FRAME;
 
-        if (avcodec_open2(m_codecCtx, codec, nullptr) < 0)
-            return Result::error(ErrorCode::ERR_TIMELINE_SOFT_DECODER_UNIMPLEMENTED,
+        if (avcodec_open2(m_codecCtx, codec, nullptr) < 0) {
+            close();
+            return Result::error(ErrorCode::ERR_DECODER_OPEN_FAILED,
                 "FFmpegVideoDecoder: avcodec_open2 failed for " + filePath);
+        }
 
         // codec 实际输出格式（可能与 codecpar->format 不同）
         AVPixelFormat actualFmt = m_codecCtx->pix_fmt != AV_PIX_FMT_NONE
@@ -202,15 +216,19 @@ public:
                 m_width, m_height, actualFmt,
                 m_width, m_height, AV_PIX_FMT_YUV420P,
                 SWS_BILINEAR, nullptr, nullptr, nullptr);
-            if (!m_swsCtx)
-                return Result::error(ErrorCode::ERR_TIMELINE_SOFT_DECODER_UNIMPLEMENTED,
+            if (!m_swsCtx) {
+                close();
+                return Result::error(ErrorCode::ERR_DECODER_OPEN_FAILED,
                     "FFmpegVideoDecoder: sws_getContext failed");
+            }
 
             // 预分配 I420 中间帧
             m_i420Frame = av_frame_alloc();
-            if (!m_i420Frame)
-                return Result::error(ErrorCode::ERR_TIMELINE_SOFT_DECODER_UNIMPLEMENTED,
+            if (!m_i420Frame) {
+                close();
+                return Result::error(ErrorCode::ERR_DECODER_OPEN_FAILED,
                     "FFmpegVideoDecoder: av_frame_alloc (i420) failed");
+            }
             int bufSz = av_image_get_buffer_size(AV_PIX_FMT_YUV420P, m_width, m_height, 1);
             m_i420Buffer.resize(static_cast<size_t>(bufSz));
             av_image_fill_arrays(m_i420Frame->data, m_i420Frame->linesize,
@@ -220,9 +238,11 @@ public:
 
         m_frame  = av_frame_alloc();
         m_packet = av_packet_alloc();
-        if (!m_frame || !m_packet)
-            return Result::error(ErrorCode::ERR_TIMELINE_SOFT_DECODER_UNIMPLEMENTED,
+        if (!m_frame || !m_packet) {
+            close();
+            return Result::error(ErrorCode::ERR_DECODER_OPEN_FAILED,
                 "FFmpegVideoDecoder: av_alloc failed");
+        }
 
         m_isOpen = true;
         const char* modeName[] = {"I420", "NV12", "swscale→I420"};
@@ -236,9 +256,9 @@ public:
     // seekExact()
     // -----------------------------------------------------------------------
     Result seekExact(int64_t timeNs) override {
-        if (!m_isOpen)
+        if (!m_isOpen || !m_codecCtx || !m_fmtCtx)
             return Result::error(ErrorCode::ERR_DECODER_SEEK_FAILED,
-                "FFmpegVideoDecoder: not open");
+                "FFmpegVideoDecoder: not open or null context");
 
         int64_t ts = av_rescale_q(timeNs / 1000,
                                    AVRational{1, AV_TIME_BASE},
@@ -330,12 +350,13 @@ public:
         m_isOpen = false;
         releaseGLResources();
 
-        if (m_swsCtx)    { sws_freeContext(m_swsCtx);    m_swsCtx    = nullptr; }
-        if (m_packet)    { av_packet_free(&m_packet);    }
-        if (m_i420Frame) { av_frame_free(&m_i420Frame);  }
-        if (m_frame)     { av_frame_free(&m_frame);      }
         if (m_codecCtx)  { avcodec_free_context(&m_codecCtx); }
         if (m_fmtCtx)    { avformat_close_input(&m_fmtCtx);   }
+        if (m_frame)     { av_frame_free(&m_frame);      }
+        if (m_i420Frame) { av_frame_free(&m_i420Frame);  }
+        if (m_packet)    { av_packet_free(&m_packet);    }
+        if (m_swsCtx)    { sws_freeContext(m_swsCtx);    m_swsCtx = nullptr; }
+
         m_i420Buffer.clear();
         LOGI("FFmpegVideoDecoder closed: %s", m_filePath.c_str());
     }

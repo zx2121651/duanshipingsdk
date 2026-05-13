@@ -71,10 +71,10 @@ static bool test_factory_not_null() {
 }
 
 // ---------------------------------------------------------------------------
-// Test 2: 用无效路径 open() — 应返回明确错误（非 ok()）
+// Test 2: 用无效路径 open() — 应返回 ERR_DECODER_OPEN_FAILED
 // ---------------------------------------------------------------------------
 static bool test_open_invalid_path() {
-    const std::string kName = "open(invalid_path) returns error";
+    const std::string kName = "open(invalid_path) returns ERR_DECODER_OPEN_FAILED";
     auto dec = createSoftwareDecoder();
     if (!dec) { fail(kName, "factory returned nullptr"); return false; }
 
@@ -83,18 +83,33 @@ static bool test_open_invalid_path() {
         fail(kName, "Expected error but got ok");
         return false;
     }
-    // 检查错误码不为 0（有明确错误码）
-    if (res.getErrorCode() == ErrorCode::SUCCESS) {
-        fail(kName, "Error code is ERR_OK despite failing to open");
+#ifdef HAS_FFMPEG_DECODER
+    if (res.getErrorCode() != ErrorCode::ERR_DECODER_OPEN_FAILED) {
+        fail(kName, "Expected ERR_DECODER_OPEN_FAILED but got " + std::to_string(res.getErrorCode()));
+        return false;
+    }
+#endif
+    pass(kName);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Test 3: 未 open 的 decoder — getFrameAt() / seekExact() 应返回错误
+// ---------------------------------------------------------------------------
+static bool test_seek_without_open() {
+    const std::string kName = "seekExact() without open() returns error";
+    auto dec = createSoftwareDecoder();
+    if (!dec) { fail(kName, "factory returned nullptr"); return false; }
+
+    auto res = dec->seekExact(1000);
+    if (res.isOk()) {
+        fail(kName, "Expected error but got ok");
         return false;
     }
     pass(kName);
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test 3: 未 open 的 decoder — getFrameAt() 应返回错误
-// ---------------------------------------------------------------------------
 static bool test_get_frame_without_open() {
     const std::string kName = "getFrameAt() without open() returns error";
     auto dec = createSoftwareDecoder();
@@ -158,10 +173,10 @@ static bool test_decoder_pool_register_release() {
 }
 
 // ---------------------------------------------------------------------------
-// Test 6: SoftwareVideoDecoder stub — close() 可多次调用不崩溃
+// Test 6: close() 可多次调用不崩溃
 // ---------------------------------------------------------------------------
-static bool test_close_idempotent() {
-    const std::string kName = "close() idempotent (no crash)";
+static bool test_double_close() {
+    const std::string kName = "test_double_close (no crash)";
     auto dec = createSoftwareDecoder();
     if (!dec) { fail(kName, "factory returned nullptr"); return false; }
     try {
@@ -177,18 +192,21 @@ static bool test_close_idempotent() {
 
 #ifdef HAS_FFMPEG_DECODER
 // ---------------------------------------------------------------------------
-// Test 7 (仅 FFmpeg 构建): FFmpegVideoDecoder open() 返回有意义的 FFmpeg 错误，
-//         不是"UNIMPLEMENTED"占位错误码
+// Test 7 (仅 FFmpeg 构建): 验证工厂返回的是 FFmpeg 实现而非 stub
 // ---------------------------------------------------------------------------
-static bool test_ffmpeg_not_stub() {
-    const std::string kName = "FFmpegVideoDecoder returns real error (not UNIMPLEMENTED)";
+static bool test_factory_returns_ffmpeg_decoder() {
+    const std::string kName = "test_factory_returns_ffmpeg_decoder";
     auto dec = createSoftwareDecoder();
     auto res = dec->open("/no/such/file.mp4");
 
-    // FFmpegVideoDecoder 的实际错误码是 ERR_TIMELINE_SOFT_DECODER_UNIMPLEMENTED
-    // 但错误消息应包含 avformat 的错误信息，而非简单占位
+    // FFmpegVideoDecoder 的错误消息应包含 "FFmpegVideoDecoder"
     if (res.getMessage().find("FFmpegVideoDecoder") == std::string::npos) {
         fail(kName, "Error message does not mention FFmpegVideoDecoder: " + res.getMessage());
+        return false;
+    }
+    // 且错误码不应是 ERR_TIMELINE_SOFT_DECODER_UNIMPLEMENTED
+    if (res.getErrorCode() == ErrorCode::ERR_TIMELINE_SOFT_DECODER_UNIMPLEMENTED) {
+        fail(kName, "Factory returned SoftwareVideoDecoder stub despite HAS_FFMPEG_DECODER");
         return false;
     }
     pass(kName);
@@ -214,13 +232,14 @@ int main() {
 
     run(test_factory_not_null());
     run(test_open_invalid_path());
+    run(test_seek_without_open());
     run(test_get_frame_without_open());
     run(test_decoder_pool_strategy());
     run(test_decoder_pool_register_release());
-    run(test_close_idempotent());
+    run(test_double_close());
 
 #ifdef HAS_FFMPEG_DECODER
-    run(test_ffmpeg_not_stub());
+    run(test_factory_returns_ffmpeg_decoder());
 #endif
 
     std::cout << "\nResult: " << passed << "/" << total << " passed\n";
