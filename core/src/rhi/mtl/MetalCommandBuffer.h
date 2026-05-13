@@ -32,11 +32,14 @@ public:
     void beginRenderPass(const RenderPassDescriptor& desc) override;
     void endRenderPass()  override;
 
+    void setViewport(float x, float y, float width, float height) override;
+    void setScissor(int32_t x, int32_t y, uint32_t width, uint32_t height) override;
+
     void bindPipelineState(std::shared_ptr<IPipelineState> pso)          override;
     void bindResourceSet(uint32_t setIndex, std::shared_ptr<IShaderResourceSet> rs) override;
     void bindVertexArray(IVertexArray* vao)                              override;
     void draw(uint32_t count)        override;
-    void drawIndexed(uint32_t count) override;
+    void drawIndexed(uint32_t count, IndexType indexType = IndexType::UInt16) override;
     void pipelineBarrier(BarrierType type) override;
     void dispatchCompute(uint32_t nx, uint32_t ny, uint32_t nz) override;
 

@@ -134,7 +134,7 @@ VkRenderPass VulkanRenderDevice::getOrCreateRenderPass(VkFormat colorFmt, bool h
 
 // ---------------------------------------------------------------------------
 std::shared_ptr<ITexture> VulkanRenderDevice::createTexture(const TextureDesc& desc) {
-    return std::make_shared<VulkanTexture>(m_ctx.device(), m_allocator, desc);
+    return std::make_shared<VulkanTexture>(m_ctx.device(), m_allocator, desc, 1);
 }
 
 std::shared_ptr<IBuffer> VulkanRenderDevice::createBuffer(
@@ -193,10 +193,11 @@ std::shared_ptr<IShaderProgram> VulkanRenderDevice::createTessellationProgram(
 std::shared_ptr<ITexture> VulkanRenderDevice::createMSAATexture(
     const TextureDesc& desc, int samples)
 {
-    // Vulkan MSAA: adjust sample count in VkImage creation
-    TextureDesc msaaDesc = desc;
-    (void)samples; // VulkanTexture will use VK_SAMPLE_COUNT_4_BIT etc in a future extension
-    return std::make_shared<VulkanTexture>(m_ctx.device(), m_allocator, msaaDesc);
+    // Clamp samples to power of two between 1 and 16
+    int clampedSamples = samples;
+    if (clampedSamples <= 1) clampedSamples = 1;
+    if (clampedSamples > 16) clampedSamples = 16;
+    return std::make_shared<VulkanTexture>(m_ctx.device(), m_allocator, desc, clampedSamples);
 }
 
 void VulkanRenderDevice::submit(ICommandBuffer* cmdBuffer) {

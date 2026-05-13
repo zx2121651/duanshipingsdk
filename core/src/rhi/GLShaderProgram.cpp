@@ -84,6 +84,21 @@ void GLShaderProgram::setUniform1i(const std::string& name, int value) {
     if (loc >= 0) glUniform1i(loc, value);
 }
 
+void GLShaderProgram::setUniform2i(const std::string& name, int x, int y) {
+    GLint loc = getUniformLocation(name);
+    if (loc >= 0) glUniform2i(loc, x, y);
+}
+
+void GLShaderProgram::setUniform3i(const std::string& name, int x, int y, int z) {
+    GLint loc = getUniformLocation(name);
+    if (loc >= 0) glUniform3i(loc, x, y, z);
+}
+
+void GLShaderProgram::setUniform4i(const std::string& name, int x, int y, int z, int w) {
+    GLint loc = getUniformLocation(name);
+    if (loc >= 0) glUniform4i(loc, x, y, z, w);
+}
+
 void GLShaderProgram::setUniform1f(const std::string& name, float value) {
     GLint loc = getUniformLocation(name);
     if (loc >= 0) glUniform1f(loc, value);
@@ -99,9 +114,29 @@ void GLShaderProgram::setUniform4f(const std::string& name, float x, float y, fl
     if (loc >= 0) glUniform4f(loc, x, y, z, w);
 }
 
+void GLShaderProgram::setUniform3f(const std::string& name, float x, float y, float z) {
+    GLint loc = getUniformLocation(name);
+    if (loc >= 0) glUniform3f(loc, x, y, z);
+}
+
+void GLShaderProgram::setUniformMat3(const std::string& name, const float* matrix3x3) {
+    GLint loc = getUniformLocation(name);
+    if (loc >= 0) glUniformMatrix3fv(loc, 1, GL_FALSE, matrix3x3);
+}
+
 void GLShaderProgram::setUniformMat4(const std::string& name, const float* matrix4x4) {
     GLint loc = getUniformLocation(name);
     if (loc >= 0) glUniformMatrix4fv(loc, 1, GL_FALSE, matrix4x4);
+}
+
+void GLShaderProgram::setUniform1fv(const std::string& name, const float* values, uint32_t count) {
+    GLint loc = getUniformLocation(name);
+    if (loc >= 0) glUniform1fv(loc, static_cast<GLsizei>(count), values);
+}
+
+void GLShaderProgram::setUniform4fv(const std::string& name, const float* values, uint32_t count) {
+    GLint loc = getUniformLocation(name);
+    if (loc >= 0) glUniform4fv(loc, static_cast<GLsizei>(count), values);
 }
 
 void GLShaderProgram::bind() {

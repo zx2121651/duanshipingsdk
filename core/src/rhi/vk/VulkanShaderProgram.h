@@ -33,10 +33,17 @@ public:
 
     // Uniform setters — 映射到 push constant 写入（由 VulkanCommandBuffer 在 bind 时发送）
     void setUniform1i(const std::string& name, int value) override;
+    void setUniform2i(const std::string& name, int x, int y) override;
+    void setUniform3i(const std::string& name, int x, int y, int z) override;
+    void setUniform4i(const std::string& name, int x, int y, int z, int w) override;
     void setUniform1f(const std::string& name, float value) override;
     void setUniform2f(const std::string& name, float x, float y) override;
+    void setUniform3f(const std::string& name, float x, float y, float z) override;
     void setUniform4f(const std::string& name, float x, float y, float z, float w) override;
+    void setUniformMat3(const std::string& name, const float* matrix3x3) override;
     void setUniformMat4(const std::string& name, const float* matrix4x4) override;
+    void setUniform1fv(const std::string& name, const float* values, uint32_t count) override;
+    void setUniform4fv(const std::string& name, const float* values, uint32_t count) override;
     void bind()   override {}
     void unbind() override {}
 

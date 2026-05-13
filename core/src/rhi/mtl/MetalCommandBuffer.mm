@@ -106,15 +106,50 @@ void MetalCommandBuffer::bindResourceSet(
 
 void MetalCommandBuffer::bindVertexArray(IVertexArray* /*vao*/) {}
 
-void MetalCommandBuffer::draw(uint32_t count) {
-    if (m_renderEnc)
-        [m_renderEnc drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                        vertexStart:0
-                        vertexCount:count];
+void MetalCommandBuffer::setViewport(float x, float y, float width, float height) {
+    if (!m_renderEnc) return;
+    MTLViewport vp;
+    vp.originX = x; vp.originY = y; vp.width = width; vp.height = height;
+    vp.znear = 0.0; vp.zfar = 1.0;
+    [m_renderEnc setViewport:vp];
 }
 
-void MetalCommandBuffer::drawIndexed(uint32_t /*indexCount*/) {
-    // TODO: [m_renderEnc drawIndexedPrimitives:...]
+void MetalCommandBuffer::setScissor(int32_t x, int32_t y, uint32_t width, uint32_t height) {
+    if (!m_renderEnc) return;
+    MTLScissorRect rect;
+    rect.x = static_cast<NSUInteger>(x); rect.y = static_cast<NSUInteger>(y);
+    rect.width = width; rect.height = height;
+    [m_renderEnc setScissorRect:rect];
+}
+
+static MTLPrimitiveType toMTLPrimitive(PrimitiveTopology t) {
+    switch (t) {
+        case PrimitiveTopology::PointList:    return MTLPrimitiveTypePoint;
+        case PrimitiveTopology::LineList:     return MTLPrimitiveTypeLine;
+        case PrimitiveTopology::LineStrip:    return MTLPrimitiveTypeLineStrip;
+        case PrimitiveTopology::TriangleList: return MTLPrimitiveTypeTriangle;
+        case PrimitiveTopology::TriangleFan:  return MTLPrimitiveTypeTriangle; // Metal has no fan; callers should triangulate
+        default:                              return MTLPrimitiveTypeTriangleStrip;
+    }
+}
+
+void MetalCommandBuffer::draw(uint32_t count) {
+    if (!m_renderEnc) return;
+    MTLPrimitiveType prim = m_currentPSO
+        ? toMTLPrimitive(m_currentPSO->desc.primitiveTopology)
+        : MTLPrimitiveTypeTriangleStrip;
+    [m_renderEnc drawPrimitives:prim vertexStart:0 vertexCount:count];
+}
+
+void MetalCommandBuffer::drawIndexed(uint32_t indexCount, IndexType indexType) {
+    if (!m_renderEnc) return;
+    MTLIndexType mtlIdxType = (indexType == IndexType::UInt32) ? MTLIndexTypeUInt32 : MTLIndexTypeUInt16;
+    MTLPrimitiveType prim = m_currentPSO
+        ? toMTLPrimitive(m_currentPSO->desc.primitiveTopology)
+        : MTLPrimitiveTypeTriangleStrip;
+    // Index buffer must be bound via setVertexBuffer externally; this issues the draw
+    // [m_renderEnc drawIndexedPrimitives:prim indexCount:indexCount indexType:mtlIdxType indexBuffer:<buf> indexBufferOffset:0]
+    (void)indexCount; (void)mtlIdxType; (void)prim; // stub until index buffer bind is wired up
 }
 
 void MetalCommandBuffer::pipelineBarrier(BarrierType /*type*/) {

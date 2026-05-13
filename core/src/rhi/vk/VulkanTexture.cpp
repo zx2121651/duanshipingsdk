@@ -13,18 +13,28 @@ static VkFormat toVkFormat(TextureFormat f) {
         case TextureFormat::RG16F:   return VK_FORMAT_R16G16_SFLOAT;
         case TextureFormat::Depth24: return VK_FORMAT_D24_UNORM_S8_UINT;
         case TextureFormat::RGB8:    return VK_FORMAT_R8G8B8_UNORM;
+        case TextureFormat::NV12:    return VK_FORMAT_G8_B8R8_2PLANE_420_UNORM; // VK_KHR_sampler_ycbcr_conversion
+        case TextureFormat::BGRA8:   return VK_FORMAT_B8G8R8A8_UNORM;
+        case TextureFormat::R8:      return VK_FORMAT_R8_UNORM;
+        case TextureFormat::R16F:    return VK_FORMAT_R16_SFLOAT;
+        case TextureFormat::R32F:    return VK_FORMAT_R32_SFLOAT;
+        case TextureFormat::Depth32F:return VK_FORMAT_D32_SFLOAT;
+        case TextureFormat::ASTC_4x4:return VK_FORMAT_ASTC_4x4_UNORM_BLOCK;
+        case TextureFormat::ASTC_6x6:return VK_FORMAT_ASTC_6x6_UNORM_BLOCK;
+        case TextureFormat::ASTC_8x8:return VK_FORMAT_ASTC_8x8_UNORM_BLOCK;
         default:                     return VK_FORMAT_R8G8B8A8_UNORM;
     }
 }
 
 VulkanTexture::VulkanTexture(VkDevice device,
                              std::shared_ptr<VulkanMemoryAllocator> allocator,
-                             const TextureDesc& desc)
+                             const TextureDesc& desc,
+                             int samples)
     : m_device(device), m_allocator(std::move(allocator)),
-      m_width(desc.width), m_height(desc.height)
+      m_width(desc.width), m_height(desc.height), m_format(desc.format), m_samples(samples)
 {
     VkFormat fmt = toVkFormat(desc.format);
-    bool isDepth = (desc.format == TextureFormat::Depth24);
+    bool isDepth = (desc.format == TextureFormat::Depth24 || desc.format == TextureFormat::Depth32F);
 
     // 1. Create VkImage
     VkImageCreateInfo ici{};
@@ -32,9 +42,9 @@ VulkanTexture::VulkanTexture(VkDevice device,
     ici.imageType     = VK_IMAGE_TYPE_2D;
     ici.format        = fmt;
     ici.extent        = {desc.width, desc.height, 1};
-    ici.mipLevels     = 1;
+    ici.mipLevels     = desc.mipLevels > 0 ? desc.mipLevels : 1;
     ici.arrayLayers   = 1;
-    ici.samples       = VK_SAMPLE_COUNT_1_BIT;
+    ici.samples       = (samples > 1) ? static_cast<VkSampleCountFlagBits>(samples) : VK_SAMPLE_COUNT_1_BIT;
     ici.tiling        = VK_IMAGE_TILING_OPTIMAL;
     ici.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     ici.sharingMode   = VK_SHARING_MODE_EXCLUSIVE;

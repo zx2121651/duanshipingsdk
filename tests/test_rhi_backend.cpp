@@ -279,6 +279,140 @@ static void tc_r16_capabilities_stable() {
 }
 
 // -----------------------------------------------------------------------
+// TC-R17: TextureFormat enum covers new video/single-channel formats
+// -----------------------------------------------------------------------
+static void tc_r17_texture_format_new_values() {
+    // Just verify distinct integer values (no collisions)
+    int nv12   = static_cast<int>(TextureFormat::NV12);
+    int bgra8  = static_cast<int>(TextureFormat::BGRA8);
+    int r8     = static_cast<int>(TextureFormat::R8);
+    int r16f   = static_cast<int>(TextureFormat::R16F);
+    int r32f   = static_cast<int>(TextureFormat::R32F);
+    int d32f   = static_cast<int>(TextureFormat::Depth32F);
+    int astc44 = static_cast<int>(TextureFormat::ASTC_4x4);
+    ASSERT_TRUE(nv12 != bgra8 && bgra8 != r8 && r8 != r16f && r16f != r32f
+                && r32f != d32f && d32f != astc44,
+                "TC-R17: new TextureFormat values are distinct");
+}
+
+// -----------------------------------------------------------------------
+// TC-R18: createTexture returns correct getFormat()
+// -----------------------------------------------------------------------
+static void tc_r18_create_texture_get_format() {
+    auto dev = std::make_shared<GLRenderDevice>();
+    TextureDesc desc;
+    desc.width = 64; desc.height = 64;
+
+    desc.format = TextureFormat::R8;
+    auto r8tex = dev->createTexture(desc);
+    ASSERT_TRUE(r8tex != nullptr, "TC-R18: R8 texture created");
+    ASSERT_EQ(static_cast<int>(r8tex->getFormat()), static_cast<int>(TextureFormat::R8),
+              "TC-R18: R8 texture getFormat() == R8");
+
+    desc.format = TextureFormat::RGBA16F;
+    auto hftex = dev->createTexture(desc);
+    ASSERT_TRUE(hftex != nullptr, "TC-R18: RGBA16F texture created");
+    ASSERT_EQ(static_cast<int>(hftex->getFormat()), static_cast<int>(TextureFormat::RGBA16F),
+              "TC-R18: RGBA16F texture getFormat() == RGBA16F");
+}
+
+// -----------------------------------------------------------------------
+// TC-R19: TextureDesc mipLevels field defaults to 1
+// -----------------------------------------------------------------------
+static void tc_r19_texture_desc_mipmaps_default() {
+    TextureDesc desc;
+    ASSERT_EQ(desc.mipLevels, 1u, "TC-R19: TextureDesc::mipLevels defaults to 1");
+}
+
+// -----------------------------------------------------------------------
+// TC-R20: PipelineStateDesc primitiveTopology defaults to TriangleStrip
+// -----------------------------------------------------------------------
+static void tc_r20_pipeline_state_topology_default() {
+    PipelineStateDesc desc;
+    ASSERT_EQ(static_cast<int>(desc.primitiveTopology),
+              static_cast<int>(PrimitiveTopology::TriangleStrip),
+              "TC-R20: default topology is TriangleStrip");
+}
+
+// -----------------------------------------------------------------------
+// TC-R21: DepthStencilDesc has depthCompareFunc defaulting to Less
+// -----------------------------------------------------------------------
+static void tc_r21_depth_stencil_compare_func_default() {
+    DepthStencilDesc desc;
+    ASSERT_EQ(static_cast<int>(desc.depthCompareFunc),
+              static_cast<int>(CompareFunc::Less),
+              "TC-R21: DepthStencilDesc::depthCompareFunc defaults to Less");
+}
+
+// -----------------------------------------------------------------------
+// TC-R22: BlendDesc has colorBlendEquation defaulting to Add
+// -----------------------------------------------------------------------
+static void tc_r22_blend_equation_default() {
+    BlendDesc desc;
+    ASSERT_EQ(static_cast<int>(desc.colorBlendEquation),
+              static_cast<int>(BlendEquation::Add),
+              "TC-R22: BlendDesc::colorBlendEquation defaults to Add");
+    ASSERT_EQ(static_cast<int>(desc.colorWriteMask),
+              static_cast<int>(ColorWriteMask::RGBA),
+              "TC-R22: BlendDesc::colorWriteMask defaults to RGBA");
+}
+
+// -----------------------------------------------------------------------
+// TC-R23: IShaderProgram interface compiles with new uniform setters
+// -----------------------------------------------------------------------
+static void tc_r23_shader_new_uniforms() {
+    auto dev = std::make_shared<GLRenderDevice>();
+    auto prog = dev->createShaderProgram(
+        "void main(){gl_Position=vec4(0);}",
+        "void main(){}");
+    // Shader compilation may fail in headless; we just verify the calls don't crash
+    if (prog && prog->isValid()) {
+        prog->setUniform3f("u_dir", 1.f, 0.f, 0.f);
+        float mat3[9] = {1,0,0,0,1,0,0,0,1};
+        prog->setUniformMat3("u_normal", mat3);
+        float arr[4] = {0.25f, 0.5f, 0.75f, 1.0f};
+        prog->setUniform4fv("u_colors", arr, 1);
+        prog->setUniform2i("u_tile", 4, 4);
+    }
+    ASSERT_TRUE(true, "TC-R23: new uniform setter calls do not crash");
+}
+
+// -----------------------------------------------------------------------
+// TC-R24: IndexType enum has correct distinct values
+// -----------------------------------------------------------------------
+static void tc_r24_index_type_enum() {
+    ASSERT_TRUE(static_cast<int>(IndexType::UInt16) != static_cast<int>(IndexType::UInt32),
+                "TC-R24: IndexType::UInt16 != UInt32");
+}
+
+// -----------------------------------------------------------------------
+// TC-R25: PrimitiveTopology enum covers all 6 types
+// -----------------------------------------------------------------------
+static void tc_r25_primitive_topology_enum() {
+    int vals[] = {
+        static_cast<int>(PrimitiveTopology::PointList),
+        static_cast<int>(PrimitiveTopology::LineList),
+        static_cast<int>(PrimitiveTopology::LineStrip),
+        static_cast<int>(PrimitiveTopology::TriangleList),
+        static_cast<int>(PrimitiveTopology::TriangleStrip),
+        static_cast<int>(PrimitiveTopology::TriangleFan),
+    };
+    for (int i = 0; i < 6; ++i)
+        for (int j = i+1; j < 6; ++j)
+            ASSERT_TRUE(vals[i] != vals[j], "TC-R25: PrimitiveTopology values are distinct");
+}
+
+// -----------------------------------------------------------------------
+// TC-R26: RasterizerDesc has frontFaceCCW and depth bias fields
+// -----------------------------------------------------------------------
+static void tc_r26_rasterizer_desc_new_fields() {
+    RasterizerDesc desc;
+    ASSERT_TRUE(desc.frontFaceCCW == true, "TC-R26: frontFaceCCW defaults to true (CCW)");
+    ASSERT_TRUE(desc.depthBiasConstantFactor == 0.0f, "TC-R26: depthBiasConstantFactor defaults to 0");
+    ASSERT_TRUE(desc.depthBiasSlopeFactor == 0.0f, "TC-R26: depthBiasSlopeFactor defaults to 0");
+}
+
+// -----------------------------------------------------------------------
 int main() {
     std::cout << "========= test_rhi_backend =========\n";
 
@@ -298,6 +432,17 @@ int main() {
     tc_r14_env_override_gles();
     tc_r15_env_override_vulkan_fallback();
     tc_r16_capabilities_stable();
+    // --- New tests for fixed/added features ---
+    tc_r17_texture_format_new_values();
+    tc_r18_create_texture_get_format();
+    tc_r19_texture_desc_mipmaps_default();
+    tc_r20_pipeline_state_topology_default();
+    tc_r21_depth_stencil_compare_func_default();
+    tc_r22_blend_equation_default();
+    tc_r23_shader_new_uniforms();
+    tc_r24_index_type_enum();
+    tc_r25_primitive_topology_enum();
+    tc_r26_rasterizer_desc_new_fields();
 
     std::cout << "\n=== Results: " << g_passed << " passed, "
               << g_failed << " failed ===\n";

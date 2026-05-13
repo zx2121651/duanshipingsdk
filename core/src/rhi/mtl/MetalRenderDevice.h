@@ -45,6 +45,7 @@ public:
     std::shared_ptr<ITexture>       createMSAATexture(const TextureDesc& desc, int samples) override;
     void submit(ICommandBuffer* cmdBuffer) override;
     std::shared_ptr<ITexture> bindExternalHardwareBuffer(void* nativeBuffer) override;
+    RHICapabilities getCapabilities() const override;
 
     MTLDeviceRef      mtlDevice()       const { return m_device; }
     MTLCommandQueueRef mtlCommandQueue() const { return m_commandQueue; }

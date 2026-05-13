@@ -103,6 +103,7 @@ void VulkanCommandBuffer::beginRenderPass(const RenderPassDescriptor& desc) {
 
     VkFramebuffer fb = VK_NULL_HANDLE;
     vkCreateFramebuffer(m_rhiDevice->context().device(), &fci, nullptr, &fb);
+    m_pendingFramebuffers.push_back(fb);  // will be destroyed after flush
 
     VkClearValue clear{};
     auto& cc = desc.colorAttachments[0].clearColor;
@@ -118,11 +119,6 @@ void VulkanCommandBuffer::beginRenderPass(const RenderPassDescriptor& desc) {
     rpbi.pClearValues      = &clear;
 
     vkCmdBeginRenderPass(m_cmd, &rpbi, VK_SUBPASS_CONTENTS_INLINE);
-
-    // Queue framebuffer for deletion after submit
-    VkDevice devHandle = m_rhiDevice->context().device();
-    // (Deferred deletion omitted for brevity — in production use a deletion queue)
-    (void)devHandle;
 }
 
 void VulkanCommandBuffer::endRenderPass() {
@@ -147,7 +143,22 @@ void VulkanCommandBuffer::draw(uint32_t count) {
     vkCmdDraw(m_cmd, count, 1, 0, 0);
 }
 
-void VulkanCommandBuffer::drawIndexed(uint32_t indexCount) {
+void VulkanCommandBuffer::setViewport(float x, float y, float width, float height) {
+    VkViewport vp{};
+    vp.x = x; vp.y = y; vp.width = width; vp.height = height;
+    vp.minDepth = 0.0f; vp.maxDepth = 1.0f;
+    vkCmdSetViewport(m_cmd, 0, 1, &vp);
+}
+
+void VulkanCommandBuffer::setScissor(int32_t x, int32_t y, uint32_t width, uint32_t height) {
+    VkRect2D rect{};
+    rect.offset = {x, y};
+    rect.extent = {width, height};
+    vkCmdSetScissor(m_cmd, 0, 1, &rect);
+}
+
+void VulkanCommandBuffer::drawIndexed(uint32_t indexCount, IndexType indexType) {
+    (void)indexType; // VkIndexType set at vkCmdBindIndexBuffer time; IndexType maps to VK_INDEX_TYPE_UINT16/32
     vkCmdDrawIndexed(m_cmd, indexCount, 1, 0, 0, 0);
 }
 
@@ -177,8 +188,13 @@ void VulkanCommandBuffer::flush(VkQueue queue) {
     si.commandBufferCount = 1;
     si.pCommandBuffers    = &m_cmd;
     vkQueueSubmit(queue, 1, &si, m_fence);
-    vkWaitForFences(m_rhiDevice->context().device(), 1, &m_fence,
-                    VK_TRUE, UINT64_MAX);
+    vkWaitForFences(m_rhiDevice->context().device(), 1, &m_fence, VK_TRUE, UINT64_MAX);
+
+    // Destroy transient per-pass framebuffers after GPU finishes
+    VkDevice dev = m_rhiDevice->context().device();
+    for (VkFramebuffer fb : m_pendingFramebuffers)
+        if (fb != VK_NULL_HANDLE) vkDestroyFramebuffer(dev, fb, nullptr);
+    m_pendingFramebuffers.clear();
 }
 
 } // namespace rhi

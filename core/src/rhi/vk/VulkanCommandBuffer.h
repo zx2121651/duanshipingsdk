@@ -43,17 +43,20 @@ public:
     ~VulkanCommandBuffer() override;
 
     void begin() override;
-    void end()   override;
+    void end() override;
 
     void beginRenderPass(const RenderPassDescriptor& desc) override;
-    void endRenderPass()  override;
+    void endRenderPass() override;
+
+    void setViewport(float x, float y, float width, float height) override;
+    void setScissor(int32_t x, int32_t y, uint32_t width, uint32_t height) override;
 
     void bindPipelineState(std::shared_ptr<IPipelineState> pso) override;
     void bindResourceSet(uint32_t setIndex, std::shared_ptr<IShaderResourceSet> rs) override;
     void bindVertexArray(IVertexArray* vao) override;
 
     void draw(uint32_t count) override;
-    void drawIndexed(uint32_t indexCount) override;
+    void drawIndexed(uint32_t indexCount, IndexType indexType = IndexType::UInt16) override;
 
     void pipelineBarrier(BarrierType type) override;
     void dispatchCompute(uint32_t nx, uint32_t ny, uint32_t nz) override;
@@ -62,15 +65,14 @@ public:
     void flush(VkQueue queue);
 
 private:
-    VulkanRenderDevice* m_rhiDevice = nullptr;
-
-    VkCommandBuffer m_cmd    = VK_NULL_HANDLE;
-    VkFence         m_fence  = VK_NULL_HANDLE;
-
-    std::shared_ptr<VulkanPipelineState>   m_currentPSO;
-    std::shared_ptr<VulkanDescriptorSet>   m_currentRS;
-
-    bool m_recording = false;
+    VulkanRenderDevice*                   m_rhiDevice = nullptr;
+    VkCommandBuffer                       m_cmd   = VK_NULL_HANDLE;
+    VkFence                               m_fence = VK_NULL_HANDLE;
+    bool                                  m_recording = false;
+    std::shared_ptr<VulkanPipelineState>  m_currentPSO;
+    std::shared_ptr<VulkanDescriptorSet>  m_currentRS;
+    // Framebuffers created per-renderpass are deferred-destroyed after flush
+    std::vector<VkFramebuffer>            m_pendingFramebuffers;
 };
 
 } // namespace rhi

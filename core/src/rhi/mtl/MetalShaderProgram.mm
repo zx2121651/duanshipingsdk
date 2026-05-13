@@ -62,22 +62,45 @@ void MetalShaderProgram::writeUniform(const std::string& name, const T& val) {
 
 void MetalShaderProgram::setUniform1i(const std::string& n, int v)   { writeUniform(n, v); }
 void MetalShaderProgram::setUniform1f(const std::string& n, float v) { writeUniform(n, v); }
+void MetalShaderProgram::setUniform2i(const std::string& n, int x, int y) {
+    int v[2] = {x, y}; registerUniform(n, 8);
+    auto it = m_uniformOffsets.find(n); if (it != m_uniformOffsets.end()) std::memcpy(m_uniformData.data() + it->second, v, 8);
+}
+void MetalShaderProgram::setUniform3i(const std::string& n, int x, int y, int z) {
+    int v[3] = {x, y, z}; registerUniform(n, 12);
+    auto it = m_uniformOffsets.find(n); if (it != m_uniformOffsets.end()) std::memcpy(m_uniformData.data() + it->second, v, 12);
+}
+void MetalShaderProgram::setUniform4i(const std::string& n, int x, int y, int z, int w) {
+    int v[4] = {x, y, z, w}; registerUniform(n, 16);
+    auto it = m_uniformOffsets.find(n); if (it != m_uniformOffsets.end()) std::memcpy(m_uniformData.data() + it->second, v, 16);
+}
 void MetalShaderProgram::setUniform2f(const std::string& n, float x, float y) {
-    float v[2] = {x, y};
-    registerUniform(n, 8);
-    auto it = m_uniformOffsets.find(n);
-    if (it != m_uniformOffsets.end()) std::memcpy(m_uniformData.data() + it->second, v, 8);
+    float v[2] = {x, y}; registerUniform(n, 8);
+    auto it = m_uniformOffsets.find(n); if (it != m_uniformOffsets.end()) std::memcpy(m_uniformData.data() + it->second, v, 8);
+}
+void MetalShaderProgram::setUniform3f(const std::string& n, float x, float y, float z) {
+    float v[3] = {x, y, z}; registerUniform(n, 12);
+    auto it = m_uniformOffsets.find(n); if (it != m_uniformOffsets.end()) std::memcpy(m_uniformData.data() + it->second, v, 12);
 }
 void MetalShaderProgram::setUniform4f(const std::string& n, float x, float y, float z, float w) {
-    float v[4] = {x, y, z, w};
-    registerUniform(n, 16);
-    auto it = m_uniformOffsets.find(n);
-    if (it != m_uniformOffsets.end()) std::memcpy(m_uniformData.data() + it->second, v, 16);
+    float v[4] = {x, y, z, w}; registerUniform(n, 16);
+    auto it = m_uniformOffsets.find(n); if (it != m_uniformOffsets.end()) std::memcpy(m_uniformData.data() + it->second, v, 16);
+}
+void MetalShaderProgram::setUniformMat3(const std::string& n, const float* m) {
+    registerUniform(n, 36);
+    auto it = m_uniformOffsets.find(n); if (it != m_uniformOffsets.end()) std::memcpy(m_uniformData.data() + it->second, m, 36);
 }
 void MetalShaderProgram::setUniformMat4(const std::string& n, const float* m) {
     registerUniform(n, 64);
-    auto it = m_uniformOffsets.find(n);
-    if (it != m_uniformOffsets.end()) std::memcpy(m_uniformData.data() + it->second, m, 64);
+    auto it = m_uniformOffsets.find(n); if (it != m_uniformOffsets.end()) std::memcpy(m_uniformData.data() + it->second, m, 64);
+}
+void MetalShaderProgram::setUniform1fv(const std::string& n, const float* values, uint32_t count) {
+    uint32_t bytes = count * 4; registerUniform(n, bytes);
+    auto it = m_uniformOffsets.find(n); if (it != m_uniformOffsets.end()) std::memcpy(m_uniformData.data() + it->second, values, bytes);
+}
+void MetalShaderProgram::setUniform4fv(const std::string& n, const float* values, uint32_t count) {
+    uint32_t bytes = count * 16; registerUniform(n, bytes);
+    auto it = m_uniformOffsets.find(n); if (it != m_uniformOffsets.end()) std::memcpy(m_uniformData.data() + it->second, values, bytes);
 }
 
 } // namespace rhi

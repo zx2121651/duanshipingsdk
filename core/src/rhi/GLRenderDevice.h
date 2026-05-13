@@ -57,12 +57,15 @@ public:
     void beginRenderPass(const RenderPassDescriptor& descriptor) override;
     void endRenderPass() override;
 
+    void setViewport(float x, float y, float width, float height) override;
+    void setScissor(int32_t x, int32_t y, uint32_t width, uint32_t height) override;
+
     void bindPipelineState(std::shared_ptr<IPipelineState> pso) override;
     void bindResourceSet(uint32_t setIndex, std::shared_ptr<IShaderResourceSet> resourceSet) override;
     void bindVertexArray(IVertexArray* vao) override;
 
     void draw(uint32_t count) override;
-    void drawIndexed(uint32_t indexCount) override;
+    void drawIndexed(uint32_t indexCount, IndexType indexType = IndexType::UInt16) override;
 
     void pipelineBarrier(BarrierType type) override;
     void dispatchCompute(uint32_t numGroupsX, uint32_t numGroupsY, uint32_t numGroupsZ) override;
@@ -71,6 +74,7 @@ private:
     GLRenderDevice* m_device = nullptr;
     uint32_t m_currentFBO = 0;
     int64_t m_beginTimeNs = 0;
+    PrimitiveTopology m_currentTopology = PrimitiveTopology::TriangleStrip;
 };
 
 class GLRenderDevice : public IRenderDevice {

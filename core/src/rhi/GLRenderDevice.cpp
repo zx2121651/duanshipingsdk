@@ -67,6 +67,49 @@ namespace sdk {
 namespace video {
 namespace rhi {
 
+static GLenum toGLBlendEquation(BlendEquation e) {
+    switch (e) {
+        case BlendEquation::Add:             return GL_FUNC_ADD;
+        case BlendEquation::Subtract:        return GL_FUNC_SUBTRACT;
+        case BlendEquation::ReverseSubtract: return GL_FUNC_REVERSE_SUBTRACT;
+        case BlendEquation::Min:             return GL_MIN;
+        case BlendEquation::Max:             return GL_MAX;
+        default:                             return GL_FUNC_ADD;
+    }
+}
+
+static GLenum toGLCompareFunc(CompareFunc f) {
+    switch (f) {
+        case CompareFunc::Never:        return GL_NEVER;
+        case CompareFunc::Less:         return GL_LESS;
+        case CompareFunc::Equal:        return GL_EQUAL;
+        case CompareFunc::LessEqual:    return GL_LEQUAL;
+        case CompareFunc::Greater:      return GL_GREATER;
+        case CompareFunc::NotEqual:     return GL_NOTEQUAL;
+        case CompareFunc::GreaterEqual: return GL_GEQUAL;
+        case CompareFunc::Always:       return GL_ALWAYS;
+        default:                        return GL_LESS;
+    }
+}
+
+static GLenum toGLStencilOp(StencilOp op) {
+    switch (op) {
+        case StencilOp::Keep:          return GL_KEEP;
+        case StencilOp::Zero:          return GL_ZERO;
+        case StencilOp::Replace:       return GL_REPLACE;
+        case StencilOp::Increment:     return GL_INCR;
+        case StencilOp::Decrement:     return GL_DECR;
+        case StencilOp::Invert:        return GL_INVERT;
+        case StencilOp::IncrementWrap:  return GL_INCR_WRAP;
+        case StencilOp::DecrementWrap:  return GL_DECR_WRAP;
+        default:                       return GL_KEEP;
+    }
+}
+
+static GLenum toGLFrontFace(bool ccw) {
+    return ccw ? GL_CCW : GL_CW;
+}
+
 void GLPipelineState::apply(ShadowState& s) {
     // Blend enable/disable
     if (desc.blendState.blendEnabled != s.blendEnabled) {
@@ -74,7 +117,7 @@ void GLPipelineState::apply(ShadowState& s) {
         else glDisable(GL_BLEND);
         s.blendEnabled = desc.blendState.blendEnabled;
     }
-    // Blend factors (only update if blend is active to avoid spurious state)
+    // Blend factors and equations
     if (desc.blendState.blendEnabled) {
         GLenum srcC = toGLBlendFactor(desc.blendState.srcColorFactor);
         GLenum dstC = toGLBlendFactor(desc.blendState.dstColorFactor);
@@ -86,6 +129,12 @@ void GLPipelineState::apply(ShadowState& s) {
             s.blendSrcColor = srcC; s.blendDstColor = dstC;
             s.blendSrcAlpha = srcA; s.blendDstAlpha = dstA;
         }
+        glBlendEquationSeparate(toGLBlendEquation(desc.blendState.colorBlendEquation),
+                                toGLBlendEquation(desc.blendState.alphaBlendEquation));
+        glColorMask((desc.blendState.colorWriteMask & static_cast<uint32_t>(ColorWriteMask::Red))   != 0,
+                    (desc.blendState.colorWriteMask & static_cast<uint32_t>(ColorWriteMask::Green)) != 0,
+                    (desc.blendState.colorWriteMask & static_cast<uint32_t>(ColorWriteMask::Blue))  != 0,
+                    (desc.blendState.colorWriteMask & static_cast<uint32_t>(ColorWriteMask::Alpha)) != 0);
     }
     // Cull face
     if (desc.rasterizerState.cullFaceEnabled != s.cullFaceEnabled) {
@@ -93,16 +142,40 @@ void GLPipelineState::apply(ShadowState& s) {
         else glDisable(GL_CULL_FACE);
         s.cullFaceEnabled = desc.rasterizerState.cullFaceEnabled;
     }
+    if (desc.rasterizerState.cullFaceEnabled) {
+        glFrontFace(toGLFrontFace(desc.rasterizerState.frontFaceCCW));
+    }
+    // Depth bias
+    if (desc.rasterizerState.depthBiasConstantFactor != 0.0f || desc.rasterizerState.depthBiasSlopeFactor != 0.0f) {
+        glEnable(GL_POLYGON_OFFSET_FILL);
+        glPolygonOffset(desc.rasterizerState.depthBiasSlopeFactor, desc.rasterizerState.depthBiasConstantFactor);
+    }
     // Depth test
     if (desc.depthStencilState.depthTestEnabled != s.depthTestEnabled) {
         if (desc.depthStencilState.depthTestEnabled) glEnable(GL_DEPTH_TEST);
         else glDisable(GL_DEPTH_TEST);
         s.depthTestEnabled = desc.depthStencilState.depthTestEnabled;
     }
+    // Depth compare function
+    if (desc.depthStencilState.depthTestEnabled) {
+        glDepthFunc(toGLCompareFunc(desc.depthStencilState.depthCompareFunc));
+    }
     // Depth write
     if (desc.depthStencilState.depthWriteEnabled != s.depthWriteEnabled) {
         glDepthMask(desc.depthStencilState.depthWriteEnabled ? GL_TRUE : GL_FALSE);
         s.depthWriteEnabled = desc.depthStencilState.depthWriteEnabled;
+    }
+    // Stencil
+    if (desc.depthStencilState.stencilFront.stencilTestEnabled) {
+        glEnable(GL_STENCIL_TEST);
+        glStencilFunc(toGLCompareFunc(desc.depthStencilState.stencilFront.compareFunc),
+                      desc.depthStencilState.stencilFront.referenceValue,
+                      desc.depthStencilState.stencilFront.compareMask);
+        glStencilOp(toGLStencilOp(desc.depthStencilState.stencilFront.failOp),
+                    toGLStencilOp(desc.depthStencilState.stencilFront.depthFailOp),
+                    toGLStencilOp(desc.depthStencilState.stencilFront.passOp));
+    } else {
+        glDisable(GL_STENCIL_TEST);
     }
 }
 
@@ -138,6 +211,17 @@ void GLCommandBuffer::end() {
     }
 }
 
+void GLCommandBuffer::setViewport(float x, float y, float width, float height) {
+    glViewport(static_cast<GLint>(x), static_cast<GLint>(y),
+               static_cast<GLsizei>(width), static_cast<GLsizei>(height));
+}
+
+void GLCommandBuffer::setScissor(int32_t x, int32_t y, uint32_t width, uint32_t height) {
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(static_cast<GLint>(x), static_cast<GLint>(y),
+              static_cast<GLsizei>(width), static_cast<GLsizei>(height));
+}
+
 void GLCommandBuffer::beginRenderPass(const RenderPassDescriptor& descriptor) {
     if (descriptor.colorAttachments.empty() || !descriptor.colorAttachments[0].texture) {
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -151,6 +235,7 @@ void GLCommandBuffer::beginRenderPass(const RenderPassDescriptor& descriptor) {
         : 0;
 
     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+    // Default viewport to full texture; caller may override with setViewport
     glViewport(0, 0, outputTexture->getWidth(), outputTexture->getHeight());
     m_currentFBO = fbo;
 
@@ -163,6 +248,7 @@ void GLCommandBuffer::beginRenderPass(const RenderPassDescriptor& descriptor) {
 
 void GLCommandBuffer::endRenderPass() {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glDisable(GL_SCISSOR_TEST);
     m_currentFBO = 0;
 }
 
@@ -173,11 +259,13 @@ void GLCommandBuffer::bindPipelineState(std::shared_ptr<IPipelineState> pso) {
             auto glProg = static_cast<GLShaderProgram*>(glPipeline->desc.shaderProgram);
             glUseProgram(glProg->getGLHandle());
         }
-        static ShadowState s_fallbackShadow; // fallback for device-less command buffers
+        static ShadowState s_fallbackShadow;
         ShadowState& shadow = m_device ? m_device->getShadowState() : s_fallbackShadow;
         glPipeline->apply(shadow);
+        m_currentTopology = glPipeline->desc.primitiveTopology;
     } else {
         glUseProgram(0);
+        m_currentTopology = PrimitiveTopology::TriangleStrip;
     }
 }
 
@@ -196,12 +284,28 @@ void GLCommandBuffer::bindVertexArray(IVertexArray* vao) {
     glBindVertexArray(glVao->getGLHandle());
 }
 
-void GLCommandBuffer::draw(uint32_t count) {
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, count);
+static GLenum toGLTopology(PrimitiveTopology t) {
+    switch (t) {
+        case PrimitiveTopology::PointList:     return GL_POINTS;
+        case PrimitiveTopology::LineList:      return GL_LINES;
+        case PrimitiveTopology::LineStrip:       return GL_LINE_STRIP;
+        case PrimitiveTopology::TriangleList:    return GL_TRIANGLES;
+        case PrimitiveTopology::TriangleStrip: return GL_TRIANGLE_STRIP;
+        case PrimitiveTopology::TriangleFan:   return GL_TRIANGLE_FAN;
+        default:                               return GL_TRIANGLE_STRIP;
+    }
 }
 
-void GLCommandBuffer::drawIndexed(uint32_t indexCount) {
-    glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_SHORT, nullptr);
+static GLenum toGLIndexType(IndexType t) {
+    return (t == IndexType::UInt32) ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT;
+}
+
+void GLCommandBuffer::draw(uint32_t count) {
+    glDrawArrays(toGLTopology(m_currentTopology), 0, count);
+}
+
+void GLCommandBuffer::drawIndexed(uint32_t indexCount, IndexType indexType) {
+    glDrawElements(toGLTopology(m_currentTopology), indexCount, toGLIndexType(indexType), nullptr);
 }
 
 void GLCommandBuffer::dispatchCompute(uint32_t numGroupsX, uint32_t numGroupsY, uint32_t numGroupsZ) {
@@ -218,10 +322,28 @@ void GLCommandBuffer::dispatchCompute(uint32_t numGroupsX, uint32_t numGroupsY, 
 
 void GLCommandBuffer::pipelineBarrier(BarrierType type) {
 #if !defined(__APPLE__) && !defined(_MSC_VER)
-    extern void glMemoryBarrier(unsigned int barriers) __attribute__((weak));
-    if (glMemoryBarrier) {
-        glMemoryBarrier(0xFFFFFFFF);
+    GLbitfield bits = 0;
+    switch (type) {
+        case BarrierType::Pipeline:
+            // Compute → fragment: texture/image reads need to see compute writes
+            bits = GL_SHADER_IMAGE_ACCESS_BARRIER_BIT
+                 | GL_TEXTURE_FETCH_BARRIER_BIT
+                 | GL_SHADER_STORAGE_BARRIER_BIT;
+            break;
+        case BarrierType::Memory:
+        default:
+            // Cross-stage general memory sync (e.g. UAV write then index buffer read)
+            bits = GL_BUFFER_UPDATE_BARRIER_BIT
+                 | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT
+                 | GL_ELEMENT_ARRAY_BARRIER_BIT
+                 | GL_UNIFORM_BARRIER_BIT
+                 | GL_TEXTURE_FETCH_BARRIER_BIT
+                 | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT
+                 | GL_FRAMEBUFFER_BARRIER_BIT
+                 | GL_SHADER_STORAGE_BARRIER_BIT;
+            break;
     }
+    glMemoryBarrier(bits);
 #elif defined(_MSC_VER)
     // glMemoryBarrier is a GLES 3.1 function; on mock/headless Windows, no-op.
     (void)type;
@@ -242,6 +364,7 @@ std::shared_ptr<ITexture> GLRenderDevice::createTexture(const TextureDesc& desc)
     GLenum internalFormat = GL_RGBA8;
     GLenum baseFormat     = GL_RGBA;
     GLenum pixelType      = GL_UNSIGNED_BYTE;
+    GLenum texTarget      = GL_TEXTURE_2D;
     switch (desc.format) {
         case TextureFormat::RGBA8:
             internalFormat = GL_RGBA8; baseFormat = GL_RGBA; pixelType = GL_UNSIGNED_BYTE; break;
@@ -253,19 +376,57 @@ std::shared_ptr<ITexture> GLRenderDevice::createTexture(const TextureDesc& desc)
             internalFormat = GL_DEPTH_COMPONENT24; baseFormat = GL_DEPTH_COMPONENT; pixelType = GL_UNSIGNED_INT; break;
         case TextureFormat::RGB8:
             internalFormat = GL_RGB8;  baseFormat = GL_RGB;  pixelType = GL_UNSIGNED_BYTE; break;
+        case TextureFormat::NV12:
+            // NV12: Y plane only; UV interleaved plane handled separately in RHI or via shader sampling
+            internalFormat = GL_LUMINANCE8; baseFormat = GL_LUMINANCE; pixelType = GL_UNSIGNED_BYTE; break;
+        case TextureFormat::BGRA8:
+            internalFormat = GL_BGRA8_EXT; baseFormat = GL_BGRA_EXT; pixelType = GL_UNSIGNED_BYTE; break;
+        case TextureFormat::R8:
+            internalFormat = GL_R8; baseFormat = GL_RED; pixelType = GL_UNSIGNED_BYTE; break;
+        case TextureFormat::R16F:
+            internalFormat = GL_R16F; baseFormat = GL_RED; pixelType = GL_HALF_FLOAT; break;
+        case TextureFormat::R32F:
+            internalFormat = GL_R32F; baseFormat = GL_RED; pixelType = GL_FLOAT; break;
+        case TextureFormat::Depth32F:
+            internalFormat = GL_DEPTH_COMPONENT32F; baseFormat = GL_DEPTH_COMPONENT; pixelType = GL_FLOAT; break;
+        case TextureFormat::ASTC_4x4:
+            internalFormat = GL_COMPRESSED_RGBA_ASTC_4x4_KHR; baseFormat = GL_RGBA; pixelType = GL_UNSIGNED_BYTE; break;
+        case TextureFormat::ASTC_6x6:
+            internalFormat = GL_COMPRESSED_RGBA_ASTC_6x6_KHR; baseFormat = GL_RGBA; pixelType = GL_UNSIGNED_BYTE; break;
+        case TextureFormat::ASTC_8x8:
+            internalFormat = GL_COMPRESSED_RGBA_ASTC_8x8_KHR; baseFormat = GL_RGBA; pixelType = GL_UNSIGNED_BYTE; break;
     }
 
     GLuint id = 0;
     glGenTextures(1, &id);
-    glBindTexture(GL_TEXTURE_2D, id);
-    glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, desc.width, desc.height, 0, baseFormat, pixelType, nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    glBindTexture(texTarget, id);
 
-    auto tex = std::make_shared<GLTexture>(id, desc.width, desc.height);
+    // For compressed formats use glCompressedTexImage2D, otherwise glTexImage2D
+    bool isCompressed = (internalFormat == GL_COMPRESSED_RGBA_ASTC_4x4_KHR ||
+                       internalFormat == GL_COMPRESSED_RGBA_ASTC_6x6_KHR ||
+                       internalFormat == GL_COMPRESSED_RGBA_ASTC_8x8_KHR);
+
+    if (isCompressed) {
+        glCompressedTexImage2D(texTarget, 0, internalFormat, desc.width, desc.height, 0, 0, nullptr);
+    } else {
+        glTexImage2D(texTarget, 0, internalFormat, desc.width, desc.height, 0, baseFormat, pixelType, nullptr);
+    }
+
+    // Filter & wrap — min filter uses mip if >1 mip level
+    GLenum minFilter = (desc.mipLevels > 1) ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR;
+    glTexParameteri(texTarget, GL_TEXTURE_MIN_FILTER, minFilter);
+    glTexParameteri(texTarget, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(texTarget, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(texTarget, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    // Generate mipmaps if requested
+    if (desc.mipLevels > 1) {
+        glGenerateMipmap(texTarget);
+    }
+
+    glBindTexture(texTarget, 0);
+
+    auto tex = std::make_shared<GLTexture>(id, desc.width, desc.height, desc.format, desc.mipLevels);
     tex->setOwnsHandle(true);
     return tex;
 }
@@ -402,7 +563,7 @@ std::shared_ptr<ITexture> GLRenderDevice::createMSAATexture(
     glBindTexture(GL_TEXTURE_2D, 0);
     std::cerr << "RHI: createMSAATexture — MSAA not available, fallback to regular texture" << std::endl;
 #endif
-    auto tex = std::make_shared<GLTexture>(id, desc.width, desc.height);
+    auto tex = std::make_shared<GLTexture>(id, desc.width, desc.height, desc.format, 1);
     tex->setOwnsHandle(true);
     return tex;
 }
@@ -497,7 +658,7 @@ std::shared_ptr<ITexture> GLRenderDevice::bindExternalHardwareBuffer(void* nativ
 
     s_eglDestroyImageKHR(display, eglImage);
 
-    auto tex = std::make_shared<GLTexture>(id, hwbDesc.width, hwbDesc.height);
+    auto tex = std::make_shared<GLTexture>(id, hwbDesc.width, hwbDesc.height, TextureFormat::BGRA8, 1);
     tex->setOwnsHandle(true);
     return tex;
 #else
@@ -506,7 +667,7 @@ std::shared_ptr<ITexture> GLRenderDevice::bindExternalHardwareBuffer(void* nativ
     glGenTextures(1, &id);
     glBindTexture(GL_TEXTURE_EXTERNAL_OES, id);
     glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
-    auto tex = std::make_shared<GLTexture>(id, 1, 1);
+    auto tex = std::make_shared<GLTexture>(id, 1, 1, TextureFormat::BGRA8, 1);
     tex->setOwnsHandle(true);
     return tex;
 #endif

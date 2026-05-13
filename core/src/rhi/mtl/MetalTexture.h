@@ -23,6 +23,7 @@ public:
     uint32_t getWidth()  const override { return m_width; }
     uint32_t getHeight() const override { return m_height; }
     uint32_t getId()     const override { return 0; } // N/A for Metal
+    TextureFormat getFormat() const override { return m_format; }
 
     MTLTextureRef mtlTexture() const { return m_texture; }
 
@@ -30,6 +31,8 @@ private:
     MTLTextureRef m_texture = nullptr;
     uint32_t m_width  = 0;
     uint32_t m_height = 0;
+    TextureFormat m_format = TextureFormat::RGBA8;
+    uint32_t m_mipLevels = 1;
 };
 
 } // namespace rhi

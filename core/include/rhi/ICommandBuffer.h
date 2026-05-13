@@ -17,6 +17,20 @@ enum class BarrierType {
     Pipeline
 };
 
+enum class PrimitiveTopology {
+    PointList,
+    LineList,
+    LineStrip,
+    TriangleList,
+    TriangleStrip,
+    TriangleFan
+};
+
+enum class IndexType {
+    UInt16,
+    UInt32
+};
+
 class [[nodiscard]] ICommandBuffer {
 public:
     virtual ~ICommandBuffer() = default;
@@ -27,10 +41,13 @@ public:
     virtual void beginRenderPass(const RenderPassDescriptor& desc) = 0;
     virtual void endRenderPass() = 0;
 
+    virtual void setViewport(float x, float y, float width, float height) = 0;
+    virtual void setScissor(int32_t x, int32_t y, uint32_t width, uint32_t height) = 0;
+
     virtual void bindPipelineState(std::shared_ptr<IPipelineState> pso) = 0;
     virtual void bindVertexArray(IVertexArray* vao) = 0;
     virtual void draw(uint32_t count) = 0;
-    virtual void drawIndexed(uint32_t indexCount) = 0;
+    virtual void drawIndexed(uint32_t indexCount, IndexType indexType = IndexType::UInt16) = 0;
 
     virtual void pipelineBarrier(BarrierType type) = 0;
 

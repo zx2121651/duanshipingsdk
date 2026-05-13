@@ -116,6 +116,46 @@ std::shared_ptr<ITexture> MetalRenderDevice::bindExternalHardwareBuffer(void* na
     return nullptr;
 }
 
+RHICapabilities MetalRenderDevice::getCapabilities() const {
+    RHICapabilities caps;
+    caps.backend = BackendType::METAL;
+
+    // All Apple GPUs since A7 support compute
+    caps.computeShader = true;
+
+    // Metal does not have a traditional geometry shader stage
+    caps.geometryShader = false;
+
+    // Metal supports tessellation (iOS 10+ / macOS 10.12+)
+    caps.tessellation = ([m_device supportsFeatureSet:
+#if TARGET_OS_IPHONE
+        MTLFeatureSet_iOS_GPUFamily3_v1
+#else
+        MTLFeatureSet_macOS_GPUFamily1_v2
+#endif
+    ]);
+
+    // MSAA
+    caps.msaa = ([m_device supportsTextureSampleCount:4]);
+    caps.maxMSAASamples = caps.msaa ? 8 : 1;
+
+    // FP16 render targets (A9+)
+    caps.fp16RenderTarget = true;
+
+    // ASTC compression
+    caps.astc = ([m_device supportsFeatureSet:
+#if TARGET_OS_IPHONE
+        MTLFeatureSet_iOS_GPUFamily2_v1
+#else
+        MTLFeatureSet_macOS_GPUFamily1_v1
+#endif
+    ]);
+
+    caps.glesVersionInt = 0;
+    caps.rendererString = std::string([[m_device name] UTF8String]);
+    return caps;
+}
+
 } // namespace rhi
 } // namespace video
 } // namespace sdk
