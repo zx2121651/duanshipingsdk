@@ -44,6 +44,7 @@ public:
     std::shared_ptr<IShaderProgram> createTessellationProgram(const char*, const char*, const char*, const char*) override;
     std::shared_ptr<ITexture>       createMSAATexture(const TextureDesc& desc, int samples) override;
     void submit(ICommandBuffer* cmdBuffer) override;
+    void waitIdle() override;
     std::shared_ptr<ITexture> bindExternalHardwareBuffer(void* nativeBuffer) override;
     RHICapabilities getCapabilities() const override;
 
