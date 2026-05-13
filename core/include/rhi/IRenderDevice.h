@@ -103,6 +103,12 @@ public:
      * Safe to call without an active GL context (returns conservative defaults).
      */
     [[nodiscard]] virtual RHICapabilities getCapabilities() const = 0;
+
+    /**
+     * @brief Global resource synchronization.
+     * Flushes commands to the GPU and blocks until all previously submitted commands are complete.
+     */
+    virtual void waitIdle() = 0;
 };
 
 } // namespace rhi

@@ -17,6 +17,9 @@ typedef unsigned int GLbitfield;
 #define GL_VERTEX_SHADER 0x8B31
 #define GL_FRAGMENT_SHADER 0x8B30
 #define GL_COMPUTE_SHADER 0x91B9
+#define GL_GEOMETRY_SHADER 0x8DD9
+#define GL_TESS_CONTROL_SHADER 0x8E88
+#define GL_TESS_EVALUATION_SHADER 0x8E87
 #define GL_COMPILE_STATUS 0x8B81
 #define GL_LINK_STATUS 0x8B82
 #define GL_INFO_LOG_LENGTH 0x8B84
@@ -53,8 +56,6 @@ typedef unsigned int GLbitfield;
 #define GL_RGBA8 0x8058
 #define GL_LUMINANCE8 0x8040
 #define GL_BGRA8_EXT 0x80E1
-#define GL_RGB565 0x8D62
-#define GL_UNSIGNED_SHORT_5_6_5 0x8363
 #define GL_R16F 0x822D
 #define GL_RG16F 0x822F
 #define GL_RGBA16F 0x881A
@@ -188,7 +189,7 @@ static inline void glDeleteShader(GLuint shader) {}
 
 static inline GLuint glCreateProgram() { return 1; }
 static inline void glAttachShader(GLuint program, GLuint shader) {}
-void glDetachShader(GLuint program, GLuint shader);
+static inline void glDetachShader(GLuint program, GLuint shader) {}
 static inline void glLinkProgram(GLuint program) {}
 static inline void glGetProgramiv(GLuint program, GLenum pname, GLint* params) { if (params) *params = GL_TRUE; }
 static inline void glGetProgramInfoLog(GLuint program, GLsizei bufSize, GLsizei* length, GLchar* infoLog) {}
@@ -226,8 +227,8 @@ static inline void glBufferData(GLenum target, GLsizeiptr size, const void* data
 static inline void glBufferSubData(GLenum target, GLintptr offset, GLsizeiptr size, const void* data) {}
 static inline void glDeleteBuffers(GLsizei n, const GLuint* buffers) {}
 static inline void glBindBufferBase(GLenum target, GLuint index, GLuint buffer) {}
-void* glMapBufferRange(GLenum target, GLintptr offset, GLsizeiptr length, GLbitfield access);
-GLboolean glUnmapBuffer(GLenum target);
+static inline void* glMapBufferRange(GLenum target, GLintptr offset, GLsizeiptr length, GLbitfield access) { return (void*)0x1234; }
+static inline GLboolean glUnmapBuffer(GLenum target) { return GL_TRUE; }
 
 // Texture functions
 static inline void glGenTextures(GLsizei n, GLuint* textures) { for(int i=0; i<n; ++i) textures[i] = i+1; }
@@ -270,7 +271,7 @@ static inline void glFinish() {}
 static inline void glEnable(GLenum cap) {}
 static inline void glDisable(GLenum cap) {}
 static inline void glBlendFunc(GLenum sfactor, GLenum dfactor) {}
-static inline void glBlendFuncSeparate(GLenum srcRGB, GLenum dstRGB, GLenum srcAlpha, GLenum dstAlpha) {}
+static inline void glBlendFuncSeparate(GLenum sfactorRGB, GLenum dfactorRGB, GLenum sfactorAlpha, GLenum dfactorAlpha) {}
 static inline void glBlendEquation(GLenum mode) {}
 static inline void glBlendEquationSeparate(GLenum modeRGB, GLenum modeAlpha) {}
 static inline void glDepthMask(GLboolean flag) {}
@@ -288,11 +289,18 @@ static inline GLenum glGetError() { return 0; }
 static inline void glGetIntegerv(GLenum pname, GLint* data) {
     if (data) {
         if (pname == GL_MAX_SAMPLES) *data = 4;
+        else if (pname == 0x8D57) *data = 4; // also GL_MAX_SAMPLES
+        else if (pname == 0x821D) *data = 0; // GL_NUM_EXTENSIONS
+        else if (pname == 0x90EB) *data = 1024; // GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS
         else *data = 0;
     }
 }
-static inline const GLchar* glGetString(GLenum name) { return (const GLchar*)"Mock GL"; }
-static inline const GLchar* glGetStringi(GLenum name, GLuint index) { return (const GLchar*)"Mock Extension"; }
+static inline const GLchar* glGetString(GLenum name) {
+    if (name == GL_VERSION) return (const GLchar*)"OpenGL ES 3.1 Mock";
+    if (name == GL_RENDERER) return (const GLchar*)"Mock GL Renderer";
+    return (const GLchar*)"";
+}
+static inline const GLchar* glGetStringi(GLenum name, GLuint index) { return (const GLchar*)""; }
 static inline void glMemoryBarrier(GLbitfield barriers) {}
 static inline void glDispatchCompute(GLuint num_groups_x, GLuint num_groups_y, GLuint num_groups_z) {}
 static inline void glReadPixels(GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, void* pixels) {}

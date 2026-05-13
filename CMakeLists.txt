@@ -255,7 +255,6 @@ endif()
 if(USE_MOCK_GL)
     target_compile_definitions(video_sdk_core PUBLIC USE_MOCK_GL)
     target_include_directories(video_sdk_core PUBLIC ${CMAKE_SOURCE_DIR}/mock_gl)
-    target_sources(video_sdk_core PRIVATE mock_gl/src/gl3_stubs.cpp)
 endif()
 
 enable_testing()

@@ -2,7 +2,10 @@
 #include <cstdint>
 
 #include <string>
-#ifdef __APPLE__
+
+#ifdef USE_MOCK_GL
+    #include "GLES3/gl3.h"
+#elif defined(__APPLE__)
     #include <OpenGLES/ES3/gl.h>
     #include <OpenGLES/ES2/glext.h>
     #include <OpenGLES/ES3/glext.h>
@@ -43,6 +46,12 @@ struct Texture {
 #endif
 #ifndef GL_RG8
 #define GL_RG8 0x822B
+#endif
+#ifndef GL_RGB565
+#define GL_RGB565 0x8D62
+#endif
+#ifndef GL_UNSIGNED_SHORT_5_6_5
+#define GL_UNSIGNED_SHORT_5_6_5 0x8363
 #endif
 
 
