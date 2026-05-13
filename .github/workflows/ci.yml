@@ -80,7 +80,7 @@ jobs:
 
       - name: Run Android unit tests
         run: |
-          export ANDROID_HOME=$ANDROID_SDK_ROOT
+          export ANDROID_SDK_ROOT=$ANDROID_HOME
           ./gradlew :android:test --continue
 
       - name: Publish unit test results

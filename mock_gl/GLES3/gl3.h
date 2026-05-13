@@ -178,10 +178,6 @@ typedef unsigned int GLbitfield;
 extern "C" {
 #endif
 
-#ifndef USE_MOCK_GL
-#define USE_MOCK_GL
-#endif
-
 // Shader functions
 static inline GLuint glCreateShader(GLenum type) { return 1; }
 static inline void glShaderSource(GLuint shader, GLsizei count, const GLchar** string, const GLint* length) {}
@@ -192,7 +188,7 @@ static inline void glDeleteShader(GLuint shader) {}
 
 static inline GLuint glCreateProgram() { return 1; }
 static inline void glAttachShader(GLuint program, GLuint shader) {}
-static inline void glDetachShader(GLuint program, GLuint shader) {}
+void glDetachShader(GLuint program, GLuint shader);
 static inline void glLinkProgram(GLuint program) {}
 static inline void glGetProgramiv(GLuint program, GLenum pname, GLint* params) { if (params) *params = GL_TRUE; }
 static inline void glGetProgramInfoLog(GLuint program, GLsizei bufSize, GLsizei* length, GLchar* infoLog) {}
@@ -230,8 +226,8 @@ static inline void glBufferData(GLenum target, GLsizeiptr size, const void* data
 static inline void glBufferSubData(GLenum target, GLintptr offset, GLsizeiptr size, const void* data) {}
 static inline void glDeleteBuffers(GLsizei n, const GLuint* buffers) {}
 static inline void glBindBufferBase(GLenum target, GLuint index, GLuint buffer) {}
-static inline void* glMapBufferRange(GLenum target, GLintptr offset, GLsizeiptr length, GLbitfield access) { return NULL; }
-static inline GLboolean glUnmapBuffer(GLenum target) { return GL_TRUE; }
+void* glMapBufferRange(GLenum target, GLintptr offset, GLsizeiptr length, GLbitfield access);
+GLboolean glUnmapBuffer(GLenum target);
 
 // Texture functions
 static inline void glGenTextures(GLsizei n, GLuint* textures) { for(int i=0; i<n; ++i) textures[i] = i+1; }
@@ -289,7 +285,12 @@ static inline void glStencilOp(GLenum fail, GLenum zfail, GLenum zpass) {}
 
 // Misc functions
 static inline GLenum glGetError() { return 0; }
-static inline void glGetIntegerv(GLenum pname, GLint* data) { if (data) *data = 0; }
+static inline void glGetIntegerv(GLenum pname, GLint* data) {
+    if (data) {
+        if (pname == GL_MAX_SAMPLES) *data = 4;
+        else *data = 0;
+    }
+}
 static inline const GLchar* glGetString(GLenum name) { return (const GLchar*)"Mock GL"; }
 static inline const GLchar* glGetStringi(GLenum name, GLuint index) { return (const GLchar*)"Mock Extension"; }
 static inline void glMemoryBarrier(GLbitfield barriers) {}
