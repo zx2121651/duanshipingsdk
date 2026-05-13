@@ -178,122 +178,124 @@ typedef unsigned int GLbitfield;
 extern "C" {
 #endif
 
-// Forward declarations for functions defined in rhi/*.cpp with weak linkage.
-void glDetachShader(GLuint program, GLuint shader);
-void* glMapBufferRange(GLenum target, GLintptr offset, GLsizeiptr length, GLbitfield access);
-GLboolean glUnmapBuffer(GLenum target);
+#ifndef USE_MOCK_GL
+#define USE_MOCK_GL
+#endif
+
+// Shader functions
+static inline GLuint glCreateShader(GLenum type) { return 1; }
+static inline void glShaderSource(GLuint shader, GLsizei count, const GLchar** string, const GLint* length) {}
+static inline void glCompileShader(GLuint shader) {}
+static inline void glGetShaderiv(GLuint shader, GLenum pname, GLint* params) { if (params) *params = GL_TRUE; }
+static inline void glGetShaderInfoLog(GLuint shader, GLsizei bufSize, GLsizei* length, GLchar* infoLog) {}
+static inline void glDeleteShader(GLuint shader) {}
+
+static inline GLuint glCreateProgram() { return 1; }
+static inline void glAttachShader(GLuint program, GLuint shader) {}
+static inline void glDetachShader(GLuint program, GLuint shader) {}
+static inline void glLinkProgram(GLuint program) {}
+static inline void glGetProgramiv(GLuint program, GLenum pname, GLint* params) { if (params) *params = GL_TRUE; }
+static inline void glGetProgramInfoLog(GLuint program, GLsizei bufSize, GLsizei* length, GLchar* infoLog) {}
+static inline void glUseProgram(GLuint program) {}
+static inline void glDeleteProgram(GLuint program) {}
+
+static inline GLint glGetAttribLocation(GLuint program, const GLchar* name) { return 0; }
+static inline GLint glGetUniformLocation(GLuint program, const GLchar* name) { return 0; }
+static inline void glEnableVertexAttribArray(GLuint index) {}
+static inline void glDisableVertexAttribArray(GLuint index) {}
+static inline void glVertexAttribPointer(GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void* pointer) {}
+
+static inline void glUniform1f(GLint location, GLfloat v0) {}
+static inline void glUniform2f(GLint location, GLfloat v0, GLfloat v1) {}
+static inline void glUniform3f(GLint location, GLfloat v0, GLfloat v1, GLfloat v2) {}
+static inline void glUniform4f(GLint location, GLfloat v0, GLfloat v1, GLfloat v2, GLfloat v3) {}
+static inline void glUniform1i(GLint location, GLint v0) {}
+static inline void glUniform2i(GLint location, GLint v0, GLint v1) {}
+static inline void glUniform3i(GLint location, GLint v0, GLint v1, GLint v2) {}
+static inline void glUniform4i(GLint location, GLint v0, GLint v1, GLint v2, GLint v3) {}
+static inline void glUniform1fv(GLint location, GLsizei count, const GLfloat* value) {}
+static inline void glUniform2fv(GLint location, GLsizei count, const GLfloat* value) {}
+static inline void glUniform3fv(GLint location, GLsizei count, const GLfloat* value) {}
+static inline void glUniform4fv(GLint location, GLsizei count, const GLfloat* value) {}
+static inline void glUniformMatrix3fv(GLint location, GLsizei count, GLboolean transpose, const GLfloat* value) {}
+static inline void glUniformMatrix4fv(GLint location, GLsizei count, GLboolean transpose, const GLfloat* value) {}
+
+static inline GLuint glGetUniformBlockIndex(GLuint program, const GLchar* uniformBlockName) { return 0; }
+static inline void glUniformBlockBinding(GLuint program, GLuint uniformBlockIndex, GLuint uniformBlockBinding) {}
+
+// Buffer functions
+static inline void glGenBuffers(GLsizei n, GLuint* buffers) { for(int i=0; i<n; ++i) buffers[i] = i+1; }
+static inline void glBindBuffer(GLenum target, GLuint buffer) {}
+static inline void glBufferData(GLenum target, GLsizeiptr size, const void* data, GLenum usage) {}
+static inline void glBufferSubData(GLenum target, GLintptr offset, GLsizeiptr size, const void* data) {}
+static inline void glDeleteBuffers(GLsizei n, const GLuint* buffers) {}
+static inline void glBindBufferBase(GLenum target, GLuint index, GLuint buffer) {}
+static inline void* glMapBufferRange(GLenum target, GLintptr offset, GLsizeiptr length, GLbitfield access) { return NULL; }
+static inline GLboolean glUnmapBuffer(GLenum target) { return GL_TRUE; }
+
+// Texture functions
+static inline void glGenTextures(GLsizei n, GLuint* textures) { for(int i=0; i<n; ++i) textures[i] = i+1; }
+static inline void glBindTexture(GLenum target, GLuint texture) {}
+static inline void glActiveTexture(GLenum texture) {}
+static inline void glTexParameteri(GLenum target, GLenum pname, GLint param) {}
+static inline void glTexImage2D(GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void* pixels) {}
+static inline void glTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void* pixels) {}
+static inline void glTexImage3D(GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLenum format, GLenum type, const void* pixels) {}
+static inline void glTexSubImage3D(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLenum type, const void* pixels) {}
+static inline void glCompressedTexImage2D(GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLint border, GLsizei imageSize, const void* data) {}
+static inline void glGenerateMipmap(GLenum target) {}
+static inline void glDeleteTextures(GLsizei n, const GLuint* textures) {}
+static inline void glPixelStorei(GLenum pname, GLint param) {}
+static inline void glTexStorage2DMultisample(GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLboolean fixedsamplelocations) {}
+
+// VAO functions
+static inline void glGenVertexArrays(GLsizei n, GLuint* arrays) { for(int i=0; i<n; ++i) arrays[i] = i+1; }
+static inline void glBindVertexArray(GLuint array) {}
+static inline void glDeleteVertexArrays(GLsizei n, const GLuint* arrays) {}
+
+// Framebuffer functions
+static inline void glGenFramebuffers(GLsizei n, GLuint* framebuffers) { for(int i=0; i<n; ++i) framebuffers[i] = i+1; }
+static inline void glBindFramebuffer(GLenum target, GLuint framebuffer) {}
+static inline void glFramebufferTexture2D(GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level) {}
+static inline GLenum glCheckFramebufferStatus(GLenum target) { return GL_FRAMEBUFFER_COMPLETE; }
+static inline void glDeleteFramebuffers(GLsizei n, const GLuint* framebuffers) {}
+static inline void glRenderbufferStorageMultisample(GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height) {}
+
+// Drawing functions
+static inline void glDrawArrays(GLenum mode, GLint first, GLsizei count) {}
+static inline void glDrawElements(GLenum mode, GLsizei count, GLenum type, const void* indices) {}
+static inline void glClear(GLbitfield mask) {}
+static inline void glClearColor(GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha) {}
+static inline void glViewport(GLint x, GLint y, GLsizei width, GLsizei height) {}
+static inline void glFlush() {}
+static inline void glFinish() {}
+
+// State functions
+static inline void glEnable(GLenum cap) {}
+static inline void glDisable(GLenum cap) {}
+static inline void glBlendFunc(GLenum sfactor, GLenum dfactor) {}
+static inline void glBlendFuncSeparate(GLenum srcRGB, GLenum dstRGB, GLenum srcAlpha, GLenum dstAlpha) {}
+static inline void glBlendEquation(GLenum mode) {}
+static inline void glBlendEquationSeparate(GLenum modeRGB, GLenum modeAlpha) {}
+static inline void glDepthMask(GLboolean flag) {}
+static inline void glDepthFunc(GLenum func) {}
+static inline void glColorMask(GLboolean red, GLboolean green, GLboolean blue, GLboolean alpha) {}
+static inline void glCullFace(GLenum mode) {}
+static inline void glFrontFace(GLenum mode) {}
+static inline void glScissor(GLint x, GLint y, GLsizei width, GLsizei height) {}
+static inline void glPolygonOffset(GLfloat factor, GLfloat units) {}
+static inline void glStencilFunc(GLenum func, GLint ref, GLuint mask) {}
+static inline void glStencilOp(GLenum fail, GLenum zfail, GLenum zpass) {}
+
+// Misc functions
+static inline GLenum glGetError() { return 0; }
+static inline void glGetIntegerv(GLenum pname, GLint* data) { if (data) *data = 0; }
+static inline const GLchar* glGetString(GLenum name) { return (const GLchar*)"Mock GL"; }
+static inline const GLchar* glGetStringi(GLenum name, GLuint index) { return (const GLchar*)"Mock Extension"; }
+static inline void glMemoryBarrier(GLbitfield barriers) {}
+static inline void glDispatchCompute(GLuint num_groups_x, GLuint num_groups_y, GLuint num_groups_z) {}
+static inline void glReadPixels(GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, void* pixels) {}
 
 #ifdef __cplusplus
 }
 #endif
-
-// Shader functions
-inline GLuint glCreateShader(GLenum type) { return 1; }
-inline void glShaderSource(GLuint shader, GLsizei count, const GLchar** string, const GLint* length) {}
-inline void glCompileShader(GLuint shader) {}
-inline void glGetShaderiv(GLuint shader, GLenum pname, GLint* params) { if (params) *params = GL_TRUE; }
-inline void glGetShaderInfoLog(GLuint shader, GLsizei bufSize, GLsizei* length, GLchar* infoLog) {}
-inline void glDeleteShader(GLuint shader) {}
-
-inline GLuint glCreateProgram() { return 1; }
-inline void glAttachShader(GLuint program, GLuint shader) {}
-inline void glLinkProgram(GLuint program) {}
-inline void glGetProgramiv(GLuint program, GLenum pname, GLint* params) { if (params) *params = GL_TRUE; }
-inline void glGetProgramInfoLog(GLuint program, GLsizei bufSize, GLsizei* length, GLchar* infoLog) {}
-inline void glUseProgram(GLuint program) {}
-inline void glDeleteProgram(GLuint program) {}
-
-inline GLint glGetAttribLocation(GLuint program, const GLchar* name) { return 0; }
-inline GLint glGetUniformLocation(GLuint program, const GLchar* name) { return 0; }
-inline void glEnableVertexAttribArray(GLuint index) {}
-inline void glDisableVertexAttribArray(GLuint index) {}
-inline void glVertexAttribPointer(GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void* pointer) {}
-
-inline void glUniform1f(GLint location, GLfloat v0) {}
-inline void glUniform2f(GLint location, GLfloat v0, GLfloat v1) {}
-inline void glUniform3f(GLint location, GLfloat v0, GLfloat v1, GLfloat v2) {}
-inline void glUniform4f(GLint location, GLfloat v0, GLfloat v1, GLfloat v2, GLfloat v3) {}
-inline void glUniform1i(GLint location, GLint v0) {}
-inline void glUniform2i(GLint location, GLint v0, GLint v1) {}
-inline void glUniform3i(GLint location, GLint v0, GLint v1, GLint v2) {}
-inline void glUniform4i(GLint location, GLint v0, GLint v1, GLint v2, GLint v3) {}
-inline void glUniform1fv(GLint location, GLsizei count, const GLfloat* value) {}
-inline void glUniform2fv(GLint location, GLsizei count, const GLfloat* value) {}
-inline void glUniform3fv(GLint location, GLsizei count, const GLfloat* value) {}
-inline void glUniform4fv(GLint location, GLsizei count, const GLfloat* value) {}
-inline void glUniformMatrix3fv(GLint location, GLsizei count, GLboolean transpose, const GLfloat* value) {}
-inline void glUniformMatrix4fv(GLint location, GLsizei count, GLboolean transpose, const GLfloat* value) {}
-
-inline GLuint glGetUniformBlockIndex(GLuint program, const GLchar* uniformBlockName) { return 0; }
-inline void glUniformBlockBinding(GLuint program, GLuint uniformBlockIndex, GLuint uniformBlockBinding) {}
-
-// Buffer functions
-inline void glGenBuffers(GLsizei n, GLuint* buffers) { for(int i=0; i<n; ++i) buffers[i] = i+1; }
-inline void glBindBuffer(GLenum target, GLuint buffer) {}
-inline void glBufferData(GLenum target, GLsizeiptr size, const void* data, GLenum usage) {}
-inline void glBufferSubData(GLenum target, GLintptr offset, GLsizeiptr size, const void* data) {}
-inline void glDeleteBuffers(GLsizei n, const GLuint* buffers) {}
-inline void glBindBufferBase(GLenum target, GLuint index, GLuint buffer) {}
-
-// Texture functions
-inline void glGenTextures(GLsizei n, GLuint* textures) { for(int i=0; i<n; ++i) textures[i] = i+1; }
-inline void glBindTexture(GLenum target, GLuint texture) {}
-inline void glActiveTexture(GLenum texture) {}
-inline void glTexParameteri(GLenum target, GLenum pname, GLint param) {}
-inline void glTexImage2D(GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void* pixels) {}
-inline void glTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void* pixels) {}
-inline void glTexImage3D(GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLenum format, GLenum type, const void* pixels) {}
-inline void glTexSubImage3D(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLenum type, const void* pixels) {}
-inline void glCompressedTexImage2D(GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLint border, GLsizei imageSize, const void* data) {}
-inline void glGenerateMipmap(GLenum target) {}
-inline void glDeleteTextures(GLsizei n, const GLuint* textures) {}
-inline void glPixelStorei(GLenum pname, GLint param) {}
-inline void glTexStorage2DMultisample(GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLboolean fixedsamplelocations) {}
-
-// VAO functions
-inline void glGenVertexArrays(GLsizei n, GLuint* arrays) { for(int i=0; i<n; ++i) arrays[i] = i+1; }
-inline void glBindVertexArray(GLuint array) {}
-inline void glDeleteVertexArrays(GLsizei n, const GLuint* arrays) {}
-
-// Framebuffer functions
-inline void glGenFramebuffers(GLsizei n, GLuint* framebuffers) { for(int i=0; i<n; ++i) framebuffers[i] = i+1; }
-inline void glBindFramebuffer(GLenum target, GLuint framebuffer) {}
-inline void glFramebufferTexture2D(GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level) {}
-inline GLenum glCheckFramebufferStatus(GLenum target) { return GL_FRAMEBUFFER_COMPLETE; }
-inline void glDeleteFramebuffers(GLsizei n, const GLuint* framebuffers) {}
-inline void glRenderbufferStorageMultisample(GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height) {}
-
-// Drawing functions
-inline void glDrawArrays(GLenum mode, GLint first, GLsizei count) {}
-inline void glDrawElements(GLenum mode, GLsizei count, GLenum type, const void* indices) {}
-inline void glClear(GLbitfield mask) {}
-inline void glClearColor(GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha) {}
-inline void glViewport(GLint x, GLint y, GLsizei width, GLsizei height) {}
-inline void glFlush() {}
-inline void glFinish() {}
-
-// State functions
-inline void glEnable(GLenum cap) {}
-inline void glDisable(GLenum cap) {}
-inline void glBlendFunc(GLenum sfactor, GLenum dfactor) {}
-inline void glBlendFuncSeparate(GLenum srcRGB, GLenum dstRGB, GLenum srcAlpha, GLenum dstAlpha) {}
-inline void glBlendEquation(GLenum mode) {}
-inline void glBlendEquationSeparate(GLenum modeRGB, GLenum modeAlpha) {}
-inline void glDepthMask(GLboolean flag) {}
-inline void glDepthFunc(GLenum func) {}
-inline void glColorMask(GLboolean red, GLboolean green, GLboolean blue, GLboolean alpha) {}
-inline void glCullFace(GLenum mode) {}
-inline void glFrontFace(GLenum mode) {}
-inline void glScissor(GLint x, GLint y, GLsizei width, GLsizei height) {}
-inline void glPolygonOffset(GLfloat factor, GLfloat units) {}
-inline void glStencilFunc(GLenum func, GLint ref, GLuint mask) {}
-inline void glStencilOp(GLenum fail, GLenum zfail, GLenum zpass) {}
-
-// Misc functions
-inline GLenum glGetError() { return 0; }
-inline void glGetIntegerv(GLenum pname, GLint* data) { if (data) *data = 0; }
-inline const GLchar* glGetString(GLenum name) { return (const GLchar*)"Mock GL"; }
-inline const GLchar* glGetStringi(GLenum name, GLuint index) { return (const GLchar*)"Mock Extension"; }
-inline void glMemoryBarrier(GLbitfield barriers) {}
-inline void glDispatchCompute(GLuint num_groups_x, GLuint num_groups_y, GLuint num_groups_z) {}
-inline void glReadPixels(GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, void* pixels) {}

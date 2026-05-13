@@ -43,6 +43,7 @@
 #define GL_HALF_FLOAT 0x140B
 #endif
 
+
 // Helper: map BlendFactor enum to GL constant
 static GLenum toGLBlendFactor(sdk::video::rhi::BlendFactor f) {
     using BF = sdk::video::rhi::BlendFactor;

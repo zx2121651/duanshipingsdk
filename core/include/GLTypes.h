@@ -25,6 +25,26 @@ struct Texture {
     uint32_t height;
 };
 
+// --- Missing GLES tokens on some platforms/configurations ---
+#ifndef GL_LUMINANCE8
+#define GL_LUMINANCE8 0x8040
+#endif
+#ifndef GL_LUMINANCE
+#define GL_LUMINANCE 0x1909
+#endif
+#ifndef GL_BGRA8_EXT
+#define GL_BGRA8_EXT 0x80E1
+#endif
+#ifndef GL_BGRA_EXT
+#define GL_BGRA_EXT 0x80E1
+#endif
+#ifndef GL_R8
+#define GL_R8 0x8229
+#endif
+#ifndef GL_RG8
+#define GL_RG8 0x822B
+#endif
+
 
 // ----------------------------------------------------------------------------
 // SDK 统一错误码字典 (Unified Error Code Dictionary)
