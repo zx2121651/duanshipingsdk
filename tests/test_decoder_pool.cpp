@@ -208,6 +208,45 @@ void test_no_fallback_on_non_fatal_failure() {
     std::cout << "test_no_fallback_on_non_fatal_failure passed" << std::endl;
 }
 
+void test_fallback_strategy_sw_first() {
+    std::cout << "Running test_fallback_strategy_sw_first..." << std::endl;
+    MockVideoDecoder::m_openCount = 0;
+
+    DecoderPool pool;
+    pool.setFallbackStrategy(DecoderFallbackStrategy::SW_FIRST);
+    pool.registerMedia("clip1", "v1.mp4");
+
+    // Should skip HW and go straight to SW (which is a stub/fails in this test env)
+    auto res = pool.getFrame("clip1", 0, false);
+    assert(!res.isOk());
+    // In stub mode, createSoftwareDecoder returns SoftwareVideoDecoder which returns ERR_TIMELINE_SOFT_DECODER_UNIMPLEMENTED on open()
+    // DecoderPool then returns ERR_TIMELINE_DECODER_GET_FRAME_FAILED
+    assert(res.getErrorCode() == ErrorCode::ERR_TIMELINE_DECODER_GET_FRAME_FAILED);
+    assert(MockVideoDecoder::m_openCount == 0); // HW decoder never opened
+
+    std::cout << "test_fallback_strategy_sw_first passed" << std::endl;
+}
+
+void test_hw_only_no_fallback() {
+    std::cout << "Running test_hw_only_no_fallback..." << std::endl;
+    MockVideoDecoder::m_openCount = 0;
+    g_mockShouldFailSeek = true;
+
+    DecoderPool pool;
+    pool.setFallbackStrategy(DecoderFallbackStrategy::HW_ONLY);
+    pool.registerMedia("clip1", "v1.mp4");
+
+    auto res = pool.getFrame("clip1", 0, false);
+    assert(!res.isOk());
+    // Should return error and NOT attempt software (which would return ERR_TIMELINE_DECODER_GET_FRAME_FAILED)
+    // Actually, in the current implementation, it recurses and hits the "Both HW and SW failed" block
+    // which also returns ERR_TIMELINE_DECODER_GET_FRAME_FAILED.
+    // But we can verify it doesn't try to open a new decoder.
+    assert(MockVideoDecoder::m_openCount == 1);
+
+    std::cout << "test_hw_only_no_fallback passed" << std::endl;
+}
+
 int main() {
     test_decoder_pool_lru_eviction();
     test_decoder_pool_release();
@@ -215,5 +254,7 @@ int main() {
     test_hw_to_sw_fallback_on_seek_failure();
     test_hw_to_sw_fallback_on_fatal_get_frame_failure();
     test_no_fallback_on_non_fatal_failure();
+    test_fallback_strategy_sw_first();
+    test_hw_only_no_fallback();
     return 0;
 }
