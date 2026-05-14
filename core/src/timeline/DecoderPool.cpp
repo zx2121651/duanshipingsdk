@@ -21,19 +21,19 @@ namespace timeline {
 extern std::shared_ptr<VideoDecoder> createPlatformDecoder();
 
 // FFmpegVideoDecoder 工厂实现 (由 FFmpegVideoDecoder.cpp 提供)
-// 在单测中，该符号会被 test_decoder_pool.cpp 中的 Mock 实现覆盖（利用弱符号或直接链接）
-#if !defined(UNIT_TEST)
 #if defined(HAS_FFMPEG_DECODER)
 extern std::shared_ptr<VideoDecoder> createSoftwareDecoder_FFmpeg();
 #else
-// 如果未集成 FFmpeg 且非测试环境，则使用 SoftwareVideoDecoder 作为占位 stub
-std::shared_ptr<VideoDecoder> createSoftwareDecoder_FFmpeg() {
+// 如果未集成 FFmpeg，则提供弱符号实现，允许单元测试通过 Mock 覆盖
+// 弱符号 (Weak Symbol) 允许链接器在发现同名的强符号（如测试中的 Mock）时优先使用强符号
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((weak)) std::shared_ptr<VideoDecoder> createSoftwareDecoder_FFmpeg() {
     return std::make_shared<SoftwareVideoDecoder>();
 }
-#endif
 #else
-// 测试环境下声明为外部符号，由测试二进制提供实现
+// MSVC 或其他平台不支持 weak 属性时，仅作声明，此时如果缺少实现会链接失败
 extern std::shared_ptr<VideoDecoder> createSoftwareDecoder_FFmpeg();
+#endif
 #endif
 
 DecoderPool::DecoderPool() {}
