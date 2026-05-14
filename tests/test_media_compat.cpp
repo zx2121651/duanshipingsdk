@@ -319,10 +319,15 @@ static void tc_c08_decoder_pool_stress() {
 // TC-C09: TemplateEngine 批量加载测试 — 确保 13 个模板全部解析成功
 // ---------------------------------------------------------------------------
 static void tc_c09_template_bulk_load() {
-    auto templates = TemplateEngine::loadAllFromDirectory("assets/templates");
+    std::string path = "assets/templates";
+    auto templates = TemplateEngine::loadAllFromDirectory(path);
+    if (templates.empty()) {
+        path = "../assets/templates";
+        templates = TemplateEngine::loadAllFromDirectory(path);
+    }
 
     // We expect 3 original + 10 new = 13 templates
-    std::cout << "TC-C09: Loaded " << templates.size() << " templates from assets/templates" << std::endl;
+    std::cout << "TC-C09: Loaded " << templates.size() << " templates from " << path << std::endl;
     assert(templates.size() >= 13);
 
     for (const auto& tmpl : templates) {
