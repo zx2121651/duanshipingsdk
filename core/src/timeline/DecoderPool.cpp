@@ -21,12 +21,12 @@ namespace timeline {
 extern std::shared_ptr<VideoDecoder> createPlatformDecoder();
 
 // FFmpegVideoDecoder 工厂（FFmpegVideoDecoder.cpp 编译时提供，否则 stub）
-#ifdef HAS_FFMPEG_DECODER
+#if defined(HAS_FFMPEG_DECODER)
 extern std::shared_ptr<VideoDecoder> createSoftwareDecoder_FFmpeg();
 #endif
 
 std::shared_ptr<VideoDecoder> createSoftwareDecoder() {
-#ifdef HAS_FFMPEG_DECODER
+#if defined(HAS_FFMPEG_DECODER)
     return createSoftwareDecoder_FFmpeg();
 #else
     return std::make_shared<SoftwareVideoDecoder>();

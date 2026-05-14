@@ -66,6 +66,10 @@ enum class ColorWriteMask : uint32_t {
     RGB   = 0x7
 };
 
+inline uint32_t operator&(ColorWriteMask lhs, uint32_t rhs) {
+    return static_cast<uint32_t>(lhs) & rhs;
+}
+
 class IShaderResourceSet {
 public:
     virtual ~IShaderResourceSet() = default;
@@ -107,6 +111,15 @@ struct DepthStencilDesc {
     bool stencilTestEnabled = false;       // compat shortcut; use stencilFront/back for full control
     StencilDesc stencilFront;
     StencilDesc stencilBack;
+};
+
+enum class PrimitiveTopology {
+    PointList,
+    LineList,
+    LineStrip,
+    TriangleList,
+    TriangleStrip,
+    TriangleFan
 };
 
 struct RasterizerDesc {

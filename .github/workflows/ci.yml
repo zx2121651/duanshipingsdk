@@ -79,9 +79,9 @@ jobs:
           restore-keys: gradle-
 
       - name: Run Android unit tests
-        run: ./gradlew :android:test --continue
-        env:
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
+        run: |
+          export ANDROID_SDK_ROOT=$ANDROID_HOME
+          ./gradlew :android:test --continue
 
       - name: Publish unit test results
         if: always()

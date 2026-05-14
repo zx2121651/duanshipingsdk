@@ -205,6 +205,12 @@ void VulkanRenderDevice::submit(ICommandBuffer* cmdBuffer) {
     if (vkCmd) vkCmd->flush(m_ctx.graphicsQueue());
 }
 
+void VulkanRenderDevice::waitIdle() {
+    if (m_ctx.device() != VK_NULL_HANDLE) {
+        vkDeviceWaitIdle(m_ctx.device());
+    }
+}
+
 std::shared_ptr<ITexture> VulkanRenderDevice::bindExternalHardwareBuffer(void* /*nativeBuffer*/) {
     std::cerr << "VulkanRenderDevice::bindExternalHardwareBuffer — not implemented" << std::endl;
     return nullptr;

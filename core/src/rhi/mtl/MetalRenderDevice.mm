@@ -108,6 +108,13 @@ void MetalRenderDevice::submit(ICommandBuffer* cmdBuffer) {
     if (mtlCmd) mtlCmd->commit();
 }
 
+void MetalRenderDevice::waitIdle() {
+    // There is no global waitIdle in Metal; submit an empty command buffer and wait for its completion.
+    MTLCommandBufferRef cmdbuf = [m_commandQueue commandBuffer];
+    [cmdbuf commit];
+    [cmdbuf waitUntilCompleted];
+}
+
 std::shared_ptr<ITexture> MetalRenderDevice::bindExternalHardwareBuffer(void* nativeBuffer) {
     // On iOS, nativeBuffer is a CVPixelBufferRef or IOSurface
     // Use CVMetalTextureCache for zero-copy binding (simplified stub here)

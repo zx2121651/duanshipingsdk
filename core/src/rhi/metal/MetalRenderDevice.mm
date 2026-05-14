@@ -193,6 +193,16 @@ std::shared_ptr<ITexture> MetalRenderDevice::createMSAATexture(
 void MetalRenderDevice::submit(ICommandBuffer* /*cmdBuffer*/) {
     // ICommandBuffer bridge not yet implemented; Metal commands are submitted via MTLCommandQueue
 }
+
+void MetalRenderDevice::waitIdle() {
+    if (m_commandQueue) {
+        id<MTLCommandQueue> cq = (__bridge id<MTLCommandQueue>)m_commandQueue;
+        id<MTLCommandBuffer> cb = [cq commandBuffer];
+        [cb commit];
+        [cb waitUntilCompleted];
+    }
+}
+
 std::shared_ptr<ITexture> MetalRenderDevice::bindExternalHardwareBuffer(
     void* /*nativeBuffer*/)
 {

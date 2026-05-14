@@ -157,7 +157,6 @@ set(CORE_SOURCES
     core/src/rhi/GLVertexArray.cpp
     core/src/rhi/GLShaderProgram.cpp
     core/src/rhi/RenderDeviceFactory.cpp
-    core/src/timeline/FFmpegVideoDecoder.cpp
     core/src/ai/TfliteInferenceEngine.cpp
     core/src/ai/SegmentationFilter.cpp
     core/src/ai/BeautyFilter.cpp
@@ -243,6 +242,7 @@ endif()
 # FFmpeg 条件链接
 if(HAS_FFMPEG)
     target_compile_definitions(video_sdk_core PUBLIC HAS_FFMPEG_DECODER)
+    target_sources(video_sdk_core PRIVATE core/src/timeline/FFmpegVideoDecoder.cpp)
     target_include_directories(video_sdk_core PUBLIC ${FFMPEG_INCLUDE_DIR})
     target_link_libraries(video_sdk_core
         ${FFMPEG_AVCODEC_LIB}
@@ -253,6 +253,7 @@ if(HAS_FFMPEG)
 endif()
 
 if(USE_MOCK_GL)
+    target_compile_definitions(video_sdk_core PUBLIC USE_MOCK_GL)
     target_include_directories(video_sdk_core PUBLIC ${CMAKE_SOURCE_DIR}/mock_gl)
 endif()
 

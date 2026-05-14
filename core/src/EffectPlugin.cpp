@@ -47,8 +47,8 @@ struct JsonVal {
     std::string                             str;
     double                                  num = 0.0;
     bool                                    b   = false;
-    std::unordered_map<std::string, JsonVal> obj;
-    std::vector<JsonVal>                    arr;
+    std::unordered_map<std::string, std::shared_ptr<JsonVal>> obj;
+    std::vector<std::shared_ptr<JsonVal>>                     arr;
 };
 
 static void skipWS(const char*& p) {
@@ -80,7 +80,7 @@ static JsonVal parseObject(const char*& p) {
         skipWS(p);
         if (*p == ':') ++p;
         skipWS(p);
-        v.obj[key] = parseValue(p);
+        v.obj[key] = std::make_shared<JsonVal>(parseValue(p));
     }
     return v;
 }
@@ -92,7 +92,7 @@ static JsonVal parseArray(const char*& p) {
         skipWS(p);
         if (*p == ']') { ++p; break; }
         if (*p == ',') { ++p; continue; }
-        v.arr.push_back(parseValue(p));
+        v.arr.push_back(std::make_shared<JsonVal>(parseValue(p)));
     }
     return v;
 }
@@ -142,7 +142,7 @@ EffectPluginDesc EffectPluginManager::parseManifest(const std::string& json) con
     auto g = [&](const std::string& key) -> const JsonVal& {
         static JsonVal empty;
         auto it = root.obj.find(key);
-        return it != root.obj.end() ? it->second : empty;
+        return it != root.obj.end() ? *it->second : empty;
     };
 
     desc.id            = getStr(g("id"));
@@ -154,13 +154,14 @@ EffectPluginDesc EffectPluginManager::parseManifest(const std::string& json) con
 
     auto& layers = g("layers");
     if (layers.type == JsonVal::Arr) {
-        for (auto& lv : layers.arr) {
+        for (auto& lvPtr : layers.arr) {
+            auto& lv = *lvPtr;
             if (lv.type != JsonVal::Obj) continue;
             EffectLayerDesc ld;
             auto getL = [&](const std::string& k) -> const JsonVal& {
                 static JsonVal empty2;
                 auto it2 = lv.obj.find(k);
-                return it2 != lv.obj.end() ? it2->second : empty2;
+                return it2 != lv.obj.end() ? *it2->second : empty2;
             };
             ld.type      = parseLayerType(getStr(getL("type")));
             ld.intensity = getL("intensity").type==JsonVal::Num ? getF(getL("intensity")) : 1.f;
@@ -192,9 +193,11 @@ EffectPluginDesc EffectPluginManager::parseManifest(const std::string& json) con
                 // ── animated frames ────────────────────────────────────────
                 auto& framesVal = getL("frames");
                 if (framesVal.type == JsonVal::Arr) {
-                    for (auto& fv : framesVal.arr)
+                    for (auto& fvPtr : framesVal.arr) {
+                        auto& fv = *fvPtr;
                         if (fv.type == JsonVal::Str)
                             ld.animFrames.push_back(fv.str);
+                    }
                 }
                 if (getL("frame_rate").type == JsonVal::Num)
                     ld.animFps = getF(getL("frame_rate"));
@@ -213,7 +216,7 @@ EffectPluginDesc EffectPluginManager::parseManifest(const std::string& json) con
                 auto fillColor = [&](const std::string& key, float* rgba) {
                     auto& cv = getL(key);
                     if (cv.type==JsonVal::Arr && cv.arr.size()>=4) {
-                        for (int i=0;i<4;++i) rgba[i] = getF(cv.arr[i]);
+                        for (int i=0;i<4;++i) rgba[i] = getF(*cv.arr[i]);
                     }
                 };
                 fillColor("lipColor",       ld.lipColor);

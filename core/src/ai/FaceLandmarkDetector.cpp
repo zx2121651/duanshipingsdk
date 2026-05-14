@@ -368,16 +368,32 @@ LandmarkFrameResult FaceLandmarkDetector::runTFLite(
 }
 
 // ---------------------------------------------------------------------------
-// 坐标解码（TFLite 输出 → 归一化 FaceLandmark）
+// 坐标解码（TFLite 输出 → 像素坐标 FaceLandmark）
+// 支持两种格式：
+//   1. [x0, y0, x1, y1, ...] (outLen = 212)
+//   2. [x0, y0, s0, x1, y1, s1, ...] (outLen = 318)
 // ---------------------------------------------------------------------------
 void FaceLandmarkDetector::decodeLandmarks(const float* out, int outLen,
                                             int imgW, int imgH, FaceResult& face)
 {
-    (void)imgW; (void)imgH; (void)outLen;
-    for (int i = 0; i < kFaceLandmarkCount; ++i) {
-        face.landmarks[i].x     = out[i * 2 + 0]; // already normalized [0,1]
-        face.landmarks[i].y     = out[i * 2 + 1];
-        face.landmarks[i].score = (outLen > kFaceLandmarkCount * 2) ? out[kFaceLandmarkCount * 2 + i] : 1.0f;
+    if (outLen == kFaceLandmarkCount * 2) {
+        for (int i = 0; i < kFaceLandmarkCount; ++i) {
+            face.landmarks[i].x     = out[i * 2 + 0] * (float)imgW;
+            face.landmarks[i].y     = out[i * 2 + 1] * (float)imgH;
+            face.landmarks[i].score = 1.0f;
+        }
+    } else if (outLen == kFaceLandmarkCount * 3) {
+        for (int i = 0; i < kFaceLandmarkCount; ++i) {
+            float x     = out[i * 3 + 0];
+            float y     = out[i * 3 + 1];
+            float s     = out[i * 3 + 2];
+            face.landmarks[i].x     = x * (float)imgW;
+            face.landmarks[i].y     = y * (float)imgH;
+            // 置信度过滤：低于 0.5 的点视为无效（score=0）
+            face.landmarks[i].score = (s < 0.5f) ? 0.0f : s;
+        }
+    } else {
+        LOGE("FaceLandmarkDetector: unexpected output length %d", outLen);
     }
     face.detected   = true;
     face.faceScore  = 1.0f;

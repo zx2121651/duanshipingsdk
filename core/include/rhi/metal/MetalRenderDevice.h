@@ -65,6 +65,7 @@ public:
     [[nodiscard]] std::shared_ptr<ITexture> createMSAATexture(
         const TextureDesc& desc, int samples) override;
     void submit(ICommandBuffer* cmdBuffer) override;
+    void waitIdle() override;
     [[nodiscard]] std::shared_ptr<ITexture> bindExternalHardwareBuffer(
         void* nativeBuffer) override;
     [[nodiscard]] RHICapabilities getCapabilities() const override;

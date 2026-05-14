@@ -43,6 +43,7 @@
 #define GL_HALF_FLOAT 0x140B
 #endif
 
+
 // Helper: map BlendFactor enum to GL constant
 static GLenum toGLBlendFactor(sdk::video::rhi::BlendFactor f) {
     using BF = sdk::video::rhi::BlendFactor;
@@ -310,11 +311,13 @@ void GLCommandBuffer::drawIndexed(uint32_t indexCount, IndexType indexType) {
 
 void GLCommandBuffer::dispatchCompute(uint32_t numGroupsX, uint32_t numGroupsY, uint32_t numGroupsZ) {
     // Compute dispatch is a command-buffer responsibility (not IShaderProgram's)
-#if !defined(__APPLE__) && !defined(_MSC_VER)
+#if !defined(__APPLE__) && !defined(_MSC_VER) && !defined(USE_MOCK_GL)
     extern void glDispatchCompute(GLuint, GLuint, GLuint) __attribute__((weak));
     if (glDispatchCompute) {
         glDispatchCompute(numGroupsX, numGroupsY, numGroupsZ);
     }
+#elif defined(USE_MOCK_GL)
+    glDispatchCompute(numGroupsX, numGroupsY, numGroupsZ);
 #else
     (void)numGroupsX; (void)numGroupsY; (void)numGroupsZ;
 #endif
@@ -769,6 +772,10 @@ RHICapabilities GLRenderDevice::getCapabilities() const {
     caps.astc = (major >= 3 && minor >= 2) || hasExt("GL_KHR_texture_compression_astc_ldr");
 
     return caps;
+}
+
+void GLRenderDevice::waitIdle() {
+    glFinish();
 }
 
 } // namespace rhi
