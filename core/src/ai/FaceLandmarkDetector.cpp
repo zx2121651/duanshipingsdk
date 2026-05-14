@@ -381,29 +381,57 @@ void FaceLandmarkDetector::decodeLandmarks(const float* out, int outLen,
         return;
     }
 
+    int numValidPoints = 0;
+    float minX = 1.0f, minY = 1.0f, maxX = 0.0f, maxY = 0.0f;
+
     if (outLen == kFaceLandmarkCount * 2) {
         for (int i = 0; i < kFaceLandmarkCount; ++i) {
-            face.landmarks[i].x     = out[i * 2 + 0] * (float)imgW;
-            face.landmarks[i].y     = out[i * 2 + 1] * (float)imgH;
-            face.landmarks[i].score = 1.0f;
-        }
-        face.detected   = true;
-        face.faceScore  = 1.0f;
-    } else if (outLen == kFaceLandmarkCount * 3) {
-        for (int i = 0; i < kFaceLandmarkCount; ++i) {
-            float x     = out[i * 3 + 0];
-            float y     = out[i * 3 + 1];
-            float s     = out[i * 3 + 2];
+            float x = out[i * 2 + 0];
+            float y = out[i * 2 + 1];
             face.landmarks[i].x     = x * (float)imgW;
             face.landmarks[i].y     = y * (float)imgH;
-            // 置信度过滤：低于 0.5 的点视为无效（score=0）
-            face.landmarks[i].score = (s < 0.5f) ? 0.0f : s;
+            face.landmarks[i].score = 1.0f;
+
+            minX = std::min(minX, x);
+            minY = std::min(minY, y);
+            maxX = std::max(maxX, x);
+            maxY = std::max(maxY, y);
+            numValidPoints++;
         }
-        face.detected   = true;
-        face.faceScore  = 1.0f;
+    } else if (outLen == kFaceLandmarkCount * 3) {
+        for (int i = 0; i < kFaceLandmarkCount; ++i) {
+            float x = out[i * 3 + 0];
+            float y = out[i * 3 + 1];
+            float s = out[i * 3 + 2];
+            face.landmarks[i].x     = x * (float)imgW;
+            face.landmarks[i].y     = y * (float)imgH;
+
+            if (s >= 0.5f) {
+                face.landmarks[i].score = s;
+                minX = std::min(minX, x);
+                minY = std::min(minY, y);
+                maxX = std::max(maxX, x);
+                maxY = std::max(maxY, y);
+                numValidPoints++;
+            } else {
+                face.landmarks[i].score = 0.0f;
+            }
+        }
     } else {
         LOGE("FaceLandmarkDetector: unexpected output length %d", outLen);
-        face.detected   = false;
+        face.detected = false;
+        return;
+    }
+
+    if (numValidPoints > 0) {
+        face.detected = true;
+        face.faceScore = 1.0f;
+        face.boundingBox[0] = minX;
+        face.boundingBox[1] = minY;
+        face.boundingBox[2] = maxX - minX;
+        face.boundingBox[3] = maxY - minY;
+    } else {
+        face.detected = false;
     }
 }
 
