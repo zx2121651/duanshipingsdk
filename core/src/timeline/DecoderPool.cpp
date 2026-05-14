@@ -159,26 +159,28 @@ ResultPayload<Texture> DecoderPool::getFrame(const std::string& clipId, int64_t 
             auto openRes = ctx->softDecoder->open(ctx->sourcePath);
             if (!openRes.isOk()) {
                 LOGE("Failed to open Software Decoder for clip %s: %s", clipId.c_str(), openRes.getMessage().c_str());
-                return ResultPayload<Texture>::error(ErrorCode::ERR_TIMELINE_DECODER_GET_FRAME_FAILED, "Failed to open software decoder for " + clipId + ": " + openRes.getMessage());
+                return ResultPayload<Texture>::error(openRes.getErrorCode(), "Failed to open software decoder for " + clipId + ": " + openRes.getMessage());
             }
             LOGI("Falling back to Software Decoder for clip %s (HW failed: %d, Exact seek: %d)", clipId.c_str(), ctx->hwFailed, requiresExactSeek);
         }
+
+        // 软件解码器通常需要先 seek 到目标位置附近，除非是连续播放且时间戳单调递增
+        // FFmpegVideoDecoder::getFrameAt 内部是向后查找，如果 timeNs < 当前 pts 则必须 seek
         Result seekRes = ctx->softDecoder->seekExact(localTimeNs);
-        if (seekRes.isOk()) {
-            auto frameRes = ctx->softDecoder->getFrameAt(localTimeNs);
-            if (frameRes.isOk()) {
-                Texture tex = frameRes.getValue();
-                ctx->lastDecodedFrame = tex;
-                ctx->lastDecodedTimeNs = localTimeNs;
-                ctx->isInitialized = true;
-                return frameRes;
-            }
-            LOGE("Software decoder returned error for clip %s at %lld: %s", clipId.c_str(), (long long)localTimeNs, frameRes.getMessage().c_str());
-            return frameRes;
-        } else {
+        if (!seekRes.isOk()) {
             LOGE("Software seek failed for clip %s to %lld: %s", clipId.c_str(), (long long)localTimeNs, seekRes.getMessage().c_str());
-            return ResultPayload<Texture>::error(ErrorCode::ERR_DECODER_SEEK_FAILED, "Software seek failed for " + clipId + ": " + seekRes.getMessage());
+            return ResultPayload<Texture>::error(seekRes.getErrorCode(), "Software seek failed for " + clipId + ": " + seekRes.getMessage());
         }
+
+        auto frameRes = ctx->softDecoder->getFrameAt(localTimeNs);
+        if (frameRes.isOk()) {
+            ctx->lastDecodedFrame = frameRes.getValue();
+            ctx->lastDecodedTimeNs = localTimeNs;
+            ctx->isInitialized = true;
+        } else {
+            LOGE("Software decoder returned error for clip %s at %lld: %s", clipId.c_str(), (long long)localTimeNs, frameRes.getMessage().c_str());
+        }
+        return frameRes;
     }
 
     if (!ctx->decoder && !ctx->hwFailed) {
