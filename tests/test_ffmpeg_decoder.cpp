@@ -57,13 +57,13 @@ static void fail(const std::string& name, const std::string& msg) {
 }
 
 // ---------------------------------------------------------------------------
-// Test 1: createSoftwareDecoder() 工厂可以构造出非空对象
+// Test 1: 工厂返回检测 — createSoftwareDecoder() 必须返回非空对象
 // ---------------------------------------------------------------------------
 static bool test_factory_not_null() {
-    const std::string kName = "createSoftwareDecoder_FFmpeg() not null";
+    const std::string kName = "Test 1: factory return check";
     auto dec = createSoftwareDecoder_FFmpeg();
     if (!dec) {
-        fail(kName, "returned nullptr");
+        fail(kName, "createSoftwareDecoder_FFmpeg() returned nullptr");
         return false;
     }
     pass(kName);
@@ -71,18 +71,21 @@ static bool test_factory_not_null() {
 }
 
 // ---------------------------------------------------------------------------
-// Test 2: 用无效路径 open() — 应返回 ERR_DECODER_OPEN_FAILED
+// Test 2: 无效路径检测 — open() 预期返回 ERR_DECODER_OPEN_FAILED
 // ---------------------------------------------------------------------------
 static bool test_open_invalid_path() {
-    const std::string kName = "open(invalid_path) returns ERR_DECODER_OPEN_FAILED";
+    const std::string kName = "Test 2: invalid path check";
     auto dec = createSoftwareDecoder_FFmpeg();
     if (!dec) { fail(kName, "factory returned nullptr"); return false; }
 
     auto res = dec->open("/nonexistent/path/video.mp4");
     if (res.isOk()) {
-        fail(kName, "Expected error but got ok");
+        fail(kName, "Expected error for invalid path, but got OK");
         return false;
     }
+
+    // 无论是 FFmpeg 实现还是 Stub，失败时都不应返回 OK
+    // 如果是 FFmpeg 实现，应返回具体的 OPEN_FAILED
 #ifdef HAS_FFMPEG_DECODER
     if (res.getErrorCode() != ErrorCode::ERR_DECODER_OPEN_FAILED) {
         fail(kName, "Expected ERR_DECODER_OPEN_FAILED but got " + std::to_string(res.getErrorCode()));
@@ -104,6 +107,10 @@ static bool test_seek_without_open() {
     auto res = dec->seekExact(1000);
     if (res.isOk()) {
         fail(kName, "Expected error but got ok");
+        return false;
+    }
+    if (res.getMessage().find("not open") == std::string::npos) {
+        fail(kName, "Expected error message to mention 'not open', but got: " + res.getMessage());
         return false;
     }
     pass(kName);
@@ -173,17 +180,17 @@ static bool test_decoder_pool_register_release() {
 }
 
 // ---------------------------------------------------------------------------
-// Test 6: close() 可多次调用不崩溃
+// Test 6: Double Close 检测 — close() 可多次调用不崩溃且状态安全
 // ---------------------------------------------------------------------------
 static bool test_double_close() {
-    const std::string kName = "test_double_close (no crash)";
+    const std::string kName = "Test 6: double close stability";
     auto dec = createSoftwareDecoder_FFmpeg();
     if (!dec) { fail(kName, "factory returned nullptr"); return false; }
     try {
         dec->close();
-        dec->close(); // 第二次 close 不应崩溃
+        dec->close(); // 连续调用 close() 不应产生崩溃或非法访问
     } catch (...) {
-        fail(kName, "Unexpected exception on double close");
+        fail(kName, "Crash or exception detected during double close");
         return false;
     }
     pass(kName);
