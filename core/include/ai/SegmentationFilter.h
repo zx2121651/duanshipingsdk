@@ -34,10 +34,11 @@ class SegmentationFilter : public Filter {
 public:
     /** 背景处理模式（与 shader u_mode 保持一致）。 */
     enum class Mode : int {
-        BLUR_BG     = 0,  ///< 高斯模糊背景
-        REPLACE_BG  = 1,  ///< 纯色背景
+        BLUR        = 0,  ///< 高斯模糊背景
+        BG_COLOR    = 1,  ///< 纯色背景
         TRANSPARENT = 2,  ///< 背景透明（alpha=0）
-        IMAGE_BG    = 3,  ///< 图像纹理背景
+        BG_IMAGE    = 3,  ///< 图像纹理背景
+        ORIGINAL    = 4,  ///< 原图直通
     };
 
     explicit SegmentationFilter(
@@ -45,8 +46,8 @@ public:
         FrameBufferPool* pool = nullptr);
     ~SegmentationFilter() override;
 
-    /** 设置 IMAGE_BG 模式下的背景纹理 ID（已上传到 GPU 的 GL 纹理）。 */
-    void setBgImageTexture(GLuint texId) { m_bgImageTexId = texId; }
+    /** 设置 BG_IMAGE 模式下的背景纹理 ID（已上传到 GPU 的 GL 纹理）。 */
+    void setBgImageTexture(GLuint texId);
     GLuint getBgImageTexture() const { return m_bgImageTexId; }
 
     Mode getMode() const;
@@ -59,6 +60,8 @@ public:
 
     Result initialize() override;
     void   onProgramRecompiled() override;
+
+    void setParameter(const std::string& key, const std::any& value) override;
 
     // 重写：推理 → 合成，双 pass（原图 + mask → 输出）
     ResultPayload<Texture> processFrame(const Texture& inputTexture,
