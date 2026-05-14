@@ -325,7 +325,117 @@ static bool test_decode_landmarks_invalid_len() {
 }
 
 // ---------------------------------------------------------------------------
-// Test 10: BodyPoseDetector::decodeKeypoints
+// Test 11: decodeLandmarks 212 格式 BoundingBox
+// ---------------------------------------------------------------------------
+static bool test_decode_landmarks_212_bbox() {
+    const std::string k = "decodeLandmarks 212-float BoundingBox";
+    float mockOutput[212];
+    for (int i = 0; i < 106; ++i) {
+        // Range: [0.2, 0.2] to [0.8, 0.8]
+        mockOutput[i * 2 + 0] = 0.2f + 0.6f * static_cast<float>(i) / 105.0f;
+        mockOutput[i * 2 + 1] = 0.2f + 0.6f * static_cast<float>(i) / 105.0f;
+    }
+
+    FaceResult res;
+    FaceLandmarkDetector::decodeLandmarks(mockOutput, 212, 100, 100, res);
+
+    if (!res.detected) { fail(k, "should be detected"); return false; }
+    // bbox: [0.2, 0.2, 0.6, 0.6]
+    if (std::abs(res.boundingBox[0] - 0.2f) > 1e-5f ||
+        std::abs(res.boundingBox[1] - 0.2f) > 1e-5f ||
+        std::abs(res.boundingBox[2] - 0.6f) > 1e-5f ||
+        std::abs(res.boundingBox[3] - 0.6f) > 1e-5f) {
+        fail(k, "incorrect bounding box calculation"); return false;
+    }
+    pass(k);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Test 12: decodeLandmarks 318 格式 BoundingBox 与过滤
+// ---------------------------------------------------------------------------
+static bool test_decode_landmarks_318_bbox_filtering() {
+    const std::string k = "decodeLandmarks 318-float BoundingBox with filtering";
+    float mockOutput[318];
+    for (int i = 0; i < 106; ++i) {
+        mockOutput[i * 3 + 0] = 0.5f;
+        mockOutput[i * 3 + 1] = 0.5f;
+        mockOutput[i * 3 + 2] = 0.1f; // all low score initially
+    }
+
+    // Set two valid points to define bbox
+    mockOutput[10 * 3 + 0] = 0.3f; mockOutput[10 * 3 + 1] = 0.3f; mockOutput[10 * 3 + 2] = 0.9f;
+    mockOutput[20 * 3 + 0] = 0.7f; mockOutput[20 * 3 + 1] = 0.7f; mockOutput[20 * 3 + 2] = 0.9f;
+
+    FaceResult res;
+    FaceLandmarkDetector::decodeLandmarks(mockOutput, 318, 100, 100, res);
+
+    if (!res.detected) { fail(k, "should be detected"); return false; }
+    // bbox should be [0.3, 0.3, 0.4, 0.4], ignoring 0.5,0.5 points because they have 0.1 score
+    if (std::abs(res.boundingBox[0] - 0.3f) > 1e-5f ||
+        std::abs(res.boundingBox[1] - 0.3f) > 1e-5f ||
+        std::abs(res.boundingBox[2] - 0.4f) > 1e-5f ||
+        std::abs(res.boundingBox[3] - 0.4f) > 1e-5f) {
+        fail(k, "incorrect bounding box with filtering. Got [" +
+            std::to_string(res.boundingBox[0]) + "," + std::to_string(res.boundingBox[1]) + "]");
+        return false;
+    }
+    pass(k);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Test 13: decodeLandmarks 全部过滤
+// ---------------------------------------------------------------------------
+static bool test_decode_landmarks_all_filtered() {
+    const std::string k = "decodeLandmarks all points filtered";
+    float mockOutput[318];
+    for (int i = 0; i < 106; ++i) {
+        mockOutput[i * 3 + 0] = 0.5f;
+        mockOutput[i * 3 + 1] = 0.5f;
+        mockOutput[i * 3 + 2] = 0.4f; // all low score
+    }
+
+    FaceResult res;
+    res.detected = true;
+    FaceLandmarkDetector::decodeLandmarks(mockOutput, 318, 100, 100, res);
+
+    if (res.detected) { fail(k, "detected should be false when all points are filtered"); return false; }
+    pass(k);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Test 14: decodeLandmarks 边界精度测试
+// ---------------------------------------------------------------------------
+static bool test_decode_landmarks_bbox_precision() {
+    const std::string k = "decodeLandmarks bbox precision (single point)";
+    float mockOutput[318];
+    for (int i = 0; i < 106; ++i) {
+        mockOutput[i * 3 + 0] = 0.0f;
+        mockOutput[i * 3 + 1] = 0.0f;
+        mockOutput[i * 3 + 2] = 0.0f;
+    }
+    mockOutput[50 * 3 + 0] = 0.123f;
+    mockOutput[50 * 3 + 1] = 0.456f;
+    mockOutput[50 * 3 + 2] = 1.0f;
+
+    FaceResult res;
+    FaceLandmarkDetector::decodeLandmarks(mockOutput, 318, 100, 100, res);
+
+    if (!res.detected) { fail(k, "should be detected"); return false; }
+    if (std::abs(res.boundingBox[0] - 0.123f) > 1e-6f ||
+        std::abs(res.boundingBox[1] - 0.456f) > 1e-6f ||
+        std::abs(res.boundingBox[2] - 0.0f) > 1e-6f ||
+        std::abs(res.boundingBox[3] - 0.0f) > 1e-6f) {
+        fail(k, "precision check failed"); return false;
+    }
+    pass(k);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Test 15: BodyPoseDetector::decodeKeypoints
 // ---------------------------------------------------------------------------
 class BodyPoseDetectorTestAccessor : public BodyPoseDetector {
 public:
@@ -370,6 +480,51 @@ static bool test_body_pose_decode() {
 }
 
 // ---------------------------------------------------------------------------
+// Test 16: SegmentationFilter 参数读写与 Mode 切换
+// ---------------------------------------------------------------------------
+static bool test_segmentation_params() {
+    const std::string k = "SegmentationFilter parameters set/get and mode switch";
+    try {
+        SegmentationFilter sf(nullptr, nullptr);
+
+        // 1. Mode check
+        sf.setParameter("mode", static_cast<int>(SegmentationFilter::Mode::REPLACE_BG));
+        if (sf.getMode() != SegmentationFilter::Mode::REPLACE_BG) {
+            fail(k, "Mode set/get failed"); return false;
+        }
+
+        sf.setParameter("mode", static_cast<int>(SegmentationFilter::Mode::TRANSPARENT));
+        if (sf.getMode() != SegmentationFilter::Mode::TRANSPARENT) {
+            fail(k, "Mode switch failed"); return false;
+        }
+
+        // 2. blurStrength check
+        sf.setParameter("blurStrength", 25.0f);
+        if (sf.getBlurStrength() != 25.0f) {
+            fail(k, "blurStrength set/get failed"); return false;
+        }
+
+        // 3. bgColor check
+        uint32_t red = 0xFFFF0000u;
+        sf.setParameter("bgColor", red);
+        if (sf.getBgColor() != red) {
+            fail(k, "bgColor set/get failed"); return false;
+        }
+
+        // 4. bgImageTexture check
+        sf.setBgImageTexture(12345u);
+        if (sf.getBgImageTexture() != 12345u) {
+            fail(k, "bgImageTexture set/get failed"); return false;
+        }
+
+    } catch (...) {
+        fail(k, "unexpected exception"); return false;
+    }
+    pass(k);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
 int main() {
@@ -392,6 +547,12 @@ int main() {
     run(test_load_from_null_buffer());
     run(test_decode_landmarks_212());
     run(test_decode_landmarks_318_filtering());
+    run(test_decode_landmarks_invalid_len());
+    run(test_decode_landmarks_212_bbox());
+    run(test_decode_landmarks_318_bbox_filtering());
+    run(test_decode_landmarks_all_filtered());
+    run(test_decode_landmarks_bbox_precision());
+    run(test_body_pose_decode());
     run(test_segmentation_params());
     run(test_segmentation_default_params());
     run(test_segmentation_set_parameter_sync());

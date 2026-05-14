@@ -44,8 +44,8 @@ static constexpr int kFaceLandmarkCount = 106;
 static constexpr int kMaxFaces          = 2;
 
 struct FaceLandmark {
-    float x = 0.f;  ///< 归一化横坐标 [0,1]
-    float y = 0.f;  ///< 归一化纵坐标 [0,1]
+    float x = 0.f;  ///< 像素横坐标 (denormalized: x * width)
+    float y = 0.f;  ///< 像素纵坐标 (denormalized: y * height)
     float score = 0.f; ///< 置信度 [0,1]
 };
 
