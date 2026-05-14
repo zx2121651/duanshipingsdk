@@ -26,7 +26,7 @@ namespace sdk {
 namespace video {
 namespace timeline {
 
-static constexpr int DRAFT_FORMAT_VERSION = 2;
+static constexpr int DRAFT_FORMAT_VERSION = 3;
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -143,7 +143,11 @@ inline void serializeClip(std::ostringstream& ss, const ClipPtr& clip) {
                << param               << ":"
                << timeNs              << ":"
                << entry.value         << ":"
-               << static_cast<int>(entry.easing) << "\n";
+               << static_cast<int>(entry.easing) << ":"
+               << entry.cp1x          << ":"
+               << entry.cp1y          << ":"
+               << entry.cp2x          << ":"
+               << entry.cp2y          << "\n";
         }
     }
 }
@@ -265,7 +269,17 @@ inline std::shared_ptr<Timeline> loadDraft(const std::string& filePath) {
             InterpolationType easing = InterpolationType::LINEAR;
             if (parts.size() >= 6) easing = static_cast<InterpolationType>(std::stoi(parts[5]));
             auto clip = currentTrack->getClip(clipId);
-            if (clip) clip->addKeyframe(param, timeNs, value, easing);
+            if (clip) {
+                if (easing == InterpolationType::BEZIER && parts.size() >= 10) {
+                    float cp1x = std::stof(parts[6]);
+                    float cp1y = std::stof(parts[7]);
+                    float cp2x = std::stof(parts[8]);
+                    float cp2y = std::stof(parts[9]);
+                    clip->addKeyframe(param, timeNs, value, cp1x, cp1y, cp2x, cp2y);
+                } else {
+                    clip->addKeyframe(param, timeNs, value, easing);
+                }
+            }
 
         } else if (tag == "SUB" && timeline && currentTrack) {
             // SUB:<id>:<text>:<tlIn>:<srcDur>:<x>:<y>:<fontSize>:<textColor>:<bgColor>:<align>

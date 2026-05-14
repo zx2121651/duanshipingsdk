@@ -18,12 +18,19 @@ enum class InterpolationType {
     EASE_OUT  = 2, ///< 减速退出（快→慢）
     EASE_IN_OUT=3, ///< 先加速后减速（平滑 S 曲线）
     HOLD      = 4, ///< 保持当前值到下一帧（阶跃/跳切）
+    BEZIER    = 5, ///< 三次贝塞尔曲线插值
 };
 
 /** 单个关键帧数据：浮点值 + 出点插值类型 */
 struct KeyframeEntry {
     float             value  = 0.f;
     InterpolationType easing = InterpolationType::LINEAR;
+
+    // Bezier control points (default 0.5, 0, 0.5, 1 for ease-in-out)
+    float cp1x = 0.5f;
+    float cp1y = 0.0f;
+    float cp2x = 0.5f;
+    float cp2y = 1.0f;
 };
 
 // ---------------------------------------------------------------------------
@@ -134,6 +141,13 @@ public:
                      float value,
                      InterpolationType easing = InterpolationType::LINEAR);
 
+    /**
+     * 添加或更新一个 BEZIER 关键帧。
+     */
+    void addKeyframe(const std::string& paramName, int64_t relativeTimeNs,
+                     float value,
+                     float cp1x, float cp1y, float cp2x, float cp2y);
+
     /** 删除指定参数的指定时间关键帧。 */
     void removeKeyframe(const std::string& paramName, int64_t relativeTimeNs);
 
@@ -189,6 +203,9 @@ public:
     float getNoiseReduction() const         { return m_noiseReductionStrength; }
 
 private:
+    static float evaluateBezier(float t, float cp1x, float cp1y, float cp2x, float cp2y);
+    static float applyEasing(float t, const KeyframeEntry& entry);
+
     std::string m_id;
     std::string m_sourcePath;
     MediaType m_type;

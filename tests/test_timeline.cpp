@@ -4,6 +4,7 @@
 #include <vector>
 #include <cmath>
 #include "../core/include/timeline/Timeline.h"
+#include "../core/include/timeline/TimelineDraft.h"
 #include "../core/include/timeline/Track.h"
 #include "../core/include/timeline/Clip.h"
 
@@ -350,6 +351,63 @@ void test_timeline_time_semantics() {
     std::cout << "test_timeline_time_semantics passed" << std::endl;
 }
 
+void test_bezier_interpolation() {
+    auto clip = std::make_shared<Clip>("clip", "v.mp4", Clip::MediaType::VIDEO);
+
+    // 1. BEZIER(0,0,1,1) should be LINEAR
+    clip->addKeyframe("opacity", 0, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f);
+    clip->addKeyframe("opacity", 1000000000, 1.0f);
+
+    assert(std::abs(clip->getOpacity(500000000) - 0.5f) < 0.01f);
+    assert(std::abs(clip->getOpacity(250000000) - 0.25f) < 0.01f);
+
+    // 2. BEZIER(0.42, 0, 0.58, 1) should be EASE_IN_OUT
+    clip->clearKeyframes("opacity");
+    clip->addKeyframe("opacity", 0, 0.0f, 0.42f, 0.0f, 0.58f, 1.0f);
+    clip->addKeyframe("opacity", 1000000000, 1.0f);
+
+    // At 0.5, ease-in-out should be 0.5
+    assert(std::abs(clip->getOpacity(500000000) - 0.5f) < 0.01f);
+    // At 0.2, ease-in-out should be LESS than 0.2 (slower start)
+    assert(clip->getOpacity(200000000) < 0.2f);
+    // At 0.8, ease-in-out should be MORE than 0.8 (slower end)
+    assert(clip->getOpacity(800000000) > 0.8f);
+
+    std::cout << "test_bezier_interpolation passed" << std::endl;
+}
+
+void test_bezier_serialization() {
+    auto timeline = std::make_shared<Timeline>(1920, 1080, 30);
+    auto track = timeline->addTrack(0, Track::TrackType::MAIN_VIDEO);
+    auto clip = std::make_shared<Clip>("c1", "v1.mp4", Clip::MediaType::VIDEO);
+    clip->addKeyframe("opacity", 0, 0.0f, 0.1f, 0.2f, 0.3f, 0.4f);
+    clip->addKeyframe("opacity", 1000000000, 1.0f);
+    track->addClip(clip);
+
+    std::string data = serializeTimeline(*timeline);
+
+    // Check if the K: line contains our bezier points
+    assert(data.find(":0.1:0.2:0.3:0.4") != std::string::npos);
+
+    // Round trip
+    std::string tempFile = "test_bezier.svdk";
+    saveDraft(*timeline, tempFile);
+    auto loadedTl = loadDraft(tempFile);
+    remove(tempFile.c_str());
+
+    assert(loadedTl != nullptr);
+    auto loadedClip = loadedTl->getTrack(0)->getClip("c1");
+    auto kfs = loadedClip->getKeyframes("opacity");
+    assert(kfs.size() == 2);
+    assert(kfs[0].second.easing == InterpolationType::BEZIER);
+    assert(std::abs(kfs[0].second.cp1x - 0.1f) < EPSILON);
+    assert(std::abs(kfs[0].second.cp1y - 0.2f) < EPSILON);
+    assert(std::abs(kfs[0].second.cp2x - 0.3f) < EPSILON);
+    assert(std::abs(kfs[0].second.cp2y - 0.4f) < EPSILON);
+
+    std::cout << "test_bezier_serialization passed" << std::endl;
+}
+
 int main() {
     test_timeline_basic_properties();
     test_clip_boundary_trim();
@@ -365,5 +423,7 @@ int main() {
     test_overlapping_clips_retrieval();
     test_duration_and_speed();
     test_keyframe_interpolation();
+    test_bezier_interpolation();
+    test_bezier_serialization();
     return 0;
 }

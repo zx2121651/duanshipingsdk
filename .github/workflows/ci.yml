@@ -76,9 +76,9 @@ jobs:
     name: "Android Unit Tests"
     runs-on: ubuntu-22.04
     permissions:
+      contents: read
       checks: write
       pull-requests: write
-      contents: read
     steps:
       - uses: actions/checkout@v4
 

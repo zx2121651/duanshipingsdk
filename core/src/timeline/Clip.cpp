@@ -35,8 +35,8 @@ void Clip::setTransform(float scale, float rotation, float transX, float transY)
 // ---------------------------------------------------------------------------
 // 缓动曲线辅助函数
 // ---------------------------------------------------------------------------
-static float applyEasing(float t, InterpolationType easing) {
-    switch (easing) {
+float Clip::applyEasing(float t, const KeyframeEntry& entry) {
+    switch (entry.easing) {
         case InterpolationType::EASE_IN:
             return t * t;                                     // quadratic ease-in
         case InterpolationType::EASE_OUT:
@@ -47,6 +47,8 @@ static float applyEasing(float t, InterpolationType easing) {
                 : 1.f - 2.f * (1.f - t) * (1.f - t);        // smooth S-curve
         case InterpolationType::HOLD:
             return 0.f;                                       // never reaches 1 (step at next KF)
+        case InterpolationType::BEZIER:
+            return Clip::evaluateBezier(t, entry.cp1x, entry.cp1y, entry.cp2x, entry.cp2y);
         default:
             return t;                                         // LINEAR
     }
@@ -55,6 +57,18 @@ static float applyEasing(float t, InterpolationType easing) {
 void Clip::addKeyframe(const std::string& paramName, int64_t relativeTimeNs,
                        float value, InterpolationType easing) {
     m_keyframes[paramName][relativeTimeNs] = KeyframeEntry{value, easing};
+}
+
+void Clip::addKeyframe(const std::string& paramName, int64_t relativeTimeNs,
+                       float value, float cp1x, float cp1y, float cp2x, float cp2y) {
+    KeyframeEntry entry;
+    entry.value = value;
+    entry.easing = InterpolationType::BEZIER;
+    entry.cp1x = cp1x;
+    entry.cp1y = cp1y;
+    entry.cp2x = cp2x;
+    entry.cp2y = cp2y;
+    m_keyframes[paramName][relativeTimeNs] = entry;
 }
 
 void Clip::removeKeyframe(const std::string& paramName, int64_t relativeTimeNs) {
@@ -97,8 +111,45 @@ float Clip::getInterpolatedParam(const std::string& paramName,
 
     float ratio = static_cast<float>(relativeTimeNs - t0)
                 / static_cast<float>(t1 - t0);
-    float easedRatio = applyEasing(ratio, itPrev->second.easing);
+    float easedRatio = applyEasing(ratio, itPrev->second);
     return v0 + (v1 - v0) * easedRatio;
+}
+
+float Clip::evaluateBezier(float t, float cp1x, float cp1y, float cp2x, float cp2y) {
+    if (t <= 0.0f) return 0.0f;
+    if (t >= 1.0f) return 1.0f;
+
+    // Cubic Bezier: x(t) = 3(1-t)^2*t*cp1x + 3(1-t)t^2*cp2x + t^3
+    // Simplified for easing (P0=0,0; P3=1,1):
+    // x(t) = (3*cp1x - 3*cp2x + 1)t^3 + (3*cp2x - 6*cp1x)t^2 + (3*cp1x)t
+
+    auto getX = [&](float t) {
+        return ((3.0f * cp1x - 3.0f * cp2x + 1.0f) * t * t * t) +
+               ((3.0f * cp2x - 6.0f * cp1x) * t * t) +
+               (3.0f * cp1x * t);
+    };
+
+    auto getSlope = [&](float t) {
+        return (3.0f * (3.0f * cp1x - 3.0f * cp2x + 1.0f) * t * t) +
+               (2.0f * (3.0f * cp2x - 6.0f * cp1x) * t) +
+               (3.0f * cp1x);
+    };
+
+    // Newton's method to solve for t (finding t such that getX(t) = target_x)
+    float targetX = t;
+    float currentT = targetX;
+    for (int i = 0; i < 8; ++i) {
+        float currentX = getX(currentT) - targetX;
+        float slope = getSlope(currentT);
+        if (std::abs(currentX) < 0.001f || std::abs(slope) < 1e-6f) break;
+        currentT -= currentX / slope;
+    }
+
+    // Now compute y for that t:
+    // y(t) = (3*cp1y - 3*cp2y + 1)t^3 + (3*cp2y - 6*cp1y)t^2 + (3*cp1y)t
+    return ((3.0f * cp1y - 3.0f * cp2y + 1.0f) * currentT * currentT * currentT) +
+           ((3.0f * cp2y - 6.0f * cp1y) * currentT * currentT) +
+           (3.0f * cp1y * currentT);
 }
 
 } // namespace timeline
