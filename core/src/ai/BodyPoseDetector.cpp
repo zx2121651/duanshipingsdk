@@ -266,17 +266,18 @@ PoseFrameResult BodyPoseDetector::runTFLite(const uint8_t* rgba,
 // Decode keypoints from MoveNet/BlazePose output
 // ---------------------------------------------------------------------------
 PoseResult BodyPoseDetector::decodeKeypoints(const float* output,
-                                              int /*w*/, int /*h*/) {
+                                              int w, int h) {
     PoseResult pose;
     float scoreSum = 0.f;
     for (int i = 0; i < kPoseKeypointCount; ++i) {
         // MoveNet: output[i*3+0] = y_norm, [i*3+1] = x_norm, [i*3+2] = score
-        pose.keypoints[i].y     = output[i * 3 + 0];
-        pose.keypoints[i].x     = output[i * 3 + 1];
+        pose.keypoints[i].y     = output[i * 3 + 0] * (float)h;
+        pose.keypoints[i].x     = output[i * 3 + 1] * (float)w;
         pose.keypoints[i].score = output[i * 3 + 2];
         scoreSum += pose.keypoints[i].score;
     }
     pose.poseScore = scoreSum / kPoseKeypointCount;
+    // Basic threshold for "detected" state
     pose.detected  = (pose.poseScore >= 0.15f);
     return pose;
 }
