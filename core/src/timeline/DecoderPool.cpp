@@ -20,18 +20,21 @@ namespace timeline {
 // Factory function implemented in VideoDecoderAndroid.cpp or VideoDecoderIOS.mm
 extern std::shared_ptr<VideoDecoder> createPlatformDecoder();
 
-// FFmpegVideoDecoder 工厂（FFmpegVideoDecoder.cpp 编译时提供，否则 stub）
+// FFmpegVideoDecoder 工厂实现 (由 FFmpegVideoDecoder.cpp 提供)
+// 在单测中，该符号会被 test_decoder_pool.cpp 中的 Mock 实现覆盖（利用弱符号或直接链接）
+#if !defined(UNIT_TEST)
 #if defined(HAS_FFMPEG_DECODER)
 extern std::shared_ptr<VideoDecoder> createSoftwareDecoder_FFmpeg();
-#endif
-
-std::shared_ptr<VideoDecoder> createSoftwareDecoder() {
-#if defined(HAS_FFMPEG_DECODER)
-    return createSoftwareDecoder_FFmpeg();
 #else
+// 如果未集成 FFmpeg 且非测试环境，则使用 SoftwareVideoDecoder 作为占位 stub
+std::shared_ptr<VideoDecoder> createSoftwareDecoder_FFmpeg() {
     return std::make_shared<SoftwareVideoDecoder>();
-#endif
 }
+#endif
+#else
+// 测试环境下声明为外部符号，由测试二进制提供实现
+extern std::shared_ptr<VideoDecoder> createSoftwareDecoder_FFmpeg();
+#endif
 
 DecoderPool::DecoderPool() {}
 
@@ -67,18 +70,21 @@ void DecoderPool::releaseMedia(const std::string& clipId) {
     std::lock_guard<std::mutex> lock(m_mutex);
     auto it = m_decoders.find(clipId);
     if (it != m_decoders.end()) {
-        if (it->second->decoder) {
-            it->second->decoder->close();
+        auto ctx = it->second;
+        // 释放硬件解码器
+        if (ctx->decoder) {
+            ctx->decoder->close();
+            ctx->decoder = nullptr;
             m_activeDecoderCount--;
         }
-        if (it->second->softDecoder) {
-            it->second->softDecoder->close();
+        // 释放软件解码器 (Software Fallback)
+        if (ctx->softDecoder) {
+            ctx->softDecoder->close();
+            ctx->softDecoder = nullptr;
         }
-        it->second->decoder = nullptr;
-        it->second->softDecoder = nullptr;
-        it->second->lastDecodedFrame = {0, 0, 0};
-        it->second->lastDecodedTimeNs = -1;
-        it->second->isInitialized = false;
+        ctx->lastDecodedFrame = {0, 0, 0};
+        ctx->lastDecodedTimeNs = -1;
+        ctx->isInitialized = false;
 
         m_decoders.erase(it);
         LOGI("Released media %s", clipId.c_str());
@@ -155,10 +161,18 @@ ResultPayload<Texture> DecoderPool::getFrame(const std::string& clipId, int64_t 
 
     if (useSoftwareDecoder) {
         if (!ctx->softDecoder) {
-            ctx->softDecoder = createSoftwareDecoder();
+            // 1. 创建软解实例 (使用指令要求的工厂函数)
+            ctx->softDecoder = createSoftwareDecoder_FFmpeg();
+            if (!ctx->softDecoder) {
+                LOGE("Failed to create FFmpeg Software Decoder for clip %s", clipId.c_str());
+                return ResultPayload<Texture>::error(ErrorCode::ERR_TIMELINE_DECODER_GET_FRAME_FAILED, "Failed to create software decoder for " + clipId);
+            }
+
+            // 2. 打开素材
             auto openRes = ctx->softDecoder->open(ctx->sourcePath);
             if (!openRes.isOk()) {
                 LOGE("Failed to open Software Decoder for clip %s: %s", clipId.c_str(), openRes.getMessage().c_str());
+                ctx->softDecoder = nullptr; // 确保失败后重置，下次可重试
                 return ResultPayload<Texture>::error(openRes.getErrorCode(), "Failed to open software decoder for " + clipId + ": " + openRes.getMessage());
             }
             LOGI("Falling back to Software Decoder for clip %s (HW failed: %d, Exact seek: %d)", clipId.c_str(), ctx->hwFailed, requiresExactSeek);

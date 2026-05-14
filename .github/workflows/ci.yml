@@ -15,6 +15,11 @@ env:
   NDK_VERSION:  '25.1.8937393'
   CMAKE_VERSION: '3.22.1'
 
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
 # ── Jobs ────────────────────────────────────────────────────────────────────
 
 jobs:

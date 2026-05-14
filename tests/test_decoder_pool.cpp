@@ -158,7 +158,7 @@ void test_soft_decoder_lifecycle() {
 
     // Request frame with exact seek to trigger soft decoder
     auto res = pool.getFrame("clip1", 0, true);
-#if defined(HAS_FFMPEG_DECODER)
+#if defined(HAS_FFMPEG_DECODER) || defined(UNIT_TEST)
     assert(res.isOk());
     assert(g_softOpenCount == 1);
 #else
@@ -183,7 +183,7 @@ void test_soft_decoder_release_in_releaseMedia() {
 
     // Trigger soft decoder
     auto res = pool.getFrame("clip1", 0, true);
-#if defined(HAS_FFMPEG_DECODER)
+#if defined(HAS_FFMPEG_DECODER) || defined(UNIT_TEST)
     assert(res.isOk());
     assert(g_softOpenCount == 1);
 #else
@@ -191,7 +191,7 @@ void test_soft_decoder_release_in_releaseMedia() {
 #endif
 
     pool.releaseMedia("clip1");
-#if defined(HAS_FFMPEG_DECODER)
+#if defined(HAS_FFMPEG_DECODER) || defined(UNIT_TEST)
     assert(g_softCloseCount == 1);
 
     // Register again and check if it opens again
@@ -214,7 +214,7 @@ void test_hw_failed_triggers_sw_fallback() {
 
     // First call: HW fails, falls back to SW
     auto res = pool.getFrame("clip1", 0, false);
-#if defined(HAS_FFMPEG_DECODER)
+#if defined(HAS_FFMPEG_DECODER) || defined(UNIT_TEST)
     assert(res.isOk());
     assert(g_softOpenCount == 1);
 #else
@@ -225,7 +225,7 @@ void test_hw_failed_triggers_sw_fallback() {
 
     // Second call: Should directly use SW
     auto res2 = pool.getFrame("clip1", 1000, false);
-#if defined(HAS_FFMPEG_DECODER)
+#if defined(HAS_FFMPEG_DECODER) || defined(UNIT_TEST)
     assert(res2.isOk());
 #else
     assert(!res2.isOk());
@@ -249,7 +249,7 @@ void test_hw_to_sw_fallback_on_seek_failure() {
 
     // This should attempt HW, fail seek, then fall back to SW
     auto res = pool.getFrame("clip1", 0, false);
-#if defined(HAS_FFMPEG_DECODER)
+#if defined(HAS_FFMPEG_DECODER) || defined(UNIT_TEST)
     assert(res.isOk());
 #else
     assert(!res.isOk());
@@ -261,7 +261,7 @@ void test_hw_to_sw_fallback_on_seek_failure() {
 
     // Subsequent calls should directly use SW
     auto res2 = pool.getFrame("clip1", 1000, false);
-#if defined(HAS_FFMPEG_DECODER)
+#if defined(HAS_FFMPEG_DECODER) || defined(UNIT_TEST)
     assert(res2.isOk());
 #else
     assert(!res2.isOk());
@@ -286,7 +286,7 @@ void test_hw_to_sw_fallback_on_fatal_get_frame_failure() {
 
     // This should attempt HW, fail getFrameAt with fatal error, then fall back to SW
     auto res = pool.getFrame("clip1", 0, false);
-#if defined(HAS_FFMPEG_DECODER)
+#if defined(HAS_FFMPEG_DECODER) || defined(UNIT_TEST)
     assert(res.isOk());
 #else
     assert(!res.isOk());
@@ -329,7 +329,7 @@ void test_fallback_strategy_sw_first() {
 
     // Should skip HW and go straight to SW
     auto res = pool.getFrame("clip1", 0, false);
-#if defined(HAS_FFMPEG_DECODER)
+#if defined(HAS_FFMPEG_DECODER) || defined(UNIT_TEST)
     assert(res.isOk());
 #else
     assert(!res.isOk());
