@@ -551,7 +551,11 @@ private:
 // ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((weak)) std::shared_ptr<VideoDecoder> createSoftwareDecoder_FFmpeg() {
+#else
 std::shared_ptr<VideoDecoder> createSoftwareDecoder_FFmpeg() {
+#endif
     return std::make_shared<FFmpegVideoDecoder>();
 }
 

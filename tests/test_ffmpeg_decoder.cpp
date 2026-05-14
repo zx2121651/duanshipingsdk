@@ -24,7 +24,7 @@ using namespace sdk::video::timeline;
 
 // Factory defined in DecoderPool.cpp (must be declared inside its own namespace)
 namespace sdk { namespace video { namespace timeline {
-extern std::shared_ptr<VideoDecoder> createSoftwareDecoder();
+extern std::shared_ptr<VideoDecoder> createSoftwareDecoder_FFmpeg();
 } } }
 
 // Desktop test stub — mirrors pattern in test_decoder_pool.cpp
@@ -60,8 +60,8 @@ static void fail(const std::string& name, const std::string& msg) {
 // Test 1: createSoftwareDecoder() 工厂可以构造出非空对象
 // ---------------------------------------------------------------------------
 static bool test_factory_not_null() {
-    const std::string kName = "createSoftwareDecoder() not null";
-    auto dec = createSoftwareDecoder();
+    const std::string kName = "createSoftwareDecoder_FFmpeg() not null";
+    auto dec = createSoftwareDecoder_FFmpeg();
     if (!dec) {
         fail(kName, "returned nullptr");
         return false;
@@ -75,7 +75,7 @@ static bool test_factory_not_null() {
 // ---------------------------------------------------------------------------
 static bool test_open_invalid_path() {
     const std::string kName = "open(invalid_path) returns ERR_DECODER_OPEN_FAILED";
-    auto dec = createSoftwareDecoder();
+    auto dec = createSoftwareDecoder_FFmpeg();
     if (!dec) { fail(kName, "factory returned nullptr"); return false; }
 
     auto res = dec->open("/nonexistent/path/video.mp4");
@@ -98,7 +98,7 @@ static bool test_open_invalid_path() {
 // ---------------------------------------------------------------------------
 static bool test_seek_without_open() {
     const std::string kName = "seekExact() without open() returns error";
-    auto dec = createSoftwareDecoder();
+    auto dec = createSoftwareDecoder_FFmpeg();
     if (!dec) { fail(kName, "factory returned nullptr"); return false; }
 
     auto res = dec->seekExact(1000);
@@ -112,7 +112,7 @@ static bool test_seek_without_open() {
 
 static bool test_get_frame_without_open() {
     const std::string kName = "getFrameAt() without open() returns error";
-    auto dec = createSoftwareDecoder();
+    auto dec = createSoftwareDecoder_FFmpeg();
     if (!dec) { fail(kName, "factory returned nullptr"); return false; }
 
     auto res = dec->getFrameAt(0);
@@ -177,7 +177,7 @@ static bool test_decoder_pool_register_release() {
 // ---------------------------------------------------------------------------
 static bool test_double_close() {
     const std::string kName = "test_double_close (no crash)";
-    auto dec = createSoftwareDecoder();
+    auto dec = createSoftwareDecoder_FFmpeg();
     if (!dec) { fail(kName, "factory returned nullptr"); return false; }
     try {
         dec->close();
@@ -196,7 +196,7 @@ static bool test_double_close() {
 // ---------------------------------------------------------------------------
 static bool test_factory_returns_ffmpeg_decoder() {
     const std::string kName = "test_factory_returns_ffmpeg_decoder";
-    auto dec = createSoftwareDecoder();
+    auto dec = createSoftwareDecoder_FFmpeg();
     auto res = dec->open("/no/such/file.mp4");
 
     // FFmpegVideoDecoder 的错误消息应包含 "FFmpegVideoDecoder"
