@@ -14,15 +14,19 @@ using namespace sdk::video::timeline;
 // Global flags to control mock behavior
 static bool g_mockShouldFailSeek = false;
 static bool g_mockShouldFailGetFrame = false;
+static bool g_mockShouldFailOpen = false;
 static int g_mockFailErrorCode = ErrorCode::ERR_DECODER_HW_FAILURE;
 
 // Mock Video Decoder for testing
 class MockVideoDecoder : public VideoDecoder {
 public:
     Result open(const std::string& filePath) override {
+        m_openCount++;
+        if (g_mockShouldFailOpen) {
+            return Result::error(ErrorCode::ERR_DECODER_OPEN_FAILED, "Mock open failure");
+        }
         m_filePath = filePath;
         m_isOpen = true;
-        m_openCount++;
         return Result::ok();
     }
     ResultPayload<Texture> getFrameAt(int64_t timeNs) override {
@@ -57,11 +61,15 @@ int MockVideoDecoder::m_closeCount = 0;
 
 static int g_softOpenCount = 0;
 static int g_softCloseCount = 0;
+static bool g_softMockShouldFailOpen = false;
 
 class MockSoftwareVideoDecoder : public VideoDecoder {
 public:
     Result open(const std::string& filePath) override {
         g_softOpenCount++;
+        if (g_softMockShouldFailOpen) {
+            return Result::error(ErrorCode::ERR_DECODER_OPEN_FAILED, "Mock software open failure");
+        }
         m_isOpen = true;
         return Result::ok();
     }
@@ -315,6 +323,82 @@ void test_hw_only_no_fallback() {
     std::cout << "test_hw_only_no_fallback passed" << std::endl;
 }
 
+void test_sw_open_failure_reporting() {
+    std::cout << "Running test_sw_open_failure_reporting..." << std::endl;
+    g_softOpenCount = 0;
+    g_softMockShouldFailOpen = true;
+
+    DecoderPool pool;
+    pool.registerMedia("clip1", "v1.mp4");
+
+    // Force SW by using exact seek
+    auto res = pool.getFrame("clip1", 0, true);
+    assert(!res.isOk());
+    assert(res.getErrorCode() == ErrorCode::ERR_DECODER_OPEN_FAILED);
+    assert(g_softOpenCount == 1);
+
+    // Try again, should attempt to open again because it was reset
+    auto res2 = pool.getFrame("clip1", 0, true);
+    assert(!res2.isOk());
+    assert(g_softOpenCount == 2);
+
+    g_softMockShouldFailOpen = false;
+    std::cout << "test_sw_open_failure_reporting passed" << std::endl;
+}
+
+class MockHwOpenFailDecoder : public MockVideoDecoder {
+public:
+    Result open(const std::string& filePath) override {
+        m_openCount++;
+        return Result::error(ErrorCode::ERR_DECODER_OPEN_FAILED, "Mock HW open failure");
+    }
+};
+
+void test_immediate_fallback_on_hw_open_failure() {
+    std::cout << "Running test_immediate_fallback_on_hw_open_failure..." << std::endl;
+    MockVideoDecoder::m_openCount = 0;
+    g_softOpenCount = 0;
+    g_mockShouldFailOpen = true;
+
+    DecoderPool pool;
+    pool.registerMedia("clip1", "v1.mp4");
+
+    // This should attempt HW, fail open, then immediately fall back to SW
+    auto res = pool.getFrame("clip1", 0, false);
+    assert(res.isOk());
+    assert(MockVideoDecoder::m_openCount == 1);
+    assert(g_softOpenCount == 1);
+
+    g_mockShouldFailOpen = false;
+    std::cout << "test_immediate_fallback_on_hw_open_failure passed" << std::endl;
+}
+
+void test_release_media_resets_hw_failed() {
+    std::cout << "Running test_release_media_resets_hw_failed..." << std::endl;
+    MockVideoDecoder::m_openCount = 0;
+    g_mockShouldFailOpen = true;
+
+    DecoderPool pool;
+    pool.registerMedia("clip1", "v1.mp4");
+
+    // HW fails, context marked hwFailed
+    auto res = pool.getFrame("clip1", 0, false);
+    assert(res.isOk()); // Fell back to SW
+    assert(MockVideoDecoder::m_openCount == 1);
+
+    // Release and re-register
+    pool.releaseMedia("clip1");
+    pool.registerMedia("clip1", "v1.mp4");
+
+    // Should try HW again
+    g_mockShouldFailOpen = false;
+    auto res2 = pool.getFrame("clip1", 0, false);
+    assert(res2.isOk());
+    assert(MockVideoDecoder::m_openCount == 2);
+
+    std::cout << "test_release_media_resets_hw_failed passed" << std::endl;
+}
+
 int main() {
     test_decoder_pool_lru_eviction();
     test_decoder_pool_release();
@@ -326,5 +410,8 @@ int main() {
     test_no_fallback_on_non_fatal_failure();
     test_fallback_strategy_sw_first();
     test_hw_only_no_fallback();
+    test_sw_open_failure_reporting();
+    test_immediate_fallback_on_hw_open_failure();
+    test_release_media_resets_hw_failed();
     return 0;
 }

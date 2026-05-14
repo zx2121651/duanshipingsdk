@@ -215,6 +215,12 @@ ResultPayload<Texture> DecoderPool::getFrame(const std::string& clipId, int64_t 
             LOGE("createPlatformDecoder returned null for clip %s", clipId.c_str());
             ctx->hwFailed = true;
         }
+
+        if (ctx->hwFailed && m_strategy != DecoderFallbackStrategy::HW_ONLY) {
+            LOGI("Immediate fallback to software for clip %s due to HW activation failure", clipId.c_str());
+            lock.unlock();
+            return getFrame(clipId, localTimeNs, true);
+        }
     }
 
     if (ctx->decoder && !ctx->hwFailed) {
