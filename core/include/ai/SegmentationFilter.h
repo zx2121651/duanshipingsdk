@@ -22,6 +22,7 @@
  */
 
 #include "../Filter.h"
+#include "../Filters.h"
 #include "../FrameBufferPool.h"
 #include "TfliteInferenceEngine.h"
 #include <memory>
@@ -46,6 +47,11 @@ public:
 
     /** 设置 IMAGE_BG 模式下的背景纹理 ID（已上传到 GPU 的 GL 纹理）。 */
     void setBgImageTexture(GLuint texId) { m_bgImageTexId = texId; }
+    GLuint getBgImageTexture() const { return m_bgImageTexId; }
+
+    Mode getMode() const;
+    float getBlurStrength() const;
+    uint32_t getBgColor() const;
 
     std::string getVertexShaderName()   const override { return "segmentation.vert"; }
     std::string getFragmentShaderName() const override { return "segmentation.frag"; }
@@ -65,6 +71,9 @@ protected:
 private:
     std::shared_ptr<ai::TfliteInferenceEngine> m_engine;
     FrameBufferPool* m_pool;
+
+    std::unique_ptr<GaussianBlurFilter> m_blurFilter;
+    FrameBufferPtr m_blurredFb;
 
     // Uniform locations
     GLuint m_locInputTex    = 0;

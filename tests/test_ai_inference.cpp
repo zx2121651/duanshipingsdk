@@ -40,6 +40,51 @@ static bool test_engine_construct() {
 }
 
 // ---------------------------------------------------------------------------
+// Test 10: SegmentationFilter 参数读写与 Mode 切换
+// ---------------------------------------------------------------------------
+static bool test_segmentation_params() {
+    const std::string k = "SegmentationFilter parameters set/get and mode switch";
+    try {
+        SegmentationFilter sf(nullptr, nullptr);
+
+        // 1. Mode check
+        sf.setParameter("mode", static_cast<int>(SegmentationFilter::Mode::REPLACE_BG));
+        if (sf.getMode() != SegmentationFilter::Mode::REPLACE_BG) {
+            fail(k, "Mode set/get failed"); return false;
+        }
+
+        sf.setParameter("mode", static_cast<int>(SegmentationFilter::Mode::TRANSPARENT));
+        if (sf.getMode() != SegmentationFilter::Mode::TRANSPARENT) {
+            fail(k, "Mode switch failed"); return false;
+        }
+
+        // 2. blurStrength check
+        sf.setParameter("blurStrength", 25.0f);
+        if (sf.getBlurStrength() != 25.0f) {
+            fail(k, "blurStrength set/get failed"); return false;
+        }
+
+        // 3. bgColor check
+        uint32_t red = 0xFFFF0000u;
+        sf.setParameter("bgColor", red);
+        if (sf.getBgColor() != red) {
+            fail(k, "bgColor set/get failed"); return false;
+        }
+
+        // 4. bgImageTexture check
+        sf.setBgImageTexture(12345u);
+        if (sf.getBgImageTexture() != 12345u) {
+            fail(k, "bgImageTexture set/get failed"); return false;
+        }
+
+    } catch (...) {
+        fail(k, "unexpected exception"); return false;
+    }
+    pass(k);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
 // Test 2: loadModel() 错误路径
 // ---------------------------------------------------------------------------
 static bool test_load_model_invalid() {
@@ -188,6 +233,7 @@ int main() {
     run(test_load_from_null_buffer());
     run(test_decode_landmarks_212());
     run(test_decode_landmarks_318_filtering());
+    run(test_segmentation_params());
 
     std::cout << "\nResult: " << passed << "/" << total << " passed\n";
     return (passed == total) ? 0 : 1;

@@ -59,13 +59,12 @@ void main() {
     } else if (u_mode == 2) {
         // TRANSPARENT: background alpha = 0
         fragColor = vec4(orig.rgb, alpha);
-    } else if (u_mode == 3) {
-        // IMAGE_BG: texture background
+    } else if (u_mode == 3 || u_mode == 0) {
+        // IMAGE_BG or BLUR_BG: texture background
         vec4 bgPixel = texture(texBgImage, v_texCoord);
         fragColor = mix(bgPixel, orig, alpha);
     } else {
-        // BLUR_BG (mode 0): darken background as placeholder (real blur = 2-pass)
-        fragColor = mix(vec4(orig.rgb * 0.15, orig.a), orig, alpha);
+        fragColor = orig;
     }
 }
 )";
@@ -83,13 +82,26 @@ SegmentationFilter::SegmentationFilter(
     m_parameters["edgeSoften"]  = 0.5f;
 }
 
-SegmentationFilter::~SegmentationFilter() = default;
+SegmentationFilter::~SegmentationFilter() {
+    if (m_pool && m_blurredFb) {
+        m_pool->release(m_blurredFb);
+    }
+}
 
 // ---------------------------------------------------------------------------
 Result SegmentationFilter::initialize() {
     Result res = Filter::initialize();
     if (!res.isOk()) return res;
     cacheUniformLocations();
+
+    // 验证 Shader Uniform 位置
+    if (m_locInputTex == (GLuint)-1) LOGW("SegmentationFilter: uniform 'texInput' not found");
+    if (m_locMaskTex == (GLuint)-1) LOGW("SegmentationFilter: uniform 'texMask' not found");
+    if (m_locMode == (GLuint)-1) LOGW("SegmentationFilter: uniform 'u_mode' not found");
+    if (m_locBgColor == (GLuint)-1) LOGW("SegmentationFilter: uniform 'u_bgColor' not found");
+    if (m_locEdgeSoften == (GLuint)-1) LOGW("SegmentationFilter: uniform 'u_edgeSoften' not found");
+    if (m_locBgImageTex == (GLuint)-1) LOGW("SegmentationFilter: uniform 'texBgImage' not found");
+
     return Result::ok();
 }
 
@@ -118,17 +130,33 @@ ResultPayload<Texture> SegmentationFilter::processFrame(
     if (!outputFb)
         return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE,
             "SegmentationFilter: null outputFb");
-    if (!m_engine)
-        return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE,
-            "SegmentationFilter: no inference engine");
-    if (!m_engine->isLoaded()) {
+
+    // ---- 1. 背景预处理 (BLUR_BG) ----
+    Mode mode = getMode();
+    if (mode == Mode::BLUR_BG && m_pool) {
+        if (!m_blurFilter) {
+            m_blurFilter = std::make_unique<GaussianBlurFilter>(m_pool);
+            m_blurFilter->setRenderDevice(m_renderDevice);
+            m_blurFilter->setShaderManager(m_shaderManager);
+            m_blurFilter->setQuadVao(m_quadVao);
+            m_blurFilter->initialize();
+        }
+        m_blurFilter->setParameter("blurSize", getBlurStrength());
+        if (m_blurredFb) m_pool->release(m_blurredFb);
+        m_blurredFb = m_pool->get(inputTexture.width, inputTexture.height);
+        if (m_blurredFb) {
+            m_blurFilter->processFrame(inputTexture, m_blurredFb);
+        }
+    }
+
+    if (!m_engine || !m_engine->isLoaded()) {
         LOGW("SegmentationFilter: inference engine not loaded — passing through");
         // 直通原图（不崩溃）
         onDraw(inputTexture, outputFb);
         return ResultPayload<Texture>::ok(outputFb->getTexture());
     }
 
-    // ---- 1. 读取原图像素（用于 TFLite 推理）----
+    // ---- 2. 读取原图像素（用于 TFLite 推理）----
     // 我们从 inputTexture 读取 RGBA 像素（glReadPixels via FBO）
     // 注意：此操作在 GPU-CPU 之间同步，是性能瓶颈。
     // 优化方向：直接在 GPU 上 resize，但需要 PBO 或 compute shader。
@@ -147,7 +175,7 @@ ResultPayload<Texture> SegmentationFilter::processFrame(
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glDeleteFramebuffers(1, &tmpFbo);
 
-    // ---- 2. 推理 ----
+    // ---- 3. 推理 ----
     auto inferResult = m_engine->runInference(pixels.data(), W, H);
     if (!inferResult.success) {
         LOGW("SegmentationFilter: inference failed: %s", inferResult.errorMessage.c_str());
@@ -156,7 +184,7 @@ ResultPayload<Texture> SegmentationFilter::processFrame(
     }
     m_lastMaskTexId = inferResult.maskTextureId;
 
-    // ---- 3. 合成 pass ----
+    // ---- 4. 合成 pass ----
     onDraw(inputTexture, outputFb);
     return ResultPayload<Texture>::ok(outputFb->getTexture());
 }
@@ -179,27 +207,29 @@ void SegmentationFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outp
     GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, m_lastMaskTexId);
     glUniform1i(m_locMaskTex, 1);
 
-    // texBgImage — slot 2 (IMAGE_BG mode; bind 0 when unused)
+    // texBgImage — slot 2 (IMAGE_BG or BLUR_BG mode)
+    Mode mode = getMode();
+    GLuint bgTexId = 0;
+    if (mode == Mode::IMAGE_BG) {
+        bgTexId = m_bgImageTexId;
+    } else if (mode == Mode::BLUR_BG && m_blurredFb) {
+        bgTexId = m_blurredFb->getTexture().id;
+    }
+
     GLStateManager::getInstance().activeTexture(GL_TEXTURE2);
-    GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D,
-        m_bgImageTexId ? m_bgImageTexId : 0);
+    GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, bgTexId);
     glUniform1i(m_locBgImageTex, 2);
 
     // mode
-    int mode = 0;
-    if (m_parameters.count("mode"))
-        mode = std::any_cast<int>(m_parameters.at("mode"));
-    glUniform1i(m_locMode, mode);
+    glUniform1i(m_locMode, static_cast<int>(mode));
 
     // bgColor (ARGB uint → normalized RGBA float)
-    if (m_parameters.count("bgColor")) {
-        uint32_t argb = std::any_cast<uint32_t>(m_parameters.at("bgColor"));
-        float r = ((argb >> 16) & 0xFF) / 255.0f;
-        float g = ((argb >>  8) & 0xFF) / 255.0f;
-        float b = ((argb >>  0) & 0xFF) / 255.0f;
-        float a = ((argb >> 24) & 0xFF) / 255.0f;
-        glUniform4f(m_locBgColor, r, g, b, a);
-    }
+    uint32_t argb = getBgColor();
+    float r = ((argb >> 16) & 0xFF) / 255.0f;
+    float g = ((argb >>  8) & 0xFF) / 255.0f;
+    float b = ((argb >>  0) & 0xFF) / 255.0f;
+    float a = ((argb >> 24) & 0xFF) / 255.0f;
+    glUniform4f(m_locBgColor, r, g, b, a);
 
     // edgeSoften
     float edgeSoften = 0.5f;
@@ -220,6 +250,33 @@ void SegmentationFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outp
 
 std::string SegmentationFilter::getVertexShaderSource()   const { return kSegVertSrc; }
 std::string SegmentationFilter::getFragmentShaderSource() const { return kSegFragSrc; }
+
+SegmentationFilter::Mode SegmentationFilter::getMode() const {
+    if (m_parameters.count("mode")) {
+        try {
+            return static_cast<Mode>(std::any_cast<int>(m_parameters.at("mode")));
+        } catch (...) {}
+    }
+    return Mode::BLUR_BG;
+}
+
+float SegmentationFilter::getBlurStrength() const {
+    if (m_parameters.count("blurStrength")) {
+        try {
+            return std::any_cast<float>(m_parameters.at("blurStrength"));
+        } catch (...) {}
+    }
+    return 10.0f;
+}
+
+uint32_t SegmentationFilter::getBgColor() const {
+    if (m_parameters.count("bgColor")) {
+        try {
+            return std::any_cast<uint32_t>(m_parameters.at("bgColor"));
+        } catch (...) {}
+    }
+    return 0xFF000000u;
+}
 
 } // namespace video
 } // namespace sdk
