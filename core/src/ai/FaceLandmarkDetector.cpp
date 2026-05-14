@@ -376,12 +376,19 @@ LandmarkFrameResult FaceLandmarkDetector::runTFLite(
 void FaceLandmarkDetector::decodeLandmarks(const float* out, int outLen,
                                             int imgW, int imgH, FaceResult& face)
 {
+    if (!out) {
+        face.detected = false;
+        return;
+    }
+
     if (outLen == kFaceLandmarkCount * 2) {
         for (int i = 0; i < kFaceLandmarkCount; ++i) {
             face.landmarks[i].x     = out[i * 2 + 0] * (float)imgW;
             face.landmarks[i].y     = out[i * 2 + 1] * (float)imgH;
             face.landmarks[i].score = 1.0f;
         }
+        face.detected   = true;
+        face.faceScore  = 1.0f;
     } else if (outLen == kFaceLandmarkCount * 3) {
         for (int i = 0; i < kFaceLandmarkCount; ++i) {
             float x     = out[i * 3 + 0];
@@ -392,11 +399,12 @@ void FaceLandmarkDetector::decodeLandmarks(const float* out, int outLen,
             // 置信度过滤：低于 0.5 的点视为无效（score=0）
             face.landmarks[i].score = (s < 0.5f) ? 0.0f : s;
         }
+        face.detected   = true;
+        face.faceScore  = 1.0f;
     } else {
         LOGE("FaceLandmarkDetector: unexpected output length %d", outLen);
+        face.detected   = false;
     }
-    face.detected   = true;
-    face.faceScore  = 1.0f;
 }
 
 } // namespace ai
