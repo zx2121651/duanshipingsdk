@@ -12,6 +12,7 @@
 
 #include "../core/include/ai/TfliteInferenceEngine.h"
 #include "../core/include/ai/FaceLandmarkDetector.h"
+#include "../core/include/ai/BodyPoseDetector.h"
 #include "../core/include/ai/BeautyFilter.h"
 #include "../core/include/ai/SegmentationFilter.h"
 
@@ -170,18 +171,25 @@ static bool test_decode_landmarks_212() {
     const std::string k = "decodeLandmarks 212-float (XY only)";
     float mockOutput[212];
     for (int i = 0; i < 106; ++i) {
-        mockOutput[i * 2 + 0] = 0.5f; // center x
-        mockOutput[i * 2 + 1] = 0.5f; // center y
+        mockOutput[i * 2 + 0] = static_cast<float>(i) / 105.0f; // x: 0.0 -> 1.0
+        mockOutput[i * 2 + 1] = 1.0f - static_cast<float>(i) / 105.0f; // y: 1.0 -> 0.0
     }
 
     FaceResult res;
-    FaceLandmarkDetector::decodeLandmarks(mockOutput, 212, 1280, 720, res);
+    FaceLandmarkDetector::decodeLandmarks(mockOutput, 212, 1000, 1000, res);
 
-    if (res.landmarks[0].x != 640.0f || res.landmarks[0].y != 360.0f) {
-        fail(k, "incorrect denormalization"); return false;
-    }
-    if (res.landmarks[0].score != 1.0f) {
-        fail(k, "default score should be 1.0"); return false;
+    if (!res.detected) { fail(k, "should be detected"); return false; }
+
+    for (int i = 0; i < 106; ++i) {
+        float expectedX = (static_cast<float>(i) / 105.0f) * 1000.0f;
+        float expectedY = (1.0f - static_cast<float>(i) / 105.0f) * 1000.0f;
+        if (std::abs(res.landmarks[i].x - expectedX) > 1e-4f ||
+            std::abs(res.landmarks[i].y - expectedY) > 1e-4f) {
+            fail(k, "incorrect denormalization at point " + std::to_string(i)); return false;
+        }
+        if (res.landmarks[i].score != 1.0f) {
+            fail(k, "default score should be 1.0 at point " + std::to_string(i)); return false;
+        }
     }
     pass(k);
     return true;
@@ -194,17 +202,89 @@ static bool test_decode_landmarks_318_filtering() {
     const std::string k = "decodeLandmarks 318-float (XYS with filtering)";
     float mockOutput[318];
     for (int i = 0; i < 106; ++i) {
-        mockOutput[i * 3 + 0] = 0.1f;
-        mockOutput[i * 3 + 1] = 0.1f;
-        mockOutput[i * 3 + 2] = (i % 2 == 0) ? 0.8f : 0.3f; // valid/invalid alternate
+        mockOutput[i * 3 + 0] = 0.5f;
+        mockOutput[i * 3 + 1] = 0.5f;
+        // Test various scores: 0.0, 0.49 (invalid), 0.5 (valid), 1.0 (valid)
+        if (i == 0) mockOutput[i * 3 + 2] = 0.0f;
+        else if (i == 1) mockOutput[i * 3 + 2] = 0.49f;
+        else if (i == 2) mockOutput[i * 3 + 2] = 0.5f;
+        else if (i == 3) mockOutput[i * 3 + 2] = 1.0f;
+        else mockOutput[i * 3 + 2] = 0.8f;
     }
 
     FaceResult res;
     FaceLandmarkDetector::decodeLandmarks(mockOutput, 318, 100, 100, res);
 
-    if (res.landmarks[0].score != 0.8f) { fail(k, "pt0 should be valid"); return false; }
+    if (!res.detected) { fail(k, "should be detected"); return false; }
+    if (res.landmarks[0].score != 0.0f) { fail(k, "pt0 should be 0.0"); return false; }
     if (res.landmarks[1].score != 0.0f) { fail(k, "pt1 should be filtered (score=0)"); return false; }
-    if (res.landmarks[1].x != 10.0f)     { fail(k, "coord should still be preserved even if score=0"); return false; }
+    if (res.landmarks[2].score != 0.5f) { fail(k, "pt2 should be 0.5"); return false; }
+    if (res.landmarks[3].score != 1.0f) { fail(k, "pt3 should be 1.0"); return false; }
+
+    if (res.landmarks[1].x != 50.0f) { fail(k, "coord should still be preserved even if score=0"); return false; }
+
+    pass(k);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Test 10: decodeLandmarks 异常长度处理
+// ---------------------------------------------------------------------------
+static bool test_decode_landmarks_invalid_len() {
+    const std::string k = "decodeLandmarks invalid output length";
+    float mockOutput[100];
+    FaceResult res;
+    res.detected = true;
+    FaceLandmarkDetector::decodeLandmarks(mockOutput, 100, 1280, 720, res);
+    if (res.detected) { fail(k, "detected should be false for invalid length"); return false; }
+
+    FaceLandmarkDetector::decodeLandmarks(nullptr, 212, 1280, 720, res);
+    if (res.detected) { fail(k, "detected should be false for null output"); return false; }
+
+    pass(k);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Test 10: BodyPoseDetector::decodeKeypoints
+// ---------------------------------------------------------------------------
+class BodyPoseDetectorTestAccessor : public BodyPoseDetector {
+public:
+    static PoseResult decodeKeypointsProxy(const float* output, int w, int h) {
+        return BodyPoseDetector::decodeKeypoints(output, w, h);
+    }
+};
+
+static bool test_body_pose_decode() {
+    const std::string k = "BodyPoseDetector::decodeKeypoints (MoveNet format)";
+
+    // 17 points * 3 = 51 floats. [y, x, score]
+    float mockOutput[51];
+    for (int i = 0; i < 17; ++i) {
+        mockOutput[i * 3 + 0] = 0.5f; // y
+        mockOutput[i * 3 + 1] = 0.2f; // x
+        mockOutput[i * 3 + 2] = (i == 0) ? 0.1f : 0.8f; // point 0 invalid, others valid
+    }
+
+    int w = 1000, h = 500;
+    auto res = BodyPoseDetectorTestAccessor::decodeKeypointsProxy(mockOutput, w, h);
+
+    if (res.keypoints.size() != 17) { fail(k, "should have 17 points"); return false; }
+
+    // Check denormalization: x = 0.2 * 1000 = 200, y = 0.5 * 500 = 250
+    if (res.keypoints[0].x != 200.0f || res.keypoints[0].y != 250.0f) {
+        fail(k, "incorrect denormalization"); return false;
+    }
+
+    // Check isValid (default threshold 0.3)
+    if (res.keypoints[0].isValid()) { fail(k, "pt0 should be invalid (score 0.1)"); return false; }
+    if (!res.keypoints[1].isValid()) { fail(k, "pt1 should be valid (score 0.8)"); return false; }
+
+    // Check poseScore calculation: (0.1 + 16 * 0.8) / 17 = 12.9 / 17 ≈ 0.7588
+    float expectedScore = (0.1f + 16 * 0.8f) / 17.0f;
+    if (std::abs(res.poseScore - expectedScore) > 1e-5) {
+        fail(k, "incorrect poseScore"); return false;
+    }
 
     pass(k);
     return true;
