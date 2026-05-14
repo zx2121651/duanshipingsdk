@@ -268,7 +268,14 @@ PoseFrameResult BodyPoseDetector::runTFLite(const uint8_t* rgba,
 PoseResult BodyPoseDetector::decodeKeypoints(const float* output,
                                               int w, int h) {
     PoseResult pose;
+    if (!output) {
+        pose.detected = false;
+        return pose;
+    }
+
     float scoreSum = 0.f;
+    // Current MoveNet-style: 17 points [y, x, score]
+    // TODO: Reserved for 33-point BlazePose extension (indices 17-32)
     for (int i = 0; i < kPoseKeypointCount; ++i) {
         // MoveNet: output[i*3+0] = y_norm, [i*3+1] = x_norm, [i*3+2] = score
         pose.keypoints[i].y     = output[i * 3 + 0] * (float)h;

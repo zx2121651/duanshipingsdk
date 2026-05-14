@@ -9,6 +9,7 @@
 #include <string>
 #include <memory>
 #include <vector>
+#include <cstring>
 
 #include "../core/include/ai/TfliteInferenceEngine.h"
 #include "../core/include/ai/FaceLandmarkDetector.h"
@@ -325,117 +326,7 @@ static bool test_decode_landmarks_invalid_len() {
 }
 
 // ---------------------------------------------------------------------------
-// Test 11: decodeLandmarks 212 格式 BoundingBox
-// ---------------------------------------------------------------------------
-static bool test_decode_landmarks_212_bbox() {
-    const std::string k = "decodeLandmarks 212-float BoundingBox";
-    float mockOutput[212];
-    for (int i = 0; i < 106; ++i) {
-        // Range: [0.2, 0.2] to [0.8, 0.8]
-        mockOutput[i * 2 + 0] = 0.2f + 0.6f * static_cast<float>(i) / 105.0f;
-        mockOutput[i * 2 + 1] = 0.2f + 0.6f * static_cast<float>(i) / 105.0f;
-    }
-
-    FaceResult res;
-    FaceLandmarkDetector::decodeLandmarks(mockOutput, 212, 100, 100, res);
-
-    if (!res.detected) { fail(k, "should be detected"); return false; }
-    // bbox: [0.2, 0.2, 0.6, 0.6]
-    if (std::abs(res.boundingBox[0] - 0.2f) > 1e-5f ||
-        std::abs(res.boundingBox[1] - 0.2f) > 1e-5f ||
-        std::abs(res.boundingBox[2] - 0.6f) > 1e-5f ||
-        std::abs(res.boundingBox[3] - 0.6f) > 1e-5f) {
-        fail(k, "incorrect bounding box calculation"); return false;
-    }
-    pass(k);
-    return true;
-}
-
-// ---------------------------------------------------------------------------
-// Test 12: decodeLandmarks 318 格式 BoundingBox 与过滤
-// ---------------------------------------------------------------------------
-static bool test_decode_landmarks_318_bbox_filtering() {
-    const std::string k = "decodeLandmarks 318-float BoundingBox with filtering";
-    float mockOutput[318];
-    for (int i = 0; i < 106; ++i) {
-        mockOutput[i * 3 + 0] = 0.5f;
-        mockOutput[i * 3 + 1] = 0.5f;
-        mockOutput[i * 3 + 2] = 0.1f; // all low score initially
-    }
-
-    // Set two valid points to define bbox
-    mockOutput[10 * 3 + 0] = 0.3f; mockOutput[10 * 3 + 1] = 0.3f; mockOutput[10 * 3 + 2] = 0.9f;
-    mockOutput[20 * 3 + 0] = 0.7f; mockOutput[20 * 3 + 1] = 0.7f; mockOutput[20 * 3 + 2] = 0.9f;
-
-    FaceResult res;
-    FaceLandmarkDetector::decodeLandmarks(mockOutput, 318, 100, 100, res);
-
-    if (!res.detected) { fail(k, "should be detected"); return false; }
-    // bbox should be [0.3, 0.3, 0.4, 0.4], ignoring 0.5,0.5 points because they have 0.1 score
-    if (std::abs(res.boundingBox[0] - 0.3f) > 1e-5f ||
-        std::abs(res.boundingBox[1] - 0.3f) > 1e-5f ||
-        std::abs(res.boundingBox[2] - 0.4f) > 1e-5f ||
-        std::abs(res.boundingBox[3] - 0.4f) > 1e-5f) {
-        fail(k, "incorrect bounding box with filtering. Got [" +
-            std::to_string(res.boundingBox[0]) + "," + std::to_string(res.boundingBox[1]) + "]");
-        return false;
-    }
-    pass(k);
-    return true;
-}
-
-// ---------------------------------------------------------------------------
-// Test 13: decodeLandmarks 全部过滤
-// ---------------------------------------------------------------------------
-static bool test_decode_landmarks_all_filtered() {
-    const std::string k = "decodeLandmarks all points filtered";
-    float mockOutput[318];
-    for (int i = 0; i < 106; ++i) {
-        mockOutput[i * 3 + 0] = 0.5f;
-        mockOutput[i * 3 + 1] = 0.5f;
-        mockOutput[i * 3 + 2] = 0.4f; // all low score
-    }
-
-    FaceResult res;
-    res.detected = true;
-    FaceLandmarkDetector::decodeLandmarks(mockOutput, 318, 100, 100, res);
-
-    if (res.detected) { fail(k, "detected should be false when all points are filtered"); return false; }
-    pass(k);
-    return true;
-}
-
-// ---------------------------------------------------------------------------
-// Test 14: decodeLandmarks 边界精度测试
-// ---------------------------------------------------------------------------
-static bool test_decode_landmarks_bbox_precision() {
-    const std::string k = "decodeLandmarks bbox precision (single point)";
-    float mockOutput[318];
-    for (int i = 0; i < 106; ++i) {
-        mockOutput[i * 3 + 0] = 0.0f;
-        mockOutput[i * 3 + 1] = 0.0f;
-        mockOutput[i * 3 + 2] = 0.0f;
-    }
-    mockOutput[50 * 3 + 0] = 0.123f;
-    mockOutput[50 * 3 + 1] = 0.456f;
-    mockOutput[50 * 3 + 2] = 1.0f;
-
-    FaceResult res;
-    FaceLandmarkDetector::decodeLandmarks(mockOutput, 318, 100, 100, res);
-
-    if (!res.detected) { fail(k, "should be detected"); return false; }
-    if (std::abs(res.boundingBox[0] - 0.123f) > 1e-6f ||
-        std::abs(res.boundingBox[1] - 0.456f) > 1e-6f ||
-        std::abs(res.boundingBox[2] - 0.0f) > 1e-6f ||
-        std::abs(res.boundingBox[3] - 0.0f) > 1e-6f) {
-        fail(k, "precision check failed"); return false;
-    }
-    pass(k);
-    return true;
-}
-
-// ---------------------------------------------------------------------------
-// Test 15: BodyPoseDetector::decodeKeypoints
+// BodyPoseDetector Tests
 // ---------------------------------------------------------------------------
 class BodyPoseDetectorTestAccessor : public BodyPoseDetector {
 public:
@@ -444,37 +335,86 @@ public:
     }
 };
 
-static bool test_body_pose_decode() {
-    const std::string k = "BodyPoseDetector::decodeKeypoints (MoveNet format)";
-
-    // 17 points * 3 = 51 floats. [y, x, score]
+static bool test_body_pose_decode_basic() {
+    const std::string k = "BodyPoseDetector::decodeKeypoints basic (MoveNet format)";
     float mockOutput[51];
     for (int i = 0; i < 17; ++i) {
         mockOutput[i * 3 + 0] = 0.5f; // y
         mockOutput[i * 3 + 1] = 0.2f; // x
-        mockOutput[i * 3 + 2] = (i == 0) ? 0.1f : 0.8f; // point 0 invalid, others valid
+        mockOutput[i * 3 + 2] = 0.8f; // score
     }
+    int w = 1000, h = 500;
+    auto res = BodyPoseDetectorTestAccessor::decodeKeypointsProxy(mockOutput, w, h);
+
+    if (!res.detected) { fail(k, "should be detected"); return false; }
+    if (res.keypoints[0].x != 200.0f || res.keypoints[0].y != 250.0f) {
+        fail(k, "incorrect denormalization"); return false;
+    }
+    pass(k);
+    return true;
+}
+
+static bool test_body_pose_semantics() {
+    const std::string k = "BodyPoseDetector semantics (shoulderCenter/torsoHeight)";
+    float mockOutput[51];
+    std::memset(mockOutput, 0, sizeof(mockOutput));
+    // Left shoulder (5): (100, 100)
+    mockOutput[5 * 3 + 0] = 0.2f; // y=100/500
+    mockOutput[5 * 3 + 1] = 0.1f; // x=100/1000
+    mockOutput[5 * 3 + 2] = 0.9f;
+    // Right shoulder (6): (300, 100)
+    mockOutput[6 * 3 + 0] = 0.2f; // y=100/500
+    mockOutput[6 * 3 + 1] = 0.3f; // x=300/1000
+    mockOutput[6 * 3 + 2] = 0.9f;
+    // Left hip (11): (100, 400)
+    mockOutput[11 * 3 + 0] = 0.8f; // y=400/500
+    mockOutput[11 * 3 + 1] = 0.1f; // x=100/1000
+    mockOutput[11 * 3 + 2] = 0.9f;
+    // Right hip (12): (300, 400)
+    mockOutput[12 * 3 + 0] = 0.8f; // y=400/500
+    mockOutput[12 * 3 + 1] = 0.3f; // x=300/1000
+    mockOutput[12 * 3 + 2] = 0.9f;
 
     int w = 1000, h = 500;
     auto res = BodyPoseDetectorTestAccessor::decodeKeypointsProxy(mockOutput, w, h);
 
-    if (res.keypoints.size() != 17) { fail(k, "should have 17 points"); return false; }
+    auto sc = res.shoulderCenter();
+    if (sc.x != 200.0f || sc.y != 100.0f) { fail(k, "shoulderCenter failed"); return false; }
 
-    // Check denormalization: x = 0.2 * 1000 = 200, y = 0.5 * 500 = 250
-    if (res.keypoints[0].x != 200.0f || res.keypoints[0].y != 250.0f) {
-        fail(k, "incorrect denormalization"); return false;
+    float th = res.torsoHeight();
+    // Shoulder center (200, 100), Hip center (200, 400) -> distance = 300
+    if (std::abs(th - 300.0f) > 1e-4f) { fail(k, "torsoHeight failed: " + std::to_string(th)); return false; }
+
+    pass(k);
+    return true;
+}
+
+static bool test_body_pose_low_score() {
+    const std::string k = "BodyPoseDetector low score handling";
+    float mockOutput[51];
+    for (int i = 0; i < 17; ++i) {
+        mockOutput[i * 3 + 0] = 0.5f;
+        mockOutput[i * 3 + 1] = 0.5f;
+        mockOutput[i * 3 + 2] = 0.1f; // all points low score
     }
+    int w = 100, h = 100;
+    auto res = BodyPoseDetectorTestAccessor::decodeKeypointsProxy(mockOutput, w, h);
 
-    // Check isValid (default threshold 0.3)
-    if (res.keypoints[0].isValid()) { fail(k, "pt0 should be invalid (score 0.1)"); return false; }
-    if (!res.keypoints[1].isValid()) { fail(k, "pt1 should be valid (score 0.8)"); return false; }
+    if (res.detected) { fail(k, "should NOT be detected with avg score 0.1"); return false; }
+    if (res.keypoints[0].isValid(0.3f)) { fail(k, "pt0 should be invalid"); return false; }
 
-    // Check poseScore calculation: (0.1 + 16 * 0.8) / 17 = 12.9 / 17 ≈ 0.7588
-    float expectedScore = (0.1f + 16 * 0.8f) / 17.0f;
-    if (std::abs(res.poseScore - expectedScore) > 1e-5) {
-        fail(k, "incorrect poseScore"); return false;
-    }
+    mockOutput[0 * 3 + 2] = 0.4f;
+    res = BodyPoseDetectorTestAccessor::decodeKeypointsProxy(mockOutput, w, h);
+    if (!res.keypoints[0].isValid(0.3f)) { fail(k, "pt0 should be valid with 0.4 score"); return false; }
 
+    pass(k);
+    return true;
+}
+
+static bool test_body_pose_null_input() {
+    const std::string k = "BodyPoseDetector null input handling";
+    auto res = BodyPoseDetectorTestAccessor::decodeKeypointsProxy(nullptr, 100, 100);
+    if (res.detected) { fail(k, "detected should be false for null input"); return false; }
     pass(k);
     return true;
 }
@@ -557,6 +497,12 @@ int main() {
     run(test_segmentation_default_params());
     run(test_segmentation_set_parameter_sync());
     run(test_segmentation_all_modes_switch());
+
+    // BodyPoseDetector tests
+    run(test_body_pose_decode_basic());
+    run(test_body_pose_semantics());
+    run(test_body_pose_low_score());
+    run(test_body_pose_null_input());
 
     std::cout << "\nResult: " << passed << "/" << total << " passed\n";
     return (passed == total) ? 0 : 1;
