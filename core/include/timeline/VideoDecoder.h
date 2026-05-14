@@ -63,7 +63,7 @@ public:
 
     Result seekExact(int64_t timeNs) override {
         return Result::error(ErrorCode::ERR_TIMELINE_SOFT_DECODER_UNIMPLEMENTED,
-            "SoftwareVideoDecoder: FFmpeg not integrated");
+            "SoftwareVideoDecoder: FFmpeg not integrated or not open");
     }
 
     void close() override {}

@@ -139,12 +139,14 @@ public:
         m_filePath = filePath;
 
         m_fmtCtx = avformat_alloc_context();
-        if (!m_fmtCtx)
+        if (!m_fmtCtx) {
+            close();
             return Result::error(ErrorCode::ERR_DECODER_OPEN_FAILED,
                 "FFmpegVideoDecoder: avformat_alloc_context failed");
+        }
 
         if (avformat_open_input(&m_fmtCtx, filePath.c_str(), nullptr, nullptr) < 0) {
-            m_fmtCtx = nullptr; // avformat_open_input already freed it on failure
+            close();
             return Result::error(ErrorCode::ERR_DECODER_OPEN_FAILED,
                 "FFmpegVideoDecoder: cannot open " + filePath);
         }
@@ -152,7 +154,7 @@ public:
         if (avformat_find_stream_info(m_fmtCtx, nullptr) < 0) {
             close();
             return Result::error(ErrorCode::ERR_DECODER_OPEN_FAILED,
-                "FFmpegVideoDecoder: cannot find stream info: " + filePath);
+                "FFmpegVideoDecoder: avformat_find_stream_info failed for " + filePath);
         }
 
         m_videoStreamIdx = -1;
@@ -178,7 +180,7 @@ public:
         if (!codec) {
             close();
             return Result::error(ErrorCode::ERR_DECODER_OPEN_FAILED,
-                "FFmpegVideoDecoder: no decoder for codec_id");
+                "FFmpegVideoDecoder: avcodec_find_decoder failed for codec_id " + std::to_string(stream->codecpar->codec_id));
         }
 
         m_codecCtx = avcodec_alloc_context3(codec);
@@ -256,9 +258,13 @@ public:
     // seekExact()
     // -----------------------------------------------------------------------
     Result seekExact(int64_t timeNs) override {
-        if (!m_isOpen || !m_codecCtx || !m_fmtCtx)
+        if (!m_isOpen)
             return Result::error(ErrorCode::ERR_DECODER_SEEK_FAILED,
-                "FFmpegVideoDecoder: not open or null context");
+                "FFmpegVideoDecoder: seek failed because decoder is not open");
+
+        if (!m_fmtCtx || !m_codecCtx)
+            return Result::error(ErrorCode::ERR_DECODER_SEEK_FAILED,
+                "FFmpegVideoDecoder: seek failed due to null FFmpeg context");
 
         int64_t ts = av_rescale_q(timeNs / 1000,
                                    AVRational{1, AV_TIME_BASE},
@@ -350,12 +356,13 @@ public:
         m_isOpen = false;
         releaseGLResources();
 
-        if (m_codecCtx)  { avcodec_free_context(&m_codecCtx); }
-        if (m_fmtCtx)    { avformat_close_input(&m_fmtCtx);   }
-        if (m_frame)     { av_frame_free(&m_frame);      }
-        if (m_i420Frame) { av_frame_free(&m_i420Frame);  }
-        if (m_packet)    { av_packet_free(&m_packet);    }
-        if (m_swsCtx)    { sws_freeContext(m_swsCtx);    m_swsCtx = nullptr; }
+        // 释放链：codec → format → frame → packet → sws
+        if (m_codecCtx)  { avcodec_free_context(&m_codecCtx); m_codecCtx = nullptr; }
+        if (m_fmtCtx)    { avformat_close_input(&m_fmtCtx);   m_fmtCtx = nullptr; }
+        if (m_frame)     { av_frame_free(&m_frame);          m_frame = nullptr; }
+        if (m_i420Frame) { av_frame_free(&m_i420Frame);      m_i420Frame = nullptr; }
+        if (m_packet)    { av_packet_free(&m_packet);        m_packet = nullptr; }
+        if (m_swsCtx)    { sws_freeContext(m_swsCtx);        m_swsCtx = nullptr; }
 
         m_i420Buffer.clear();
         LOGI("FFmpegVideoDecoder closed: %s", m_filePath.c_str());
