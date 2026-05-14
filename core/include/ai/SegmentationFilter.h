@@ -52,6 +52,7 @@ public:
     Mode getMode() const;
     float getBlurStrength() const;
     uint32_t getBgColor() const;
+    float getEdgeSoften() const;
 
     std::string getVertexShaderName()   const override { return "segmentation.vert"; }
     std::string getFragmentShaderName() const override { return "segmentation.frag"; }

@@ -60,6 +60,10 @@ jobs:
   android-unit-tests:
     name: "Android Unit Tests"
     runs-on: ubuntu-22.04
+    permissions:
+      checks: write
+      pull-requests: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
 

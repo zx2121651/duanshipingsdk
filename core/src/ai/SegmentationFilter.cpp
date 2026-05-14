@@ -232,10 +232,7 @@ void SegmentationFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outp
     glUniform4f(m_locBgColor, r, g, b, a);
 
     // edgeSoften
-    float edgeSoften = 0.5f;
-    if (m_parameters.count("edgeSoften"))
-        edgeSoften = std::any_cast<float>(m_parameters.at("edgeSoften"));
-    glUniform1f(m_locEdgeSoften, edgeSoften);
+    glUniform1f(m_locEdgeSoften, getEdgeSoften());
 
     // 全屏四边形（通过 render device command buffer，同 GaussianBlurFilter 模式）
     if (m_renderDevice && m_quadVao) {
@@ -276,6 +273,15 @@ uint32_t SegmentationFilter::getBgColor() const {
         } catch (...) {}
     }
     return 0xFF000000u;
+}
+
+float SegmentationFilter::getEdgeSoften() const {
+    if (m_parameters.count("edgeSoften")) {
+        try {
+            return std::any_cast<float>(m_parameters.at("edgeSoften"));
+        } catch (...) {}
+    }
+    return 0.5f;
 }
 
 } // namespace video
