@@ -41,6 +41,130 @@ static bool test_engine_construct() {
 }
 
 // ---------------------------------------------------------------------------
+// Test 10: SegmentationFilter 参数读写与 Mode 切换
+// ---------------------------------------------------------------------------
+static bool test_segmentation_params() {
+    const std::string k = "SegmentationFilter parameters set/get and mode switch";
+    try {
+        SegmentationFilter sf(nullptr, nullptr);
+
+        // 1. Mode check
+        sf.setParameter("mode", static_cast<int>(SegmentationFilter::Mode::BG_COLOR));
+        if (sf.getMode() != SegmentationFilter::Mode::BG_COLOR) {
+            fail(k, "Mode set/get failed (BG_COLOR)"); return false;
+        }
+
+        sf.setParameter("mode", static_cast<int>(SegmentationFilter::Mode::TRANSPARENT));
+        if (sf.getMode() != SegmentationFilter::Mode::TRANSPARENT) {
+            fail(k, "Mode switch failed (TRANSPARENT)"); return false;
+        }
+
+        sf.setParameter("mode", static_cast<int>(SegmentationFilter::Mode::BG_IMAGE));
+        if (sf.getMode() != SegmentationFilter::Mode::BG_IMAGE) {
+            fail(k, "Mode switch failed (BG_IMAGE)"); return false;
+        }
+
+        sf.setParameter("mode", static_cast<int>(SegmentationFilter::Mode::ORIGINAL));
+        if (sf.getMode() != SegmentationFilter::Mode::ORIGINAL) {
+            fail(k, "Mode switch failed (ORIGINAL)"); return false;
+        }
+
+        sf.setParameter("mode", static_cast<int>(SegmentationFilter::Mode::BLUR));
+        if (sf.getMode() != SegmentationFilter::Mode::BLUR) {
+            fail(k, "Mode switch failed (BLUR)"); return false;
+        }
+
+        // 2. blurStrength check
+        sf.setParameter("blurStrength", 25.0f);
+        if (sf.getBlurStrength() != 25.0f) {
+            fail(k, "blurStrength set/get failed"); return false;
+        }
+
+        // 3. bgColor check
+        uint32_t red = 0xFFFF0000u;
+        sf.setParameter("bgColor", red);
+        if (sf.getBgColor() != red) {
+            fail(k, "bgColor set/get failed"); return false;
+        }
+
+        // 4. bgImageTexture check
+        sf.setBgImageTexture(12345u);
+        if (sf.getBgImageTexture() != 12345u) {
+            fail(k, "bgImageTexture set/get failed"); return false;
+        }
+
+    } catch (...) {
+        fail(k, "unexpected exception"); return false;
+    }
+    pass(k);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Test 11: SegmentationFilter 默认参数验证
+// ---------------------------------------------------------------------------
+static bool test_segmentation_default_params() {
+    const std::string k = "SegmentationFilter default parameters";
+    try {
+        SegmentationFilter sf(nullptr, nullptr);
+        if (sf.getMode() != SegmentationFilter::Mode::BLUR) { fail(k, "default mode should be BLUR"); return false; }
+        if (sf.getBlurStrength() != 10.0f) { fail(k, "default blurStrength should be 10.0"); return false; }
+        if (sf.getBgColor() != 0xFF000000u) { fail(k, "default bgColor should be black"); return false; }
+        if (sf.getEdgeSoften() != 0.5f) { fail(k, "default edgeSoften should be 0.5"); return false; }
+        if (sf.getBgImageTexture() != 0u) { fail(k, "default bgImageTexture should be 0"); return false; }
+    } catch (...) { fail(k, "unexpected exception"); return false; }
+    pass(k);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Test 12: SegmentationFilter setParameter("bgImageTexture") 同步验证
+// ---------------------------------------------------------------------------
+static bool test_segmentation_set_parameter_sync() {
+    const std::string k = "SegmentationFilter setParameter sync";
+    try {
+        SegmentationFilter sf(nullptr, nullptr);
+        uint32_t texId = 54321u;
+        sf.setParameter("bgImageTexture", texId);
+        if (sf.getBgImageTexture() != texId) {
+            fail(k, "setParameter('bgImageTexture') failed to sync m_bgImageTexId"); return false;
+        }
+
+        // Test with int cast
+        int texIdInt = 112233;
+        sf.setParameter("bgImageTexture", texIdInt);
+        if (sf.getBgImageTexture() != static_cast<uint32_t>(texIdInt)) {
+            fail(k, "setParameter('bgImageTexture') with int failed to sync"); return false;
+        }
+    } catch (...) { fail(k, "unexpected exception"); return false; }
+    pass(k);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Test 13: SegmentationFilter 所有模式顺序切换验证
+// ---------------------------------------------------------------------------
+static bool test_segmentation_all_modes_switch() {
+    const std::string k = "SegmentationFilter all modes switch";
+    try {
+        SegmentationFilter sf(nullptr, nullptr);
+        SegmentationFilter::Mode modes[] = {
+            SegmentationFilter::Mode::BLUR,
+            SegmentationFilter::Mode::BG_COLOR,
+            SegmentationFilter::Mode::TRANSPARENT,
+            SegmentationFilter::Mode::BG_IMAGE,
+            SegmentationFilter::Mode::ORIGINAL
+        };
+        for (auto m : modes) {
+            sf.setParameter("mode", static_cast<int>(m));
+            if (sf.getMode() != m) { fail(k, "Mode switch failed for " + std::to_string(static_cast<int>(m))); return false; }
+        }
+    } catch (...) { fail(k, "unexpected exception"); return false; }
+    pass(k);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
 // Test 2: loadModel() 错误路径
 // ---------------------------------------------------------------------------
 static bool test_load_model_invalid() {
@@ -430,6 +554,9 @@ int main() {
     run(test_decode_landmarks_bbox_precision());
     run(test_body_pose_decode());
     run(test_segmentation_params());
+    run(test_segmentation_default_params());
+    run(test_segmentation_set_parameter_sync());
+    run(test_segmentation_all_modes_switch());
 
     std::cout << "\nResult: " << passed << "/" << total << " passed\n";
     return (passed == total) ? 0 : 1;

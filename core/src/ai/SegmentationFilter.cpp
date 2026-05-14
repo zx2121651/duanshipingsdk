@@ -54,15 +54,18 @@ void main() {
     float softRange = u_edgeSoften * 0.15;
     float alpha = smoothstep(0.5 - softRange, 0.5 + softRange, fg);
     if (u_mode == 1) {
-        // REPLACE_BG: pure colour background
+        // BG_COLOR: pure colour background
         fragColor = mix(u_bgColor, orig, alpha);
     } else if (u_mode == 2) {
         // TRANSPARENT: background alpha = 0
         fragColor = vec4(orig.rgb, alpha);
     } else if (u_mode == 3 || u_mode == 0) {
-        // IMAGE_BG or BLUR_BG: texture background
+        // BG_IMAGE or BLUR: texture background
         vec4 bgPixel = texture(texBgImage, v_texCoord);
         fragColor = mix(bgPixel, orig, alpha);
+    } else if (u_mode == 4) {
+        // ORIGINAL: bypass
+        fragColor = orig;
     } else {
         fragColor = orig;
     }
@@ -76,16 +79,22 @@ SegmentationFilter::SegmentationFilter(
     : m_engine(std::move(engine))
     , m_pool(pool)
 {
-    m_parameters["mode"]        = 0;
-    m_parameters["blurStrength"]= 10.0f;
-    m_parameters["bgColor"]     = 0xFF000000u;
-    m_parameters["edgeSoften"]  = 0.5f;
+    m_parameters["mode"]         = 0;
+    m_parameters["blurStrength"] = 10.0f;
+    m_parameters["bgColor"]      = 0xFF000000u;
+    m_parameters["edgeSoften"]   = 0.5f;
+    m_parameters["bgImageTexture"] = 0u;
 }
 
 SegmentationFilter::~SegmentationFilter() {
     if (m_pool && m_blurredFb) {
         m_pool->release(m_blurredFb);
     }
+}
+
+void SegmentationFilter::setBgImageTexture(GLuint texId) {
+    m_bgImageTexId = texId;
+    m_parameters["bgImageTexture"] = texId;
 }
 
 // ---------------------------------------------------------------------------
@@ -107,6 +116,19 @@ Result SegmentationFilter::initialize() {
 
 void SegmentationFilter::onProgramRecompiled() {
     cacheUniformLocations();
+}
+
+void SegmentationFilter::setParameter(const std::string& key, const std::any& value) {
+    if (key == "bgImageTexture") {
+        try {
+            m_bgImageTexId = std::any_cast<uint32_t>(value);
+        } catch (...) {
+            try {
+                m_bgImageTexId = static_cast<uint32_t>(std::any_cast<int>(value));
+            } catch (...) {}
+        }
+    }
+    Filter::setParameter(key, value);
 }
 
 void SegmentationFilter::cacheUniformLocations() {
@@ -131,9 +153,9 @@ ResultPayload<Texture> SegmentationFilter::processFrame(
         return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE,
             "SegmentationFilter: null outputFb");
 
-    // ---- 1. 背景预处理 (BLUR_BG) ----
+    // ---- 1. 背景预处理 (BLUR) ----
     Mode mode = getMode();
-    if (mode == Mode::BLUR_BG && m_pool) {
+    if (mode == Mode::BLUR && m_pool) {
         if (!m_blurFilter) {
             m_blurFilter = std::make_unique<GaussianBlurFilter>(m_pool);
             m_blurFilter->setRenderDevice(m_renderDevice);
@@ -207,12 +229,12 @@ void SegmentationFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outp
     GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, m_lastMaskTexId);
     glUniform1i(m_locMaskTex, 1);
 
-    // texBgImage — slot 2 (IMAGE_BG or BLUR_BG mode)
+    // texBgImage — slot 2 (BG_IMAGE or BLUR mode)
     Mode mode = getMode();
     GLuint bgTexId = 0;
-    if (mode == Mode::IMAGE_BG) {
+    if (mode == Mode::BG_IMAGE) {
         bgTexId = m_bgImageTexId;
-    } else if (mode == Mode::BLUR_BG && m_blurredFb) {
+    } else if (mode == Mode::BLUR && m_blurredFb) {
         bgTexId = m_blurredFb->getTexture().id;
     }
 
@@ -254,7 +276,7 @@ SegmentationFilter::Mode SegmentationFilter::getMode() const {
             return static_cast<Mode>(std::any_cast<int>(m_parameters.at("mode")));
         } catch (...) {}
     }
-    return Mode::BLUR_BG;
+    return Mode::BLUR;
 }
 
 float SegmentationFilter::getBlurStrength() const {

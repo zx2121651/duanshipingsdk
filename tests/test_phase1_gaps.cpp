@@ -145,10 +145,11 @@ static void testMediaTypes() {
 static void testSegmentationModes() {
     std::cout << "\n=== SegmentationFilter::Mode ===\n";
 
-    ASSERT_EQ(static_cast<int>(SegmentationFilter::Mode::BLUR_BG),    0, "T13: BLUR_BG==0");
-    ASSERT_EQ(static_cast<int>(SegmentationFilter::Mode::REPLACE_BG), 1, "T14: REPLACE_BG==1");
-    ASSERT_EQ(static_cast<int>(SegmentationFilter::Mode::TRANSPARENT),2, "T15: TRANSPARENT==2");
-    ASSERT_EQ(static_cast<int>(SegmentationFilter::Mode::IMAGE_BG),   3, "T16: IMAGE_BG==3");
+    ASSERT_EQ(static_cast<int>(SegmentationFilter::Mode::BLUR),       0, "T13: BLUR==0");
+    ASSERT_EQ(static_cast<int>(SegmentationFilter::Mode::BG_COLOR),    1, "T14: BG_COLOR==1");
+    ASSERT_EQ(static_cast<int>(SegmentationFilter::Mode::TRANSPARENT), 2, "T15: TRANSPARENT==2");
+    ASSERT_EQ(static_cast<int>(SegmentationFilter::Mode::BG_IMAGE),    3, "T16: BG_IMAGE==3");
+    ASSERT_EQ(static_cast<int>(SegmentationFilter::Mode::ORIGINAL),    4, "T17: ORIGINAL==4");
 }
 
 // ---------------------------------------------------------------------------
