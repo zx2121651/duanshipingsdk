@@ -2,22 +2,16 @@
  * test_ai_inference.cpp
  *
  * TfliteInferenceEngine + BeautyFilter + SegmentationFilter 单元测试。
- *
- * 在无 HAS_TFLITE 的桌面环境中验证：
- *   1. 引擎构造不崩溃
- *   2. loadModel() 返回 false + 有意义的错误描述
- *   3. runInference() 在未加载时返回 success=false
- *   4. release() 幂等
- *   5. BeautyFilter 参数 set/get 一致性
- *   6. SegmentationFilter 在 engine=nullptr 时构造不崩溃
  */
 
 #include <cassert>
 #include <iostream>
 #include <string>
 #include <memory>
+#include <vector>
 
 #include "../core/include/ai/TfliteInferenceEngine.h"
+#include "../core/include/ai/FaceLandmarkDetector.h"
 #include "../core/include/ai/BeautyFilter.h"
 #include "../core/include/ai/SegmentationFilter.h"
 
@@ -93,9 +87,6 @@ static bool test_beauty_params() {
     BeautyFilter bf;
     bf.setParameter("smoothStrength", 0.75f);
     bf.setParameter("whitenStrength", 0.25f);
-
-    // 验证通过 m_parameters map 可读回（Filter::setParameter 写入 map）
-    // 直接访问 protected map 需要子类暴露，这里通过无 GL 环境下不崩溃来验证
     pass(k);
     return true;
 }
@@ -121,9 +112,55 @@ static bool test_segmentation_null_engine() {
 static bool test_load_from_null_buffer() {
     const std::string k = "loadModelFromBuffer(nullptr, 0) returns false";
     TfliteInferenceEngine eng;
-    // Passing zero-size buffer — should not crash
     bool ok = eng.loadModelFromBuffer(nullptr, 0);
     if (ok) { fail(k, "expected false"); return false; }
+    pass(k);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Test 8: decodeLandmarks 212 格式（XY 归一化）
+// ---------------------------------------------------------------------------
+static bool test_decode_landmarks_212() {
+    const std::string k = "decodeLandmarks 212-float (XY only)";
+    float mockOutput[212];
+    for (int i = 0; i < 106; ++i) {
+        mockOutput[i * 2 + 0] = 0.5f; // center x
+        mockOutput[i * 2 + 1] = 0.5f; // center y
+    }
+
+    FaceResult res;
+    FaceLandmarkDetector::decodeLandmarks(mockOutput, 212, 1280, 720, res);
+
+    if (res.landmarks[0].x != 640.0f || res.landmarks[0].y != 360.0f) {
+        fail(k, "incorrect denormalization"); return false;
+    }
+    if (res.landmarks[0].score != 1.0f) {
+        fail(k, "default score should be 1.0"); return false;
+    }
+    pass(k);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Test 9: decodeLandmarks 318 格式（XYS 置信度过滤）
+// ---------------------------------------------------------------------------
+static bool test_decode_landmarks_318_filtering() {
+    const std::string k = "decodeLandmarks 318-float (XYS with filtering)";
+    float mockOutput[318];
+    for (int i = 0; i < 106; ++i) {
+        mockOutput[i * 3 + 0] = 0.1f;
+        mockOutput[i * 3 + 1] = 0.1f;
+        mockOutput[i * 3 + 2] = (i % 2 == 0) ? 0.8f : 0.3f; // valid/invalid alternate
+    }
+
+    FaceResult res;
+    FaceLandmarkDetector::decodeLandmarks(mockOutput, 318, 100, 100, res);
+
+    if (res.landmarks[0].score != 0.8f) { fail(k, "pt0 should be valid"); return false; }
+    if (res.landmarks[1].score != 0.0f) { fail(k, "pt1 should be filtered (score=0)"); return false; }
+    if (res.landmarks[1].x != 10.0f)     { fail(k, "coord should still be preserved even if score=0"); return false; }
+
     pass(k);
     return true;
 }
@@ -149,6 +186,8 @@ int main() {
     run(test_beauty_params());
     run(test_segmentation_null_engine());
     run(test_load_from_null_buffer());
+    run(test_decode_landmarks_212());
+    run(test_decode_landmarks_318_filtering());
 
     std::cout << "\nResult: " << passed << "/" << total << " passed\n";
     return (passed == total) ? 0 : 1;

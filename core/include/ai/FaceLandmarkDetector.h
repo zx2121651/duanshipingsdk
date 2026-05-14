@@ -195,6 +195,7 @@ private:
 #endif
 
     // 后处理：sigmoid + 坐标反归一化
+public:
     static void decodeLandmarks(const float* rawOutput, int outputLen,
                                 int imgW, int imgH, FaceResult& out);
 };
