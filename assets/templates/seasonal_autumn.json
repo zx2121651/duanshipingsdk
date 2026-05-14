@@ -1,0 +1,57 @@
+{
+  "id": "seasonal_autumn",
+  "name": "金秋时节",
+  "version": 1,
+  "duration_ms": 18000,
+  "fps": 30,
+  "width": 1080,
+  "height": 1920,
+  "slots": [
+    {
+      "id": "v0",
+      "type": "video",
+      "duration_ms": 6000,
+      "transition": "wipe_up",
+      "trans_dur_ms": 500,
+      "fit": "crop_center"
+    },
+    {
+      "id": "v1",
+      "type": "video",
+      "duration_ms": 6000,
+      "transition": "wipe_up",
+      "trans_dur_ms": 500,
+      "fit": "crop_center"
+    },
+    {
+      "id": "v2",
+      "type": "video",
+      "duration_ms": 6000,
+      "transition": "wipe_up",
+      "trans_dur_ms": 500,
+      "fit": "crop_center"
+    }
+  ],
+  "subtitles": [
+    {
+      "id": "sub_0",
+      "text": "又是一年秋好时",
+      "start_ms": 500,
+      "end_ms": 3500,
+      "font_size": 56,
+      "color": 4294967295,
+      "y": 0.15,
+      "align": 1
+    }
+  ],
+  "audio": {
+    "type": "music",
+    "path": "assets/music/autumn.mp3",
+    "loop": true,
+    "volume": 0.8
+  },
+  "lut": {
+    "path": "assets/luts/autumn.png",
+    "intensity": 0.75
+  }
+}

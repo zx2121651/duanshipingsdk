@@ -1,0 +1,73 @@
+{
+  "id": "family_reunion",
+  "name": "阖家团圆",
+  "version": 1,
+  "duration_ms": 25000,
+  "fps": 30,
+  "width": 1080,
+  "height": 1920,
+  "slots": [
+    {
+      "id": "v0",
+      "type": "video",
+      "duration_ms": 5000,
+      "transition": "crossfade",
+      "trans_dur_ms": 600,
+      "fit": "crop_center"
+    },
+    {
+      "id": "v1",
+      "type": "video",
+      "duration_ms": 5000,
+      "transition": "crossfade",
+      "trans_dur_ms": 600,
+      "fit": "crop_center"
+    },
+    {
+      "id": "v2",
+      "type": "video",
+      "duration_ms": 5000,
+      "transition": "crossfade",
+      "trans_dur_ms": 600,
+      "fit": "crop_center"
+    },
+    {
+      "id": "v3",
+      "type": "video",
+      "duration_ms": 5000,
+      "transition": "crossfade",
+      "trans_dur_ms": 600,
+      "fit": "crop_center"
+    },
+    {
+      "id": "v4",
+      "type": "video",
+      "duration_ms": 5000,
+      "transition": "crossfade",
+      "trans_dur_ms": 600,
+      "fit": "crop_center"
+    }
+  ],
+  "subtitles": [
+    {
+      "id": "sub_0",
+      "text": "家是最温暖的港湾",
+      "start_ms": 0,
+      "end_ms": 3000,
+      "font_size": 60,
+      "color": 4294967295,
+      "y": 0.85,
+      "align": 1
+    }
+  ],
+  "audio": {
+    "type": "music",
+    "path": "assets/music/family.mp3",
+    "loop": true,
+    "volume": 0.75
+  },
+  "lut": {
+    "path": "assets/luts/warm_home.png",
+    "intensity": 0.6
+  }
+}
