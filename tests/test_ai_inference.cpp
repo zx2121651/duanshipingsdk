@@ -12,6 +12,7 @@
 
 #include "../core/include/ai/TfliteInferenceEngine.h"
 #include "../core/include/ai/FaceLandmarkDetector.h"
+#include "../core/include/ai/BodyPoseDetector.h"
 #include "../core/include/ai/BeautyFilter.h"
 #include "../core/include/ai/SegmentationFilter.h"
 
@@ -200,6 +201,51 @@ static bool test_decode_landmarks_invalid_len() {
 }
 
 // ---------------------------------------------------------------------------
+// Test 10: BodyPoseDetector::decodeKeypoints
+// ---------------------------------------------------------------------------
+class BodyPoseDetectorTestAccessor : public BodyPoseDetector {
+public:
+    static PoseResult decodeKeypointsProxy(const float* output, int w, int h) {
+        return BodyPoseDetector::decodeKeypoints(output, w, h);
+    }
+};
+
+static bool test_body_pose_decode() {
+    const std::string k = "BodyPoseDetector::decodeKeypoints (MoveNet format)";
+
+    // 17 points * 3 = 51 floats. [y, x, score]
+    float mockOutput[51];
+    for (int i = 0; i < 17; ++i) {
+        mockOutput[i * 3 + 0] = 0.5f; // y
+        mockOutput[i * 3 + 1] = 0.2f; // x
+        mockOutput[i * 3 + 2] = (i == 0) ? 0.1f : 0.8f; // point 0 invalid, others valid
+    }
+
+    int w = 1000, h = 500;
+    auto res = BodyPoseDetectorTestAccessor::decodeKeypointsProxy(mockOutput, w, h);
+
+    if (res.keypoints.size() != 17) { fail(k, "should have 17 points"); return false; }
+
+    // Check denormalization: x = 0.2 * 1000 = 200, y = 0.5 * 500 = 250
+    if (res.keypoints[0].x != 200.0f || res.keypoints[0].y != 250.0f) {
+        fail(k, "incorrect denormalization"); return false;
+    }
+
+    // Check isValid (default threshold 0.3)
+    if (res.keypoints[0].isValid()) { fail(k, "pt0 should be invalid (score 0.1)"); return false; }
+    if (!res.keypoints[1].isValid()) { fail(k, "pt1 should be valid (score 0.8)"); return false; }
+
+    // Check poseScore calculation: (0.1 + 16 * 0.8) / 17 = 12.9 / 17 ≈ 0.7588
+    float expectedScore = (0.1f + 16 * 0.8f) / 17.0f;
+    if (std::abs(res.poseScore - expectedScore) > 1e-5) {
+        fail(k, "incorrect poseScore"); return false;
+    }
+
+    pass(k);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
 int main() {
@@ -222,7 +268,7 @@ int main() {
     run(test_load_from_null_buffer());
     run(test_decode_landmarks_212());
     run(test_decode_landmarks_318_filtering());
-    run(test_decode_landmarks_invalid_len());
+    run(test_body_pose_decode());
 
     std::cout << "\nResult: " << passed << "/" << total << " passed\n";
     return (passed == total) ? 0 : 1;

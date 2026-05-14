@@ -59,12 +59,16 @@ enum PoseKeypointIndex {
     POSE_LEFT_KNEE     = 13,
     POSE_RIGHT_KNEE    = 14,
     POSE_LEFT_ANKLE    = 15,
-    POSE_RIGHT_ANKLE   = 16
+    POSE_RIGHT_ANKLE   = 16,
+
+    // 17-32: Reserved for 33-point BlazePose extension
+    POSE_EXT_START    = 17,
+    POSE_EXT_END      = 32
 };
 
 struct PoseKeypoint {
-    float x     = 0.f;  ///< 归一化横坐标 [0,1]
-    float y     = 0.f;  ///< 归一化纵坐标 [0,1]
+    float x     = 0.f;  ///< 像素横坐标 (denormalized: x * width)
+    float y     = 0.f;  ///< 像素纵坐标 (denormalized: y * height)
     float score = 0.f;  ///< 置信度 [0,1]
 
     bool isValid(float minScore = 0.3f) const { return score >= minScore; }
@@ -184,9 +188,11 @@ private:
     PoseFrameResult runInferenceInternal(const PendingFrame& frame);
     PoseFrameResult runTFLite(const uint8_t* rgba, int w, int h, int64_t ts);
 
+public:
     /** Decode raw model output (shape [1,1,17,3]) → PoseResult */
     static PoseResult decodeKeypoints(const float* output, int w, int h);
 
+private:
 #ifdef HAS_TFLITE
     bool buildInterpreterInternal();
 #endif
