@@ -16,7 +16,7 @@ static bool g_mockShouldFailSeek = false;
 static bool g_mockShouldFailGetFrame = false;
 static int g_mockFailErrorCode = ErrorCode::ERR_DECODER_HW_FAILURE;
 
-// Mock Platform Decoder for testing
+// Mock Video Decoder for testing
 class MockVideoDecoder : public VideoDecoder {
 public:
     Result open(const std::string& filePath) override {
@@ -55,12 +55,37 @@ public:
 int MockVideoDecoder::m_openCount = 0;
 int MockVideoDecoder::m_closeCount = 0;
 
+static int g_softOpenCount = 0;
+static int g_softCloseCount = 0;
+
+class MockSoftwareVideoDecoder : public VideoDecoder {
+public:
+    Result open(const std::string& filePath) override {
+        g_softOpenCount++;
+        m_isOpen = true;
+        return Result::ok();
+    }
+    ResultPayload<Texture> getFrameAt(int64_t timeNs) override {
+        if (!m_isOpen) return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Mock decoder not open");
+        return ResultPayload<Texture>::ok({2, 1920, 1080});
+    }
+    Result seekExact(int64_t timeNs) override { return Result::ok(); }
+    void close() override {
+        g_softCloseCount++;
+        m_isOpen = false;
+    }
+    bool m_isOpen = false;
+};
+
 // Override createPlatformDecoder for testing
 namespace sdk {
 namespace video {
 namespace timeline {
 std::shared_ptr<VideoDecoder> createPlatformDecoder() {
     return std::make_shared<MockVideoDecoder>();
+}
+std::shared_ptr<VideoDecoder> createSoftwareDecoder_FFmpeg() {
+    return std::make_shared<MockSoftwareVideoDecoder>();
 }
 }
 }
@@ -126,16 +151,65 @@ void test_decoder_pool_release() {
 
 void test_soft_decoder_lifecycle() {
     std::cout << "Running test_soft_decoder_lifecycle..." << std::endl;
+    g_softOpenCount = 0;
+    g_softCloseCount = 0;
     DecoderPool pool;
     pool.registerMedia("clip1", "v1.mp4");
 
     // Request frame with exact seek to trigger soft decoder
     auto res = pool.getFrame("clip1", 0, true);
-    assert(!res.isOk());
-    assert(res.getErrorCode() == ErrorCode::ERR_TIMELINE_DECODER_GET_FRAME_FAILED);
+    assert(res.isOk());
+    assert(g_softOpenCount == 1);
 
     pool.releaseMedia("clip1");
+    assert(g_softCloseCount == 1);
     std::cout << "test_soft_decoder_lifecycle passed" << std::endl;
+}
+
+void test_soft_decoder_release_in_releaseMedia() {
+    std::cout << "Running test_soft_decoder_release_in_releaseMedia..." << std::endl;
+    g_softOpenCount = 0;
+    g_softCloseCount = 0;
+    DecoderPool pool;
+    pool.registerMedia("clip1", "v1.mp4");
+
+    // Trigger soft decoder
+    auto res = pool.getFrame("clip1", 0, true);
+    assert(res.isOk());
+    assert(g_softOpenCount == 1);
+
+    pool.releaseMedia("clip1");
+    assert(g_softCloseCount == 1);
+
+    // Register again and check if it opens again
+    pool.registerMedia("clip1", "v1.mp4");
+    assert(pool.getFrame("clip1", 0, true).isOk());
+    assert(g_softOpenCount == 2);
+    std::cout << "test_soft_decoder_release_in_releaseMedia passed" << std::endl;
+}
+
+void test_hw_failed_triggers_sw_fallback() {
+    std::cout << "Running test_hw_failed_triggers_sw_fallback..." << std::endl;
+    MockVideoDecoder::m_openCount = 0;
+    g_softOpenCount = 0;
+    g_mockShouldFailGetFrame = true;
+    g_mockFailErrorCode = ErrorCode::ERR_DECODER_HW_FAILURE;
+
+    DecoderPool pool;
+    pool.registerMedia("clip1", "v1.mp4");
+
+    // First call: HW fails, falls back to SW
+    auto res = pool.getFrame("clip1", 0, false);
+    assert(res.isOk());
+    assert(g_softOpenCount == 1);
+    assert(MockVideoDecoder::m_openCount == 1);
+
+    // Second call: Should directly use SW
+    auto res2 = pool.getFrame("clip1", 1000, false);
+    assert(res2.isOk());
+    assert(MockVideoDecoder::m_openCount == 1);
+
+    std::cout << "test_hw_failed_triggers_sw_fallback passed" << std::endl;
 }
 
 void test_hw_to_sw_fallback_on_seek_failure() {
@@ -151,15 +225,13 @@ void test_hw_to_sw_fallback_on_seek_failure() {
 
     // This should attempt HW, fail seek, then fall back to SW
     auto res = pool.getFrame("clip1", 0, false);
-    assert(!res.isOk());
-    assert(res.getErrorCode() == ErrorCode::ERR_TIMELINE_DECODER_GET_FRAME_FAILED);
+    assert(res.isOk());
     assert(MockVideoDecoder::m_openCount == 1);
     assert(MockVideoDecoder::m_closeCount == 1);
 
     // Subsequent calls should directly use SW
     auto res2 = pool.getFrame("clip1", 1000, false);
-    assert(!res2.isOk());
-    assert(res2.getErrorCode() == ErrorCode::ERR_DECODER_SEEK_FAILED);
+    assert(res2.isOk());
     assert(MockVideoDecoder::m_openCount == 1); // No new HW decoder opened
 
     std::cout << "test_hw_to_sw_fallback_on_seek_failure passed" << std::endl;
@@ -179,8 +251,7 @@ void test_hw_to_sw_fallback_on_fatal_get_frame_failure() {
 
     // This should attempt HW, fail getFrameAt with fatal error, then fall back to SW
     auto res = pool.getFrame("clip1", 0, false);
-    assert(!res.isOk());
-    assert(res.getErrorCode() == ErrorCode::ERR_TIMELINE_DECODER_GET_FRAME_FAILED);
+    assert(res.isOk());
     assert(MockVideoDecoder::m_openCount == 1);
     assert(MockVideoDecoder::m_closeCount == 1);
 
@@ -216,12 +287,9 @@ void test_fallback_strategy_sw_first() {
     pool.setFallbackStrategy(DecoderFallbackStrategy::SW_FIRST);
     pool.registerMedia("clip1", "v1.mp4");
 
-    // Should skip HW and go straight to SW (which is a stub/fails in this test env)
+    // Should skip HW and go straight to SW
     auto res = pool.getFrame("clip1", 0, false);
-    assert(!res.isOk());
-    // In stub mode, createSoftwareDecoder returns SoftwareVideoDecoder which returns ERR_TIMELINE_SOFT_DECODER_UNIMPLEMENTED on open()
-    // DecoderPool then returns ERR_TIMELINE_DECODER_GET_FRAME_FAILED
-    assert(res.getErrorCode() == ErrorCode::ERR_TIMELINE_DECODER_GET_FRAME_FAILED);
+    assert(res.isOk());
     assert(MockVideoDecoder::m_openCount == 0); // HW decoder never opened
 
     std::cout << "test_fallback_strategy_sw_first passed" << std::endl;
@@ -251,6 +319,8 @@ int main() {
     test_decoder_pool_lru_eviction();
     test_decoder_pool_release();
     test_soft_decoder_lifecycle();
+    test_soft_decoder_release_in_releaseMedia();
+    test_hw_failed_triggers_sw_fallback();
     test_hw_to_sw_fallback_on_seek_failure();
     test_hw_to_sw_fallback_on_fatal_get_frame_failure();
     test_no_fallback_on_non_fatal_failure();

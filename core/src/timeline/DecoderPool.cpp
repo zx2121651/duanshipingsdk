@@ -20,18 +20,21 @@ namespace timeline {
 // Factory function implemented in VideoDecoderAndroid.cpp or VideoDecoderIOS.mm
 extern std::shared_ptr<VideoDecoder> createPlatformDecoder();
 
-// FFmpegVideoDecoder 工厂（FFmpegVideoDecoder.cpp 编译时提供，否则 stub）
+// FFmpegVideoDecoder 工厂实现 (由 FFmpegVideoDecoder.cpp 提供)
 #if defined(HAS_FFMPEG_DECODER)
 extern std::shared_ptr<VideoDecoder> createSoftwareDecoder_FFmpeg();
-#endif
-
-std::shared_ptr<VideoDecoder> createSoftwareDecoder() {
-#if defined(HAS_FFMPEG_DECODER)
-    return createSoftwareDecoder_FFmpeg();
 #else
+// 如果未集成 FFmpeg，则提供弱符号实现，允许单元测试通过 Mock 覆盖
+// 弱符号 (Weak Symbol) 允许链接器在发现同名的强符号（如测试中的 Mock）时优先使用强符号
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((weak)) std::shared_ptr<VideoDecoder> createSoftwareDecoder_FFmpeg() {
     return std::make_shared<SoftwareVideoDecoder>();
-#endif
 }
+#else
+// MSVC 或其他平台不支持 weak 属性时，仅作声明，此时如果缺少实现会链接失败
+extern std::shared_ptr<VideoDecoder> createSoftwareDecoder_FFmpeg();
+#endif
+#endif
 
 DecoderPool::DecoderPool() {}
 
@@ -67,18 +70,21 @@ void DecoderPool::releaseMedia(const std::string& clipId) {
     std::lock_guard<std::mutex> lock(m_mutex);
     auto it = m_decoders.find(clipId);
     if (it != m_decoders.end()) {
-        if (it->second->decoder) {
-            it->second->decoder->close();
+        auto ctx = it->second;
+        // 释放硬件解码器
+        if (ctx->decoder) {
+            ctx->decoder->close();
+            ctx->decoder = nullptr;
             m_activeDecoderCount--;
         }
-        if (it->second->softDecoder) {
-            it->second->softDecoder->close();
+        // 释放软件解码器 (Software Fallback)
+        if (ctx->softDecoder) {
+            ctx->softDecoder->close();
+            ctx->softDecoder = nullptr;
         }
-        it->second->decoder = nullptr;
-        it->second->softDecoder = nullptr;
-        it->second->lastDecodedFrame = {0, 0, 0};
-        it->second->lastDecodedTimeNs = -1;
-        it->second->isInitialized = false;
+        ctx->lastDecodedFrame = {0, 0, 0};
+        ctx->lastDecodedTimeNs = -1;
+        ctx->isInitialized = false;
 
         m_decoders.erase(it);
         LOGI("Released media %s", clipId.c_str());
@@ -155,30 +161,40 @@ ResultPayload<Texture> DecoderPool::getFrame(const std::string& clipId, int64_t 
 
     if (useSoftwareDecoder) {
         if (!ctx->softDecoder) {
-            ctx->softDecoder = createSoftwareDecoder();
+            // 1. 创建软解实例 (使用指令要求的工厂函数)
+            ctx->softDecoder = createSoftwareDecoder_FFmpeg();
+            if (!ctx->softDecoder) {
+                LOGE("Failed to create FFmpeg Software Decoder for clip %s", clipId.c_str());
+                return ResultPayload<Texture>::error(ErrorCode::ERR_TIMELINE_DECODER_GET_FRAME_FAILED, "Failed to create software decoder for " + clipId);
+            }
+
+            // 2. 打开素材
             auto openRes = ctx->softDecoder->open(ctx->sourcePath);
             if (!openRes.isOk()) {
                 LOGE("Failed to open Software Decoder for clip %s: %s", clipId.c_str(), openRes.getMessage().c_str());
-                return ResultPayload<Texture>::error(ErrorCode::ERR_TIMELINE_DECODER_GET_FRAME_FAILED, "Failed to open software decoder for " + clipId + ": " + openRes.getMessage());
+                ctx->softDecoder = nullptr; // 确保失败后重置，下次可重试
+                return ResultPayload<Texture>::error(openRes.getErrorCode(), "Failed to open software decoder for " + clipId + ": " + openRes.getMessage());
             }
             LOGI("Falling back to Software Decoder for clip %s (HW failed: %d, Exact seek: %d)", clipId.c_str(), ctx->hwFailed, requiresExactSeek);
         }
+
+        // 软件解码器通常需要先 seek 到目标位置附近，除非是连续播放且时间戳单调递增
+        // FFmpegVideoDecoder::getFrameAt 内部是向后查找，如果 timeNs < 当前 pts 则必须 seek
         Result seekRes = ctx->softDecoder->seekExact(localTimeNs);
-        if (seekRes.isOk()) {
-            auto frameRes = ctx->softDecoder->getFrameAt(localTimeNs);
-            if (frameRes.isOk()) {
-                Texture tex = frameRes.getValue();
-                ctx->lastDecodedFrame = tex;
-                ctx->lastDecodedTimeNs = localTimeNs;
-                ctx->isInitialized = true;
-                return frameRes;
-            }
-            LOGE("Software decoder returned error for clip %s at %lld: %s", clipId.c_str(), (long long)localTimeNs, frameRes.getMessage().c_str());
-            return frameRes;
-        } else {
+        if (!seekRes.isOk()) {
             LOGE("Software seek failed for clip %s to %lld: %s", clipId.c_str(), (long long)localTimeNs, seekRes.getMessage().c_str());
-            return ResultPayload<Texture>::error(ErrorCode::ERR_DECODER_SEEK_FAILED, "Software seek failed for " + clipId + ": " + seekRes.getMessage());
+            return ResultPayload<Texture>::error(seekRes.getErrorCode(), "Software seek failed for " + clipId + ": " + seekRes.getMessage());
         }
+
+        auto frameRes = ctx->softDecoder->getFrameAt(localTimeNs);
+        if (frameRes.isOk()) {
+            ctx->lastDecodedFrame = frameRes.getValue();
+            ctx->lastDecodedTimeNs = localTimeNs;
+            ctx->isInitialized = true;
+        } else {
+            LOGE("Software decoder returned error for clip %s at %lld: %s", clipId.c_str(), (long long)localTimeNs, frameRes.getMessage().c_str());
+        }
+        return frameRes;
     }
 
     if (!ctx->decoder && !ctx->hwFailed) {
