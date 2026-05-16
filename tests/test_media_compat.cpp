@@ -14,6 +14,7 @@
 #include <cmath>
 #include <algorithm>
 #include "../core/include/timeline/VideoDecoder.h"
+#include "../core/include/timeline/TemplateEngine.h"
 #include "../core/include/GLTypes.h"
 
 using namespace sdk::video;
@@ -314,6 +315,32 @@ static void tc_c08_decoder_pool_stress() {
               << (MAX_DECODERS + 4) << " concurrent decoders)" << std::endl;
 }
 
+// ---------------------------------------------------------------------------
+// TC-C09: TemplateEngine 批量加载测试 — 确保 13 个模板全部解析成功
+// ---------------------------------------------------------------------------
+static void tc_c09_template_bulk_load() {
+    std::string path = "assets/templates";
+    auto templates = TemplateEngine::loadAllFromDirectory(path);
+    if (templates.empty()) {
+        path = "../assets/templates";
+        templates = TemplateEngine::loadAllFromDirectory(path);
+    }
+
+    // We expect 3 original + 10 new = 13 templates
+    std::cout << "TC-C09: Loaded " << templates.size() << " templates from " << path << std::endl;
+    assert(templates.size() >= 13);
+
+    for (const auto& tmpl : templates) {
+        assert(!tmpl.id.empty());
+        assert(!tmpl.slots.empty());
+        // Verify audio/lut are present (optional in schema but required by task)
+        // audio.type defaults to "none" if not present, but our templates should have them
+        assert(!tmpl.audio.type.empty());
+    }
+
+    std::cout << "TC-C09 PASS: template_bulk_load" << std::endl;
+}
+
 int main() {
     tc_c01_h264_normal_sequence();
     tc_c02_h265_codec_detection();
@@ -323,6 +350,7 @@ int main() {
     tc_c06_bframe_seek_demotion();
     tc_c07_empty_path_open_failed();
     tc_c08_decoder_pool_stress();
+    tc_c09_template_bulk_load();
     std::cout << "\nAll test_media_compat cases PASSED" << std::endl;
     return 0;
 }

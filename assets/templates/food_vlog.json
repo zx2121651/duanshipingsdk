@@ -1,0 +1,67 @@
+{
+  "id": "food_vlog",
+  "name": "美食Vlog",
+  "version": 1,
+  "duration_ms": 15000,
+  "fps": 30,
+  "width": 1080,
+  "height": 1920,
+  "slots": [
+    {
+      "id": "v0",
+      "type": "video",
+      "duration_ms": 5000,
+      "transition": "none",
+      "trans_dur_ms": 0,
+      "fit": "crop_center"
+    },
+    {
+      "id": "v1",
+      "type": "video",
+      "duration_ms": 5000,
+      "transition": "slide_left",
+      "trans_dur_ms": 400,
+      "fit": "crop_center"
+    },
+    {
+      "id": "v2",
+      "type": "video",
+      "duration_ms": 5000,
+      "transition": "slide_right",
+      "trans_dur_ms": 400,
+      "fit": "crop_center"
+    }
+  ],
+  "subtitles": [
+    {
+      "id": "sub_0",
+      "text": "今日美食",
+      "start_ms": 500,
+      "end_ms": 2500,
+      "font_size": 80,
+      "color": 4294967295,
+      "y": 0.1,
+      "align": 1
+    },
+    {
+      "id": "sub_1",
+      "text": "真香！",
+      "start_ms": 12000,
+      "end_ms": 14000,
+      "font_size": 72,
+      "color": 4294967040,
+      "y": 0.8,
+      "align": 1
+    }
+  ],
+  "audio": {
+    "type": "music",
+    "path": "assets/music/food.mp3",
+    "loop": true,
+    "volume": 0.8
+  },
+  "lut": {
+    "path": "assets/luts/appetizing.png",
+    "intensity": 0.8
+  }
+}
