@@ -408,6 +408,45 @@ void test_bezier_serialization() {
     std::cout << "test_bezier_serialization passed" << std::endl;
 }
 
+void test_effect_clip() {
+    auto effect = std::make_shared<EffectClip>("fx1", "blur");
+    assert(effect->getType() == Clip::MediaType::EFFECT);
+    assert(effect->getEffectType() == "blur");
+
+    // Static intensity
+    effect->setIntensity(0.8f);
+    assert(std::abs(effect->getIntensity(0) - 0.8f) < EPSILON);
+
+    // Keyframed intensity
+    effect->addKeyframe("intensity", 0, 0.0f);
+    effect->addKeyframe("intensity", 1000000000, 1.0f);
+    assert(std::abs(effect->getIntensity(500000000) - 0.5f) < EPSILON);
+
+    std::cout << "test_effect_clip passed" << std::endl;
+}
+
+void test_time_remapping() {
+    auto clip = std::make_shared<Clip>("c1", "v1.mp4", Clip::MediaType::VIDEO);
+
+    // 1. Linear constant speed (0.5x)
+    clip->setSpeedCurvePoint(0, 0.5f);
+    assert(std::abs(clip->getSpeedAtTime(500000000) - 0.5f) < EPSILON);
+    assert(clip->getRemappedTime(1000000000) == 500000000);
+
+    // 2. Variable speed: 0s(0.5x) -> 2s(2.0x)
+    // At 1s, speed should be 1.25x
+    clip->setSpeedCurvePoint(2000000000, 2.0f);
+    assert(std::abs(clip->getSpeedAtTime(1000000000) - 1.25f) < EPSILON);
+
+    // Integral from 0 to 1s:
+    // v(t) = 0.5 + (2.0 - 0.5) * t / 2.0 = 0.5 + 0.75 * t
+    // SourceTime(t) = 0.5t + 0.375 * t^2
+    // SourceTime(1s) = 0.5 * 1 + 0.375 * 1^2 = 0.875s = 875,000,000 ns
+    assert(clip->getRemappedTime(1000000000) == 875000000);
+
+    std::cout << "test_time_remapping passed" << std::endl;
+}
+
 int main() {
     test_timeline_basic_properties();
     test_clip_boundary_trim();
@@ -425,5 +464,7 @@ int main() {
     test_keyframe_interpolation();
     test_bezier_interpolation();
     test_bezier_serialization();
+    test_effect_clip();
+    test_time_remapping();
     return 0;
 }

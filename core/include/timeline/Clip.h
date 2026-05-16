@@ -60,7 +60,8 @@ public:
         AUDIO,
         IMAGE,
         TEXT,    ///< 纯文字叠加层（SubtitleClip / 文字贴纸）
-        STICKER  ///< 贴纸 / GIF / 动效叠加层（StickerClip）
+        STICKER, ///< 贴纸 / GIF / 动效叠加层（StickerClip）
+        EFFECT   ///< 特效片段 (EffectClip)
     };
 
     Clip(const std::string& id, const std::string& sourcePath, MediaType type);
@@ -94,6 +95,14 @@ public:
     /** @brief 倒放开关。开启时 DecoderPool 将触发精确 Seek 路径（逐帧反向取帧）。 */
     void setReversed(bool reversed) { m_isReversed = reversed; }
     bool isReversed() const { return m_isReversed; }
+
+    // 时间重映射 (Time Remapping)
+    /** @brief 设置变速曲线上的点。时间为相对于 Clip 起点的相对时间。 */
+    void setSpeedCurvePoint(int64_t relativeTimeNs, float speed);
+    /** @brief 获取指定相对时间点的瞬时速度。 */
+    float getSpeedAtTime(int64_t relativeTimeNs) const;
+    /** @brief 将时间轴相对时间映射到源素材相对时间（考虑变速曲线积分）。 */
+    int64_t getRemappedTime(int64_t relativeTimeNs) const;
 
     // 空间变换
     void setTransform(float scale, float rotation, float transX, float transY);
@@ -256,6 +265,29 @@ private:
     // 数据结构：属性名 -> (相对时间戳 -> KeyframeEntry{value, easing})
     // std::map 自带按 Key (时间戳) 排序的特性，便于插值查找
     std::map<std::string, std::map<int64_t, KeyframeEntry>> m_keyframes;
+
+    // 时间重映射：相对时间 -> 瞬时速度
+    std::map<int64_t, float> m_speedCurve;
+};
+
+/**
+ * @brief 特效片段 (EffectClip)
+ */
+class EffectClip : public Clip {
+public:
+    EffectClip(const std::string& id, const std::string& effectType);
+
+    std::string getEffectType() const { return m_effectType; }
+    void setEffectType(const std::string& type) { m_effectType = type; }
+
+    float getIntensity(int64_t relativeTimeNs) const {
+        return getInterpolatedParam("intensity", relativeTimeNs, m_intensity);
+    }
+    void setIntensity(float intensity) { m_intensity = intensity; }
+
+private:
+    std::string m_effectType;
+    float m_intensity = 1.0f;
 };
 
 using ClipPtr = std::shared_ptr<Clip>;
