@@ -152,6 +152,71 @@ float Clip::evaluateBezier(float t, float cp1x, float cp1y, float cp2x, float cp
            (3.0f * cp1y * currentT);
 }
 
+// ---------------------------------------------------------------------------
+// 时间重映射 (Time Remapping)
+// ---------------------------------------------------------------------------
+void Clip::setSpeedCurvePoint(int64_t relativeTimeNs, float speed) {
+    m_speedCurve[relativeTimeNs] = speed;
+}
+
+float Clip::getSpeedAtTime(int64_t relativeTimeNs) const {
+    if (m_speedCurve.empty()) return m_speed;
+
+    auto itNext = m_speedCurve.lower_bound(relativeTimeNs);
+    if (itNext == m_speedCurve.begin()) return itNext->second;
+    if (itNext == m_speedCurve.end()) return std::prev(itNext)->second;
+
+    auto itPrev = std::prev(itNext);
+    int64_t t0 = itPrev->first;
+    int64_t t1 = itNext->first;
+    float   v0 = itPrev->second;
+    float   v1 = itNext->second;
+
+    float ratio = static_cast<float>(relativeTimeNs - t0) / static_cast<float>(t1 - t0);
+    return v0 + (v1 - v0) * ratio;
+}
+
+int64_t Clip::getRemappedTime(int64_t relativeTimeNs) const {
+    if (m_speedCurve.empty()) {
+        return static_cast<int64_t>(std::round(relativeTimeNs * static_cast<long double>(m_speed)));
+    }
+
+    long double totalSourceNs = 0;
+    int64_t lastT = 0;
+
+    for (auto const& [t, v] : m_speedCurve) {
+        if (t <= 0) {
+            lastT = t;
+            continue;
+        }
+        if (t > relativeTimeNs) break;
+
+        int64_t t0 = lastT;
+        int64_t t1 = t;
+        float   v0 = getSpeedAtTime(t0);
+        float   v1 = v;
+
+        // Integral of linear speed: v(u) = v0 + (v1-v0)*(u-t0)/(t1-t0)
+        // SourceTime = Integral(v(u) du) from t0 to t1 = (v0 + v1) / 2 * (t1 - t0)
+        totalSourceNs += static_cast<long double>(v0 + v1) * 0.5 * (t1 - t0);
+        lastT = t1;
+    }
+
+    if (lastT < relativeTimeNs) {
+        float v0 = getSpeedAtTime(lastT);
+        float v1 = getSpeedAtTime(relativeTimeNs);
+        totalSourceNs += static_cast<long double>(v0 + v1) * 0.5 * (relativeTimeNs - lastT);
+    }
+
+    return static_cast<int64_t>(std::round(totalSourceNs));
+}
+
+// ---------------------------------------------------------------------------
+// EffectClip
+// ---------------------------------------------------------------------------
+EffectClip::EffectClip(const std::string& id, const std::string& effectType)
+    : Clip(id, "", MediaType::EFFECT), m_effectType(effectType) {}
+
 } // namespace timeline
 } // namespace video
 } // namespace sdk
