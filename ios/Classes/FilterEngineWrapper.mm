@@ -7,11 +7,9 @@
 
 using namespace sdk::video;
 
-#ifdef HAS_METAL
 #import <Metal/Metal.h>
 #import <CoreVideo/CVMetalTextureCache.h>
 #include "../../core/src/rhi/mtl/MetalRenderDevice.h"
-#endif
 
 #import <CoreVideo/CVOpenGLESTextureCache.h>
 
@@ -24,9 +22,7 @@ using namespace sdk::video;
     size_t poolHeight;
     GLuint blitFboRead;
     GLuint blitFboDraw;
-#ifdef HAS_METAL
     CVMetalTextureCacheRef metalTextureCache;
-#endif
 }
 @property (nonatomic, readwrite) int lastErrorCode;
 @end
@@ -46,9 +42,7 @@ using namespace sdk::video;
         poolHeight = 0;
         blitFboRead = 0;
         blitFboDraw = 0;
-#ifdef HAS_METAL
         metalTextureCache = NULL;
-#endif
         _lastErrorCode = 0;
     }
     return self;
@@ -90,9 +84,18 @@ using namespace sdk::video;
         return self.lastErrorCode;
     }
 
-    if (m_context || metalTextureCache) {
+
+    bool needsCleanup = false;
+    if (m_context) needsCleanup = true;
+    if (textureCache) needsCleanup = true;
+#ifdef HAS_METAL
+    if (metalTextureCache) needsCleanup = true;
+#endif
+
+    if (needsCleanup) {
         [self _cleanupGLResources];
     }
+
 
     engine->setPreferredBackend(static_cast<sdk::video::rhi::BackendType>(backend));
 
@@ -158,14 +161,11 @@ using namespace sdk::video;
     sdk::video::Texture inTex;
     GLuint inputTextureId = 0;
     CVOpenGLESTextureRef cvTexture = NULL;
-#ifdef HAS_METAL
     CVMetalTextureRef metalTexture = NULL;
-#endif
 
     bool isMetal = (engine->getActiveBackend() == sdk::video::rhi::BackendType::METAL);
 
     if (isMetal) {
-#ifdef HAS_METAL
         if (!metalTextureCache) {
             self.lastErrorCode = static_cast<int>(sdk::video::ErrorCode::ERR_RENDER_INVALID_STATE);
             return nil;
@@ -182,7 +182,6 @@ using namespace sdk::video;
         }
         id<MTLTexture> mtlTex = CVMetalTextureGetTexture(metalTexture);
         inTex = { (uint32_t)(uintptr_t)(__bridge void*)mtlTex, (uint32_t)width, (uint32_t)height };
-#endif
     } else {
         if (!m_context || !textureCache) {
             self.lastErrorCode = static_cast<int>(sdk::video::ErrorCode::ERR_RENDER_INVALID_STATE);
@@ -215,9 +214,7 @@ using namespace sdk::video;
     if (!result.isOk()) {
         NSLog(@"FilterEngineWrapper: processFrame failed [%d] %s", result.getErrorCode(), result.getMessage().c_str());
         self.lastErrorCode = result.getErrorCode();
-#ifdef HAS_METAL
         if (metalTexture) CFRelease(metalTexture);
-#endif
         if (cvTexture) CFRelease(cvTexture);
         return nil;
     }
@@ -251,9 +248,7 @@ using namespace sdk::video;
         CVReturn err = CVPixelBufferPoolCreate(kCFAllocatorDefault, NULL, (__bridge CFDictionaryRef)pixelBufferAttributes, &pixelBufferPool);
         if (err != kCVReturnSuccess || !pixelBufferPool) {
             self.lastErrorCode = static_cast<int>(sdk::video::ErrorCode::ERR_RENDER_FBO_ALLOC_FAILED);
-#ifdef HAS_METAL
             if (metalTexture) CFRelease(metalTexture);
-#endif
             if (cvTexture) CFRelease(cvTexture);
             return nil;
         }
@@ -265,15 +260,12 @@ using namespace sdk::video;
     CVReturn err = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pixelBufferPool, &outPixelBuffer);
     if (err != kCVReturnSuccess || !outPixelBuffer) {
         self.lastErrorCode = static_cast<int>(sdk::video::ErrorCode::ERR_RENDER_FBO_ALLOC_FAILED);
-#ifdef HAS_METAL
         if (metalTexture) CFRelease(metalTexture);
-#endif
         if (cvTexture) CFRelease(cvTexture);
         return nil;
     }
 
     if (isMetal) {
-#ifdef HAS_METAL
         CVMetalTextureRef outMetalTexture = NULL;
         err = CVMetalTextureCacheCreateTextureFromImage(kCFAllocatorDefault,
                                                         metalTextureCache,
@@ -311,7 +303,6 @@ using namespace sdk::video;
         CFRelease(outMetalTexture);
         CFRelease(metalTexture);
         CVMetalTextureCacheFlush(metalTextureCache, 0);
-#endif
     } else {
         CVOpenGLESTextureRef outCvTexture = NULL;
         err = CVOpenGLESTextureCacheCreateTextureFromImage(kCFAllocatorDefault,
