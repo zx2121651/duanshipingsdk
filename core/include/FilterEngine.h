@@ -67,6 +67,12 @@ public:
     Result buildTimelinePipeline(std::shared_ptr<timeline::Timeline> timeline, std::shared_ptr<timeline::Compositor> compositor);
 
     /**
+     * @brief Configure Dynamic Resolution Scaling (DSR) for Timeline mode.
+     */
+    void setDsrConfig(float targetFps, float minScaleFactor = 0.5f, float maxScaleFactor = 1.0f);
+    void disableDsr();
+
+    /**
      * @brief Add a filter to the pipeline.
      * @note MUST be called on the Render thread as it triggers filter initialization.
      */

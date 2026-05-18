@@ -61,10 +61,8 @@ Java_com_sdk_video_timeline_TimelineExporter_nativeExportAsync(JNIEnv *env, jobj
     if (!timelinePtr || !(*timelinePtr) || !wrapper || !wrapper->filterEngine) return -1;
 
     auto compositor = std::make_shared<Compositor>(*timelinePtr, wrapper->filterEngine);
-    // 将 RenderEngine 中待命的 DSR 配置注入 Compositor
-    if (wrapper->dsrEnabled) {
-        compositor->setDsrConfig(wrapper->pendingDsr);
-    }
+    // 强制离线导出关闭 DSR，保证最终画质，不使用预览期的降级配置
+    compositor->disableDsr();
 
     // 创建音频混音器（可选）：有平台解码器池时注入，无则静音导出
     {

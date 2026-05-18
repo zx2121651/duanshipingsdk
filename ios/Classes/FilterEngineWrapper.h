@@ -28,6 +28,9 @@ typedef NS_ENUM(NSInteger, IOSFilterType) {
 
 - (NSArray<NSNumber *> *)getPerformanceMetrics;
 - (void)recordDroppedFrame;
+- (void)setDsrConfigWithTargetFps:(float)fps minScale:(float)minScale maxScale:(float)maxScale;
+- (void)disableDsr;
+
 - (void)releaseResources;
 
 @end

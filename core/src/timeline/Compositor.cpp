@@ -47,7 +47,14 @@ const char* Compositor::s_quadVertSrc = R"(#version 300 es
 )";
 
 Compositor::Compositor(std::shared_ptr<Timeline> timeline, std::shared_ptr<FilterEngine> engine)
-    : m_timeline(timeline), m_filterEngine(engine), m_decoderPool(nullptr) {}
+    : m_timeline(timeline), m_filterEngine(engine), m_decoderPool(nullptr) {
+    // 默认开启保守 DSR 策略防卡顿
+    m_dsrEnabled = true;
+    m_dsrConfig.targetFps = 30.0f;
+    m_dsrConfig.minScaleFactor = 0.7f;
+    m_dsrConfig.maxScaleFactor = 1.0f;
+    m_dsrConfig.sampleWindow = 6;
+}
 
 Compositor::~Compositor() {
 #ifdef __ANDROID__

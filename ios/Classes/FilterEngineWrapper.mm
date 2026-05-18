@@ -256,6 +256,18 @@ using namespace sdk::video;
     return 0;
 }
 
+- (void)setDsrConfigWithTargetFps:(float)fps minScale:(float)minScale maxScale:(float)maxScale {
+    if (engine) {
+        engine->setDsrConfig(fps, minScale, maxScale);
+    }
+}
+
+- (void)disableDsr {
+    if (engine) {
+        engine->disableDsr();
+    }
+}
+
 - (void)releaseResources {
     if (engine) {
         engine->release();
