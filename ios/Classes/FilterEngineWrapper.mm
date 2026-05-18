@@ -23,7 +23,6 @@ using namespace sdk::video;
     size_t poolWidth;
     size_t poolHeight;
     GLuint blitFboRead;
-    GLuint blitFboRead;
     GLuint blitFboDraw;
 #ifdef HAS_METAL
     CVMetalTextureCacheRef metalTextureCache;
@@ -44,7 +43,6 @@ using namespace sdk::video;
         pixelBufferPool = NULL;
         poolWidth = 0;
         poolHeight = 0;
-        blitFboRead = 0;
         poolHeight = 0;
         blitFboRead = 0;
         blitFboDraw = 0;
