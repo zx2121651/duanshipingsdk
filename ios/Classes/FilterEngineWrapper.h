@@ -17,7 +17,7 @@ typedef NS_ENUM(NSInteger, IOSFilterType) {
 @property (nonatomic, readonly) int lastErrorCode;
 
 - (instancetype)init;
-- (int)initializeWithContext:(EAGLContext *)context;
+- (int)initializeWithContext:(EAGLContext *)context backend:(int)backend;
 - (CVPixelBufferRef)processFrame:(CVPixelBufferRef)pixelBuffer;
 
 - (int)addFilter:(IOSFilterType)type;

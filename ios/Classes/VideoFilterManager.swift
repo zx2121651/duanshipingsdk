@@ -68,11 +68,11 @@ public actor VideoFilterManager {
     }
 
     /// 初始化底层滤镜引擎，传入已设置好 OpenGL ES 3.0 的 EAGLContext
-    public func initialize(context: EAGLContext) {
+    public func initialize(context: EAGLContext?, backend: Int32 = 0) {
         self.state = .initializing
         self.context = context
 
-        let result = engine.initialize(context: context)
+        let result = engine.initialize(context: context, backend: backend)
         if result == 0 {
             self.state = .running
         } else {

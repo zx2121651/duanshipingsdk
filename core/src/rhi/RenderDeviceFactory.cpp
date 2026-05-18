@@ -16,7 +16,7 @@
 #endif
 
 #ifdef HAS_METAL
-#   include "../../include/rhi/metal/MetalRenderDevice.h"
+#   include "mtl/MetalRenderDevice.h"
 #endif
 
 #include <iostream>
@@ -79,13 +79,13 @@ std::shared_ptr<IRenderDevice> RenderDeviceFactory::create(
     // ----------------------------------------------------------------
 #ifdef HAS_METAL
     if (resolved == BackendType::METAL) {
-        auto dev = std::make_shared<sdk::video::rhi::MetalRenderDevice>();
-        if (dev->initialize()) {
+        auto dev = sdk::video::rhi::MetalRenderDevice::tryCreate();
+        if (dev) {
             chosen = BackendType::METAL;
             std::cout << "RHI: Backend selected \u2192 METAL" << std::endl;
             return dev;
         }
-        std::cerr << "RHI: MetalRenderDevice::initialize() failed, fallback to GLES" << std::endl;
+        std::cerr << "RHI: MetalRenderDevice::tryCreate() failed, fallback to GLES" << std::endl;
         resolved = BackendType::GLES;
     }
 #else
