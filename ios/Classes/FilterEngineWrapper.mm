@@ -125,7 +125,7 @@ using namespace sdk::video;
 #ifdef HAS_METAL
         sdk::video::rhi::MetalRenderDevice* mtlDevice = static_cast<sdk::video::rhi::MetalRenderDevice*>(engine->getRenderDevice());
         if (mtlDevice && mtlDevice->mtlDevice()) {
-            CVReturn err = CVMetalTextureCacheCreate(kCFAllocatorDefault, NULL, (__bridge id<MTLDevice>)mtlDevice->mtlDevice(), NULL, &metalTextureCache);
+            CVReturn err = CVMetalTextureCacheCreate(kCFAllocatorDefault, NULL, (__bridge id<MTLDevice>)(mtlDevice->mtlDevice()), NULL, &metalTextureCache);
             if (err != kCVReturnSuccess) {
                 self.lastErrorCode = static_cast<int>(sdk::video::ErrorCode::ERR_RENDER_FBO_ALLOC_FAILED);
                 return self.lastErrorCode;
@@ -286,7 +286,7 @@ using namespace sdk::video;
         id<MTLTexture> mtlEngineOutTex = (__bridge id<MTLTexture>)(void*)(uintptr_t)outTex.id;
 
         sdk::video::rhi::MetalRenderDevice* mtlDevice = static_cast<sdk::video::rhi::MetalRenderDevice*>(engine->getRenderDevice());
-        id<MTLCommandBuffer> commandBuffer = [mtlDevice->mtlCommandQueue() commandBuffer];
+        id<MTLCommandBuffer> commandBuffer = [(__bridge id<MTLCommandQueue>)(mtlDevice->mtlCommandQueue()) commandBuffer];
         id<MTLBlitCommandEncoder> blitEncoder = [commandBuffer blitCommandEncoder];
 
         [blitEncoder copyFromTexture:mtlEngineOutTex
