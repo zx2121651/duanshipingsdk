@@ -13,6 +13,9 @@ def ffmpegPrebuiltDirPath = configuredFfmpegPrebuiltDir != null
         : (defaultFfmpegPrebuiltDir.exists() ? defaultFfmpegPrebuiltDir.absolutePath.replace('\\', '/') : null)
 
 android {
+    lint {
+        abortOnError false
+    }
     namespace 'com.sdk.video'
     compileSdk 34
 
@@ -66,6 +69,10 @@ android {
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlin {
+        jvmToolchain(17)
     }
 
     kotlinOptions {
