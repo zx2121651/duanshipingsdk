@@ -23,9 +23,9 @@ import OpenGLES
     }
 
     // Call on GL thread
-    @objc public func initialize(context: EAGLContext) -> Int32 {
+    @objc public func initialize(context: EAGLContext?, backend: Int32 = 0) -> Int32 {
         self.context = context
-        return wrapper.initialize(with: context)
+        return wrapper.initialize(with: context, backend: backend)
     }
 
     // Call on GL thread to process frames from AVFoundation/Camera
