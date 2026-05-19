@@ -7,6 +7,8 @@
 
 using namespace sdk::video;
 
+#define HAS_METAL
+#import "../../core/src/rhi/mtl/MetalRenderDevice.h"
 #import <Metal/Metal.h>
 #import <CoreVideo/CVMetalTextureCache.h>
 #include "../../core/src/rhi/mtl/MetalRenderDevice.h"
