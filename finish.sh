@@ -1,0 +1,1 @@
+python3 -c "import urllib.request, json; urllib.request.urlopen(urllib.request.Request('http://localhost:8080/submit', data=json.dumps({'branch_name': 'feature/dsr-optimization'}).encode('utf-8'), headers={'Content-Type': 'application/json'}))"

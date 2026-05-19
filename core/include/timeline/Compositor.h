@@ -92,7 +92,7 @@ private:
     // ---------------------------------------------------------------------------
     DsrConfig         m_dsrConfig;
     float             m_dsrScale     = 1.0f;  // 当前渲染倍率，[minScale, maxScale]
-    bool              m_dsrEnabled   = false;
+    bool              m_dsrEnabled   = true;
     std::deque<float> m_dsrFrameTimes;         // 近 N 帧帧时间（ms）
 
     void updateDsrScale(float frameTimeMs);

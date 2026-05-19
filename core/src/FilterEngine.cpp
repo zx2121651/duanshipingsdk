@@ -297,6 +297,22 @@ Result FilterEngine::buildTimelinePipeline(std::shared_ptr<timeline::Timeline> t
     return res;
 }
 
+void FilterEngine::setDsrConfig(float targetFps, float minScaleFactor, float maxScaleFactor) {
+    if (auto comp = m_compositor.lock()) {
+        timeline::DsrConfig cfg;
+        cfg.targetFps = targetFps;
+        cfg.minScaleFactor = minScaleFactor;
+        cfg.maxScaleFactor = maxScaleFactor;
+        comp->setDsrConfig(cfg);
+    }
+}
+
+void FilterEngine::disableDsr() {
+    if (auto comp = m_compositor.lock()) {
+        comp->disableDsr();
+    }
+}
+
 Result FilterEngine::rebuildGraph(std::shared_ptr<PipelineNode> inputNode) {
     // Transactional Graph Rebuild:
     // We build the new graph in isolation and only commit it to the engine state

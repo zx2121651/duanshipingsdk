@@ -210,6 +210,14 @@ public actor VideoFilterManager {
         engine.recordDroppedFrame()
     }
 
+    public func setDsrConfig(targetFps: Float, minScale: Float = 0.5, maxScale: Float = 1.0) {
+        engine.setDsrConfig(targetFps: targetFps, minScale: minScale, maxScale: maxScale)
+    }
+
+    public func disableDsr() {
+        engine.disableDsr()
+    }
+
     public func release() {
         if let encoder = videoEncoder {
             encoder.stopRecording(isFallback: false)

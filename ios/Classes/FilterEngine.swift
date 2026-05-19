@@ -66,6 +66,14 @@ import OpenGLES
     @objc public func recordDroppedFrame() {
         wrapper.recordDroppedFrame()
     }
+
+    @objc public func setDsrConfig(targetFps: Float, minScale: Float, maxScale: Float) {
+        wrapper.setDsrConfigWithTargetFps(targetFps, minScale: minScale, maxScale: maxScale)
+    }
+
+    @objc public func disableDsr() {
+        wrapper.disableDsr()
+    }
     // Free resources
     @objc public func releaseEngine() {
         wrapper.releaseResources()
