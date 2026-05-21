@@ -2,6 +2,9 @@
 #include "../../include/rhi/GLHardwareTexture.h"
 #if defined(__APPLE__)
 #import <CoreVideo/CoreVideo.h>
+#include <objc/objc.h>
+#include <objc/runtime.h>
+#include <objc/message.h>
 #endif
 #if defined(__ANDROID__) && __ANDROID_API__ >= 26
 #include <android/hardware_buffer.h>
@@ -678,13 +681,21 @@ std::shared_ptr<ITexture> GLRenderDevice::createTextureFromHardwareBuffer(const 
     // Since we don't have it natively integrated in this file's class definition without altering it further,
     // we instantiate a local one or thread-local one for now, or just implement the required structure.
     CVOpenGLESTextureCacheRef textureCache = NULL;
-    EAGLContext* context = [EAGLContext currentContext];
+    void* context = nullptr;
+    Class EAGLContextClass = objc_getClass("EAGLContext");
+    if (EAGLContextClass) {
+        SEL currentContextSel = sel_registerName("currentContext");
+        typedef id (*SendMsgFunc)(id, SEL);
+        auto sendMsg = reinterpret_cast<SendMsgFunc>(objc_msgSend);
+        context = (void*)sendMsg((id)EAGLContextClass, currentContextSel);
+    }
+
     if (!context) {
         std::cerr << "createTextureFromHardwareBuffer: No EAGLContext" << std::endl;
         return nullptr;
     }
 
-    CVReturn err = CVOpenGLESTextureCacheCreate(kCFAllocatorDefault, NULL, context, NULL, &textureCache);
+    CVReturn err = CVOpenGLESTextureCacheCreate(kCFAllocatorDefault, NULL, (CVEAGLContext)context, NULL, &textureCache);
     if (err != kCVReturnSuccess) {
         std::cerr << "createTextureFromHardwareBuffer: CVOpenGLESTextureCacheCreate failed" << std::endl;
         return nullptr;
