@@ -115,7 +115,7 @@ void MetalRenderDevice::waitIdle() {
     [cmdbuf waitUntilCompleted];
 }
 
-std::shared_ptr<ITexture> MetalRenderDevice::bindExternalHardwareBuffer(void* nativeBuffer) {
+std::shared_ptr<ITexture> MetalRenderDevice::createTextureFromHardwareBuffer(const HardwareBufferDesc& desc) {
     // On iOS, nativeBuffer is a CVPixelBufferRef or IOSurface
     // Use CVMetalTextureCache for zero-copy binding (simplified stub here)
     std::cerr << "MetalRenderDevice::bindExternalHardwareBuffer — stub (use CVMetalTextureCache)" << std::endl;
