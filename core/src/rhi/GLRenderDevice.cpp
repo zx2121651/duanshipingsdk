@@ -1,3 +1,11 @@
+
+#include "../../include/rhi/GLHardwareTexture.h"
+#if defined(__APPLE__)
+#import <CoreVideo/CoreVideo.h>
+#endif
+#if defined(__ANDROID__) && __ANDROID_API__ >= 26
+#include <android/hardware_buffer.h>
+#endif
 #include "GLBuffer.h"
 #include "GLVertexArray.h"
 #include "GLRenderDevice.h"
@@ -602,42 +610,36 @@ std::shared_ptr<IShaderResourceSet> GLRenderDevice::createShaderResourceSet() {
     return std::make_shared<GLShaderResourceSet>();  // Now has real bindTexture/apply impl
 }
 
-std::shared_ptr<ITexture> GLRenderDevice::bindExternalHardwareBuffer(void* nativeBuffer) {
+std::shared_ptr<ITexture> GLRenderDevice::createTextureFromHardwareBuffer(const HardwareBufferDesc& desc) {
     std::lock_guard<std::mutex> lock(m_mutex);
 
 #if defined(__ANDROID__) && __ANDROID_API__ >= 26
-    if (!nativeBuffer) return nullptr;
+    if (!desc.nativeBuffer) return nullptr;
 
-    AHardwareBuffer* ahwb = static_cast<AHardwareBuffer*>(nativeBuffer);
-
-    AHardwareBuffer_Desc hwbDesc = {};
-    AHardwareBuffer_describe(ahwb, &hwbDesc);
+    AHardwareBuffer* ahwb = static_cast<AHardwareBuffer*>(desc.nativeBuffer);
 
     EGLDisplay display = eglGetCurrentDisplay();
     if (display == EGL_NO_DISPLAY) {
-        std::cerr << "bindExternalHardwareBuffer: No EGL display" << std::endl;
+        std::cerr << "createTextureFromHardwareBuffer: No EGL display" << std::endl;
         return nullptr;
     }
 
-    // Load EGL extension function pointers (extensions — not in core EGL)
+    // Load EGL extension function pointers
     static auto s_eglGetNativeClientBufferANDROID =
         (PFNEGLGETNATIVECLIENTBUFFERANDROIDPROC)eglGetProcAddress("eglGetNativeClientBufferANDROID");
     static auto s_eglCreateImageKHR =
         (PFNEGLCREATEIMAGEKHRPROC)eglGetProcAddress("eglCreateImageKHR");
-    static auto s_eglDestroyImageKHR =
-        (PFNEGLDESTROYIMAGEKHRPROC)eglGetProcAddress("eglDestroyImageKHR");
     static auto s_glEGLImageTargetTexture2DOES =
         (PFNGLEGLIMAGETARGETTEXTURE2DOESPROC)eglGetProcAddress("glEGLImageTargetTexture2DOES");
 
-    if (!s_eglGetNativeClientBufferANDROID || !s_eglCreateImageKHR ||
-        !s_eglDestroyImageKHR || !s_glEGLImageTargetTexture2DOES) {
-        std::cerr << "bindExternalHardwareBuffer: required EGL extensions unavailable" << std::endl;
+    if (!s_eglGetNativeClientBufferANDROID || !s_eglCreateImageKHR || !s_glEGLImageTargetTexture2DOES) {
+        std::cerr << "createTextureFromHardwareBuffer: required EGL extensions unavailable" << std::endl;
         return nullptr;
     }
 
     EGLClientBuffer clientBuffer = s_eglGetNativeClientBufferANDROID(ahwb);
     if (!clientBuffer) {
-        std::cerr << "bindExternalHardwareBuffer: eglGetNativeClientBufferANDROID failed" << std::endl;
+        std::cerr << "createTextureFromHardwareBuffer: eglGetNativeClientBufferANDROID failed" << std::endl;
         return nullptr;
     }
 
@@ -645,12 +647,18 @@ std::shared_ptr<ITexture> GLRenderDevice::bindExternalHardwareBuffer(void* nativ
     EGLImageKHR eglImage = s_eglCreateImageKHR(
         display, EGL_NO_CONTEXT, EGL_NATIVE_BUFFER_ANDROID, clientBuffer, imageAttribs);
     if (eglImage == EGL_NO_IMAGE_KHR) {
-        std::cerr << "bindExternalHardwareBuffer: eglCreateImageKHR failed" << std::endl;
+        std::cerr << "createTextureFromHardwareBuffer: eglCreateImageKHR failed" << std::endl;
         return nullptr;
     }
 
     GLuint id = 0;
     glGenTextures(1, &id);
+
+    // Most AHardwareBuffers map to GL_TEXTURE_EXTERNAL_OES
+    #ifndef GL_TEXTURE_EXTERNAL_OES
+    #define GL_TEXTURE_EXTERNAL_OES 0x8D65
+    #endif
+
     glBindTexture(GL_TEXTURE_EXTERNAL_OES, id);
     s_glEGLImageTargetTexture2DOES(GL_TEXTURE_EXTERNAL_OES, eglImage);
     glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -659,20 +667,70 @@ std::shared_ptr<ITexture> GLRenderDevice::bindExternalHardwareBuffer(void* nativ
     glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
 
-    s_eglDestroyImageKHR(display, eglImage);
+    return std::make_shared<GLHardwareTexture>(id, GL_TEXTURE_EXTERNAL_OES, desc.width, desc.height, eglImage);
 
-    auto tex = std::make_shared<GLTexture>(id, hwbDesc.width, hwbDesc.height, TextureFormat::BGRA8, 1);
-    tex->setOwnsHandle(true);
-    return tex;
+#elif defined(__APPLE__)
+    if (!desc.nativeBuffer) return nullptr;
+    CVPixelBufferRef pixelBuffer = (CVPixelBufferRef)desc.nativeBuffer;
+
+    // For iOS, assuming a local creation or global cache, but CoreVideo prefers a CVOpenGLESTextureCacheRef.
+    // In a full implementation, GLRenderDevice would hold a CVOpenGLESTextureCacheRef m_textureCache.
+    // Since we don't have it natively integrated in this file's class definition without altering it further,
+    // we instantiate a local one or thread-local one for now, or just implement the required structure.
+    CVOpenGLESTextureCacheRef textureCache = NULL;
+    EAGLContext* context = [EAGLContext currentContext];
+    if (!context) {
+        std::cerr << "createTextureFromHardwareBuffer: No EAGLContext" << std::endl;
+        return nullptr;
+    }
+
+    CVReturn err = CVOpenGLESTextureCacheCreate(kCFAllocatorDefault, NULL, context, NULL, &textureCache);
+    if (err != kCVReturnSuccess) {
+        std::cerr << "createTextureFromHardwareBuffer: CVOpenGLESTextureCacheCreate failed" << std::endl;
+        return nullptr;
+    }
+
+    CVOpenGLESTextureRef cvTexture = NULL;
+    err = CVOpenGLESTextureCacheCreateTextureFromImage(
+        kCFAllocatorDefault,
+        textureCache,
+        pixelBuffer,
+        NULL,
+        GL_TEXTURE_2D,
+        GL_RGBA,
+        desc.width,
+        desc.height,
+        GL_BGRA,
+        GL_UNSIGNED_BYTE,
+        0,
+        &cvTexture);
+
+    if (err != kCVReturnSuccess || !cvTexture) {
+        std::cerr << "createTextureFromHardwareBuffer: CVOpenGLESTextureCacheCreateTextureFromImage failed" << std::endl;
+        if (textureCache) CFRelease(textureCache);
+        return nullptr;
+    }
+
+    GLuint texId = CVOpenGLESTextureGetName(cvTexture);
+    glBindTexture(GL_TEXTURE_2D, texId);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    // Clean up cache; cvTexture retains the texture
+    if (textureCache) CFRelease(textureCache);
+
+    return std::make_shared<GLHardwareTexture>(texId, GL_TEXTURE_2D, desc.width, desc.height, cvTexture);
+
 #else
-    // Non-Android stub
+    // Non-Android/Apple stub
     GLuint id = 0;
     glGenTextures(1, &id);
-    glBindTexture(GL_TEXTURE_EXTERNAL_OES, id);
-    glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
-    auto tex = std::make_shared<GLTexture>(id, 1, 1, TextureFormat::BGRA8, 1);
-    tex->setOwnsHandle(true);
-    return tex;
+    glBindTexture(GL_TEXTURE_2D, id);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    return std::make_shared<GLHardwareTexture>(id, GL_TEXTURE_2D, desc.width, desc.height);
 #endif
 }
 
