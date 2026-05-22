@@ -22,7 +22,7 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import com.sdk.video.sample.state.AppViewModel
+import com.sdk.video.sample.core.model.AppViewModel
 import com.sdk.video.sample.ui.HomeScaffold
 import com.sdk.video.timeline.TimelineManager
 import kotlinx.coroutines.launch

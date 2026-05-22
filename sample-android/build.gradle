@@ -41,6 +41,20 @@ android {
 
 dependencies {
     implementation project(':android')
+    
+    // Core Modules
+    implementation project(':core-ui')
+    implementation project(':core-model')
+
+    // Feature Modules
+    implementation project(':feature-home')
+    implementation project(':feature-capture')
+    implementation project(':feature-effects')
+    implementation project(':feature-diagnostics')
+    implementation project(':feature-import')
+    implementation project(':feature-editor')
+    implementation project(':feature-export')
+
     implementation 'androidx.core:core-ktx:1.12.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'

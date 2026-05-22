@@ -27,8 +27,16 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.sdk.video.sample.state.AppViewModel
-import com.sdk.video.sample.state.TimelineViewModel
+import com.sdk.video.sample.core.model.AppViewModel
+import com.sdk.video.sample.core.model.TimelineViewModel
+import com.sdk.video.sample.feature.home.HomeScreen
+import com.sdk.video.sample.feature.capture.CaptureScreen
+import com.sdk.video.sample.feature.effects.EffectsScreen
+import com.sdk.video.sample.feature.diagnostics.DiagnosticsScreen
+import com.sdk.video.sample.feature.import.ImportScreen
+import com.sdk.video.sample.feature.editor.TimelineEditorScreen
+import com.sdk.video.sample.feature.editor.TextEditorScreen
+import com.sdk.video.sample.feature.export.ExportScreen
 
 private val fullscreenRoutes = setOf("import", "timeline_editor", "export", "text_editor")
 
