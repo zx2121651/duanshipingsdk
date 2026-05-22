@@ -224,6 +224,136 @@ InferenceResult TfliteInferenceEngine::runInference(
 }
 
 // ---------------------------------------------------------------------------
+// runInference() — Texture Overload (GPU Downsampling)
+// ---------------------------------------------------------------------------
+InferenceResult TfliteInferenceEngine::runInference(GLuint textureId, int width, int height) {
+    InferenceResult result;
+#ifdef HAS_TFLITE
+    if (!m_loaded || !m_impl->interpreter) {
+        result.errorMessage = "TfliteInferenceEngine: model not loaded";
+        return result;
+    }
+
+    auto t0 = std::chrono::high_resolution_clock::now();
+
+    // 1. Ensure downsample FBO and texture are ready
+    ensureDownsampleResources(m_inputW, m_inputH);
+
+    // 2. Perform GPU downsampling using glBlitFramebuffer
+    GLuint srcFbo = 0;
+    glGenFramebuffers(1, &srcFbo);
+    
+    GLStateManager::getInstance().bindFramebuffer(GL_READ_FRAMEBUFFER, srcFbo);
+    glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textureId, 0);
+
+    GLStateManager::getInstance().bindFramebuffer(GL_DRAW_FRAMEBUFFER, m_downsampleFbo);
+
+    glBlitFramebuffer(0, 0, width, height, 0, 0, m_inputW, m_inputH, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+
+    // 3. Read back the downsampled pixels from m_downsampleFbo (low-res readback)
+    GLStateManager::getInstance().bindFramebuffer(GL_READ_FRAMEBUFFER, m_downsampleFbo);
+    glReadPixels(0, 0, m_inputW, m_inputH, GL_RGBA, GL_UNSIGNED_BYTE, m_downsampleBuffer.data());
+
+    // Clean up temporary FBO binding
+    GLStateManager::getInstance().bindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+    GLStateManager::getInstance().bindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    GLStateManager::getInstance().bindFramebuffer(GL_FRAMEBUFFER, 0);
+    glDeleteFramebuffers(1, &srcFbo);
+
+    // 4. Fill TFLite float input tensor
+    TfLiteTensor* inputTensor = TfLiteInterpreterGetInputTensor(m_impl->interpreter, 0);
+    float* inputData = (float*)TfLiteTensorData(inputTensor);
+    const int numPixels = m_inputW * m_inputH;
+    for (int i = 0; i < numPixels; ++i) {
+        inputData[i * 3 + 0] = m_downsampleBuffer[i * 4 + 0] / 255.0f;
+        inputData[i * 3 + 1] = m_downsampleBuffer[i * 4 + 1] / 255.0f;
+        inputData[i * 3 + 2] = m_downsampleBuffer[i * 4 + 2] / 255.0f;
+    }
+
+    // 5. Invoke Inference
+    if (TfLiteInterpreterInvoke(m_impl->interpreter) != kTfLiteOk) {
+        result.errorMessage = "TfliteInferenceEngine: Invoke() failed";
+        return result;
+    }
+
+    // 6. Decode output
+    const TfLiteTensor* outputTensor = TfLiteInterpreterGetOutputTensor(m_impl->interpreter, 0);
+    const float* outputData = (const float*)TfLiteTensorData(outputTensor);
+    int outChannels = TfLiteTensorDim(outputTensor, TfLiteTensorNumDims(outputTensor) - 1);
+
+    int fgChannel = (outChannels >= 2) ? 1 : 0;
+    std::vector<float> mask(static_cast<size_t>(m_inputW * m_inputH));
+    for (int i = 0; i < m_inputW * m_inputH; ++i) {
+        float v = outputData[i * outChannels + fgChannel];
+        if (outChannels >= 2) {
+            float bg = outputData[i * outChannels + 0];
+            float fg = outputData[i * outChannels + 1];
+            float maxV = std::max(bg, fg);
+            float eBg = std::exp(bg - maxV);
+            float eFg = std::exp(fg - maxV);
+            v = eFg / (eBg + eFg);
+        } else {
+            v = 1.0f / (1.0f + std::exp(-v));
+        }
+        mask[i] = std::max(0.0f, std::min(1.0f, v));
+    }
+
+    auto t1 = std::chrono::high_resolution_clock::now();
+    result.inferenceTimeMs = std::chrono::duration<float, std::milli>(t1 - t0).count();
+
+    // 7. Upload mask to GL_R8 texture
+    ensureMaskTexture(m_inputW, m_inputH);
+    uploadMaskToGL(mask.data(), m_inputW, m_inputH);
+
+    result.success       = true;
+    result.maskTextureId = m_maskTextureId;
+    result.maskWidth     = m_inputW;
+    result.maskHeight    = m_inputH;
+
+    LOGV("TfliteInferenceEngine: GPU-downsampled inference %.1fms, mask tex=%u", result.inferenceTimeMs, m_maskTextureId);
+    return result;
+#else
+    (void)textureId; (void)width; (void)height;
+    result.errorMessage = "TfliteInferenceEngine: TFLite not compiled — stub";
+    return result;
+#endif
+}
+
+// ---------------------------------------------------------------------------
+// ensureDownsampleResources()
+// ---------------------------------------------------------------------------
+void TfliteInferenceEngine::ensureDownsampleResources(int w, int h) {
+    if (m_downsampleInited && m_downsampleTexId != 0 && m_downsampleFbo != 0) {
+        return;
+    }
+    
+    glGenFramebuffers(1, &m_downsampleFbo);
+    glGenTextures(1, &m_downsampleTexId);
+    
+    GLStateManager::getInstance().bindFramebuffer(GL_FRAMEBUFFER, m_downsampleFbo);
+    GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, m_downsampleTexId);
+    
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_downsampleTexId, 0);
+    
+    GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (status != GL_FRAMEBUFFER_COMPLETE) {
+        LOGE("TfliteInferenceEngine: downsample framebuffer incomplete: %u", status);
+    }
+    
+    GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, 0);
+    GLStateManager::getInstance().bindFramebuffer(GL_FRAMEBUFFER, 0);
+    
+    m_downsampleBuffer.resize(w * h * 4);
+    m_downsampleInited = true;
+}
+
+// ---------------------------------------------------------------------------
 // ensureMaskTexture() — 懒初始化 GL_R8 mask 纹理
 // ---------------------------------------------------------------------------
 void TfliteInferenceEngine::ensureMaskTexture(int w, int h) {
@@ -290,6 +420,15 @@ void TfliteInferenceEngine::releaseGLResources() {
         m_maskTextureId = 0;
         m_maskTexInited = false;
     }
+    if (m_downsampleTexId != 0) {
+        glDeleteTextures(1, &m_downsampleTexId);
+        m_downsampleTexId = 0;
+    }
+    if (m_downsampleFbo != 0) {
+        glDeleteFramebuffers(1, &m_downsampleFbo);
+        m_downsampleFbo = 0;
+    }
+    m_downsampleInited = false;
 }
 
 void TfliteInferenceEngine::release() {

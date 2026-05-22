@@ -100,6 +100,18 @@ public:
     InferenceResult runInference(const uint8_t* inputPixels, int inputW, int inputH);
 
     /**
+     * 执行推理（直接传入 GPU 纹理，并在 GPU 上进行 Resize 下采样，避免 CPU 高分辨率回读与缩放）。
+     *
+     * @param textureId    RGBA 纹理 ID
+     * @param width        输入纹理宽度
+     * @param height       输入纹理高度
+     * @return InferenceResult（含 maskTextureId）
+     *
+     * @note 必须在 GL 线程调用
+     */
+    InferenceResult runInference(GLuint textureId, int width, int height);
+
+    /**
      * 查询模型期望的输入尺寸。
      * loadModel() 成功后有效。
      */
@@ -131,6 +143,13 @@ private:
     GLuint m_maskTextureId = 0;
     bool   m_maskTexInited = false;
 
+    // GPU 下采样资源
+    GLuint m_downsampleFbo = 0;
+    GLuint m_downsampleTexId = 0;
+    bool   m_downsampleInited = false;
+    std::vector<uint8_t> m_downsampleBuffer;
+
+    void ensureDownsampleResources(int w, int h);
     void ensureMaskTexture(int w, int h);
     void uploadMaskToGL(const float* maskData, int w, int h);
 

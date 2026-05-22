@@ -178,27 +178,11 @@ ResultPayload<Texture> SegmentationFilter::processFrame(
         return ResultPayload<Texture>::ok(outputFb->getTexture());
     }
 
-    // ---- 2. 读取原图像素（用于 TFLite 推理）----
-    // 我们从 inputTexture 读取 RGBA 像素（glReadPixels via FBO）
-    // 注意：此操作在 GPU-CPU 之间同步，是性能瓶颈。
-    // 优化方向：直接在 GPU 上 resize，但需要 PBO 或 compute shader。
+    // ---- 2. GPU 下采样与 TFLite 推理 ----
     const int W = static_cast<int>(inputTexture.width);
     const int H = static_cast<int>(inputTexture.height);
 
-    // Read-back via temporary FBO
-    GLuint tmpFbo = 0;
-    glGenFramebuffers(1, &tmpFbo);
-    glBindFramebuffer(GL_FRAMEBUFFER, tmpFbo);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                           GL_TEXTURE_2D, inputTexture.id, 0);
-
-    std::vector<uint8_t> pixels(static_cast<size_t>(W * H * 4));
-    glReadPixels(0, 0, W, H, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glDeleteFramebuffers(1, &tmpFbo);
-
-    // ---- 3. 推理 ----
-    auto inferResult = m_engine->runInference(pixels.data(), W, H);
+    auto inferResult = m_engine->runInference(inputTexture.id, W, H);
     if (!inferResult.success) {
         LOGW("SegmentationFilter: inference failed: %s", inferResult.errorMessage.c_str());
         onDraw(inputTexture, outputFb);

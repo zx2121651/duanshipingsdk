@@ -101,6 +101,8 @@ typedef unsigned int GLbitfield;
 #define GL_STENCIL_ATTACHMENT 0x8D20
 #define GL_FRAMEBUFFER_COMPLETE 0x8CD5
 #define GL_FRAMEBUFFER_BINDING 0x8CA6
+#define GL_READ_FRAMEBUFFER 0x8CA8
+#define GL_DRAW_FRAMEBUFFER 0x8CA9
 
 #define GL_BLEND 0x0BE2
 #define GL_CULL_FACE 0x0B44
@@ -257,6 +259,7 @@ static inline void glFramebufferTexture2D(GLenum target, GLenum attachment, GLen
 static inline GLenum glCheckFramebufferStatus(GLenum target) { return GL_FRAMEBUFFER_COMPLETE; }
 static inline void glDeleteFramebuffers(GLsizei n, const GLuint* framebuffers) {}
 static inline void glRenderbufferStorageMultisample(GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height) {}
+static inline void glBlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter) {}
 
 // Drawing functions
 static inline void glDrawArrays(GLenum mode, GLint first, GLsizei count) {}

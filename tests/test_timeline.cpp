@@ -447,6 +447,55 @@ void test_time_remapping() {
     std::cout << "test_time_remapping passed" << std::endl;
 }
 
+void test_draft_path_resilience() {
+    auto timeline = std::make_shared<Timeline>(1920, 1080, 30);
+    auto track = timeline->addTrack(0, Track::TrackType::MAIN_VIDEO);
+
+    std::string draftRoot = "E:/projects/drafts/my_project/";
+    std::string sandboxRoot = "C:/Users/app/AppData/Local/Temp/sandbox/";
+
+    auto clip1 = std::make_shared<Clip>("clip1", "E:\\projects\\drafts\\my_project\\assets\\video.mp4", Clip::MediaType::VIDEO);
+    auto clip2 = std::make_shared<Clip>("clip2", "C:/Users/app/AppData/Local/Temp/sandbox/files/audio.wav", Clip::MediaType::AUDIO);
+    auto clip3 = std::make_shared<Clip>("clip3", "D:/movies/intro.mp4", Clip::MediaType::VIDEO);
+
+    track->addClip(clip1);
+    track->addClip(clip2);
+    track->addClip(clip3);
+
+    // Serialize
+    std::string serialized = serializeTimeline(*timeline, draftRoot, sandboxRoot);
+
+    // Verify placeholders are present
+    assert(serialized.find("<DRAFT_ROOT>/assets/video.mp4") != std::string::npos);
+    assert(serialized.find("<SANDBOX>/files/audio.wav") != std::string::npos);
+    assert(serialized.find("D:/movies/intro.mp4") != std::string::npos);
+
+    // Now deserialize in a different environment/paths (mimicking app reinstall/transfer)
+    std::string newDraftRoot = "F:/new_projects/drafts/my_project/";
+    std::string newSandboxRoot = "D:/sandbox_root/";
+
+    auto deserializedTimeline = deserializeTimeline(serialized, newDraftRoot, newSandboxRoot);
+    assert(deserializedTimeline != nullptr);
+
+    auto loadedTrack = deserializedTimeline->getTrack(0);
+    assert(loadedTrack != nullptr);
+
+    auto loadedClip1 = loadedTrack->getClip("clip1");
+    auto loadedClip2 = loadedTrack->getClip("clip2");
+    auto loadedClip3 = loadedTrack->getClip("clip3");
+
+    assert(loadedClip1 != nullptr);
+    assert(loadedClip2 != nullptr);
+    assert(loadedClip3 != nullptr);
+
+    // Verify paths are resolved to the new roots
+    assert(loadedClip1->getSourcePath() == "F:/new_projects/drafts/my_project/assets/video.mp4");
+    assert(loadedClip2->getSourcePath() == "D:/sandbox_root/files/audio.wav");
+    assert(loadedClip3->getSourcePath() == "D:/movies/intro.mp4");
+
+    std::cout << "test_draft_path_resilience passed" << std::endl;
+}
+
 int main() {
     test_timeline_basic_properties();
     test_clip_boundary_trim();
@@ -466,5 +515,6 @@ int main() {
     test_bezier_serialization();
     test_effect_clip();
     test_time_remapping();
+    test_draft_path_resilience();
     return 0;
 }

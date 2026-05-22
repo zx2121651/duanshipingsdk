@@ -142,7 +142,7 @@ bool DraftAutoSave::saveNow() {
     }
 
     std::string path = buildSnapshotPath();
-    bool ok = saveDraft(*tl, path);
+    bool ok = saveDraft(*tl, path, m_sandboxPath);
     if (!ok) {
         m_lastError = "DraftAutoSave: saveDraft failed for " + path;
         LOGE("%s", m_lastError.c_str());
@@ -182,7 +182,7 @@ bool DraftAutoSave::loadLatest(std::shared_ptr<Timeline> /*timeline*/) {
         return false;
     }
 
-    auto rebuilt = loadDraft(snaps.front());
+    auto rebuilt = loadDraft(snaps.front(), m_sandboxPath);
     bool ok = (rebuilt != nullptr);
     if (ok) {
         m_timeline = rebuilt;

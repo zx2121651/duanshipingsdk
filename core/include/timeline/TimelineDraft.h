@@ -73,6 +73,66 @@ inline std::string unescapeColons(const std::string& s) {
     return out;
 }
 
+inline std::string normalizePath(const std::string& path) {
+    std::string out = path;
+    for (char& c : out) {
+        if (c == '\\') c = '/';
+    }
+    return out;
+}
+
+inline std::string getDirectoryPath(const std::string& filePath) {
+    std::string norm = normalizePath(filePath);
+    size_t lastSlash = norm.find_last_of('/');
+    if (lastSlash == std::string::npos) {
+        return "";
+    }
+    return norm.substr(0, lastSlash + 1); // include trailing slash
+}
+
+inline std::string detectSandboxPath(const std::string& filePath) {
+    std::string norm = normalizePath(filePath);
+    static const char* patterns[] = {
+        "/files/", "/cache/", "/Documents/", "/Library/", "/tmp/"
+    };
+    for (const char* pattern : patterns) {
+        size_t pos = norm.find(pattern);
+        if (pos != std::string::npos) {
+            // Include the pattern itself up to the trailing slash
+            return norm.substr(0, pos + strlen(pattern));
+        }
+    }
+    return "";
+}
+
+inline std::string serializePath(const std::string& path, const std::string& draftRoot, const std::string& sandboxRoot) {
+    if (path.empty()) return path;
+    
+    std::string normPath = normalizePath(path);
+    std::string normDraftRoot = normalizePath(draftRoot);
+    std::string normSandboxRoot = normalizePath(sandboxRoot);
+    
+    if (!normDraftRoot.empty() && normPath.compare(0, normDraftRoot.size(), normDraftRoot) == 0) {
+        return "<DRAFT_ROOT>/" + normPath.substr(normDraftRoot.size());
+    }
+    if (!normSandboxRoot.empty() && normPath.compare(0, normSandboxRoot.size(), normSandboxRoot) == 0) {
+        return "<SANDBOX>/" + normPath.substr(normSandboxRoot.size());
+    }
+    return path;
+}
+
+inline std::string deserializePath(const std::string& path, const std::string& draftRoot, const std::string& sandboxRoot) {
+    if (path.empty()) return path;
+    
+    if (path.compare(0, 13, "<DRAFT_ROOT>/") == 0) {
+        return normalizePath(draftRoot) + path.substr(13);
+    }
+    if (path.compare(0, 10, "<SANDBOX>/") == 0) {
+        return normalizePath(sandboxRoot) + path.substr(10);
+    }
+    return path;
+}
+
 } // namespace detail
 
 // ---------------------------------------------------------------------------
@@ -80,7 +140,7 @@ inline std::string unescapeColons(const std::string& s) {
 // ---------------------------------------------------------------------------
 namespace detail {
 
-inline void serializeClip(std::ostringstream& ss, const ClipPtr& clip) {
+inline void serializeClip(std::ostringstream& ss, const ClipPtr& clip, const std::string& draftRoot, const std::string& sandboxRoot) {
     const std::string& clipId = clip->getId();
     // ── Check for specialised subtypes ────────────────────────────────────
     if (auto sub = std::dynamic_pointer_cast<SubtitleClip>(clip)) {
@@ -99,10 +159,11 @@ inline void serializeClip(std::ostringstream& ss, const ClipPtr& clip) {
         return;
     }
     if (auto stk = std::dynamic_pointer_cast<StickerClip>(clip)) {
+        std::string serializedPath = serializePath(stk->getSourcePath(), draftRoot, sandboxRoot);
         // STICKER:<id>:<srcPath>:<srcDur>:<tlIn>:<cx>:<cy>:<scale>:<rot>
         ss << "STICKER:"
            << escapeColons(clipId)                   << ":"
-           << escapeColons(stk->getSourcePath())     << ":"
+           << escapeColons(serializedPath)           << ":"
            << stk->getSourceDuration()               << ":"
            << stk->getTimelineIn()                   << ":"
            << stk->centerX                           << ":"
@@ -112,9 +173,10 @@ inline void serializeClip(std::ostringstream& ss, const ClipPtr& clip) {
         return;
     }
     // ── Generic Clip ─────────────────────────────────────────────────────────
+    std::string serializedPath = serializePath(clip->getSourcePath(), draftRoot, sandboxRoot);
     ss << "C:"
        << escapeColons(clipId)                          << ":"
-       << escapeColons(clip->getSourcePath())           << ":"
+       << escapeColons(serializedPath)                  << ":"
        << static_cast<int>(clip->getType())             << ":"
        << clip->getSourceDuration()                     << ":"
        << clip->getTrimIn()                             << ":"
@@ -126,7 +188,7 @@ inline void serializeClip(std::ostringstream& ss, const ClipPtr& clip) {
        << clip->getScale(0)                             << ":"
        << 0.0f << ":" << 0.0f << ":" << 0.0f            << ":"
        << escapeColons(clip->getInTransitionName())     << ":"
-       << clip->getInTransitionDurationNs()             << ":"
+       << clip->getInTransitionDurationNs()             <<             ":"
        << escapeColons(clip->getOutTransitionName())    << ":"
        << clip->getOutTransitionDurationNs()            << "\n";
 
@@ -157,7 +219,7 @@ inline void serializeClip(std::ostringstream& ss, const ClipPtr& clip) {
 // ---------------------------------------------------------------------------
 // serialize
 // ---------------------------------------------------------------------------
-inline std::string serializeTimeline(const Timeline& tl) {
+inline std::string serializeTimeline(const Timeline& tl, const std::string& draftRoot = "", const std::string& sandboxRoot = "") {
     std::ostringstream ss;
     ss << "SVDK_DRAFT:" << DRAFT_FORMAT_VERSION << ":"
        << tl.getOutputWidth() << ":" << tl.getOutputHeight() << ":" << tl.getFps() << "\n";
@@ -171,7 +233,7 @@ inline std::string serializeTimeline(const Timeline& tl) {
 
         // O(n) direct iteration via getAllClips()
         for (const auto& clip : track->getAllClips())
-            detail::serializeClip(ss, clip);
+            detail::serializeClip(ss, clip, draftRoot, sandboxRoot);
     }
     return ss.str();
 }
@@ -179,20 +241,7 @@ inline std::string serializeTimeline(const Timeline& tl) {
 // ---------------------------------------------------------------------------
 // saveDraft / loadDraft  (file I/O wrappers)
 // ---------------------------------------------------------------------------
-inline bool saveDraft(const Timeline& tl, const std::string& filePath) {
-    std::ofstream f(filePath, std::ios::out | std::ios::trunc);
-    if (!f.is_open()) return false;
-    f << serializeTimeline(tl);
-    return f.good();
-}
-
-inline std::shared_ptr<Timeline> loadDraft(const std::string& filePath) {
-    std::ifstream f(filePath);
-    if (!f.is_open()) return nullptr;
-    std::ostringstream buf;
-    buf << f.rdbuf();
-    const std::string content = buf.str();
-
+inline std::shared_ptr<Timeline> deserializeTimeline(const std::string& content, const std::string& draftRoot = "", const std::string& sandboxRoot = "") {
     std::istringstream ss(content);
     std::string line;
 
@@ -234,6 +283,7 @@ inline std::shared_ptr<Timeline> loadDraft(const std::string& filePath) {
             if (parts.size() < 19) continue;
             std::string id      = detail::unescapeColons(parts[1]);
             std::string src     = detail::unescapeColons(parts[2]);
+            src = detail::deserializePath(src, draftRoot, sandboxRoot);
             Clip::MediaType mt  = static_cast<Clip::MediaType>(std::stoi(parts[3]));
             int64_t srcDur      = std::stoll(parts[4]);
             int64_t trimIn      = std::stoll(parts[5]);
@@ -304,6 +354,7 @@ inline std::shared_ptr<Timeline> loadDraft(const std::string& filePath) {
             if (parts.size() < 9) continue;
             std::string id  = detail::unescapeColons(parts[1]);
             std::string src = detail::unescapeColons(parts[2]);
+            src = detail::deserializePath(src, draftRoot, sandboxRoot);
             int64_t srcDur  = std::stoll(parts[3]);
             int64_t tlIn    = std::stoll(parts[4]);
             auto stk = std::make_shared<StickerClip>(id, src);
@@ -318,6 +369,32 @@ inline std::shared_ptr<Timeline> loadDraft(const std::string& filePath) {
     }
 
     return timeline;
+}
+
+inline bool saveDraft(const Timeline& tl, const std::string& filePath, const std::string& sandboxPath = "") {
+    std::string draftRoot = detail::getDirectoryPath(filePath);
+    std::string sandboxRoot = sandboxPath;
+    if (sandboxRoot.empty()) {
+        sandboxRoot = detail::detectSandboxPath(filePath);
+    }
+    std::ofstream f(filePath, std::ios::out | std::ios::trunc);
+    if (!f.is_open()) return false;
+    f << serializeTimeline(tl, draftRoot, sandboxRoot);
+    return f.good();
+}
+
+inline std::shared_ptr<Timeline> loadDraft(const std::string& filePath, const std::string& sandboxPath = "") {
+    std::ifstream f(filePath);
+    if (!f.is_open()) return nullptr;
+    std::ostringstream buf;
+    buf << f.rdbuf();
+    
+    std::string draftRoot = detail::getDirectoryPath(filePath);
+    std::string sandboxRoot = sandboxPath;
+    if (sandboxRoot.empty()) {
+        sandboxRoot = detail::detectSandboxPath(filePath);
+    }
+    return deserializeTimeline(buf.str(), draftRoot, sandboxRoot);
 }
 
 } // namespace timeline

@@ -86,24 +86,10 @@ void HairSegmentationFilter::setHairColor(float r, float g, float b) {
 ResultPayload<Texture> HairSegmentationFilter::processFrame(
     const Texture& inputTexture, FrameBufferPtr outputFb)
 {
-    // AI 推理（读回像素 → TFLite → 上传 mask）
-    // 注意：生产环境应避免每帧读回像素，改用 PBO 异步回读
     int texW = inputTexture.width  > 0 ? inputTexture.width  : 256;
     int texH = inputTexture.height > 0 ? inputTexture.height : 256;
 
-    // 读取当前帧像素（简化实现；生产用 PBO）
-    std::vector<uint8_t> pixels(texW * texH * 4);
-    // 绑定到临时 FBO 读取
-    GLuint tmpFbo = 0;
-    glGenFramebuffers(1, &tmpFbo);
-    glBindFramebuffer(GL_FRAMEBUFFER, tmpFbo);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                           GL_TEXTURE_2D, inputTexture.id, 0);
-    glReadPixels(0, 0, texW, texH, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glDeleteFramebuffers(1, &tmpFbo);
-
-    auto result = m_engine.runInference(pixels.data(), texW, texH);
+    auto result = m_engine.runInference(inputTexture.id, texW, texH);
     if (result.success) {
         m_maskTexId = result.maskTextureId;
         m_maskW     = result.maskWidth;

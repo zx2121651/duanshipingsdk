@@ -55,6 +55,10 @@ public:
     void setDraftDir(const std::string& dir) { m_draftDir = dir; }
     const std::string& getDraftDir() const   { return m_draftDir; }
 
+    /** 沙盒路径。 */
+    void setSandboxPath(const std::string& path) { m_sandboxPath = path; }
+    const std::string& getSandboxPath() const     { return m_sandboxPath; }
+
     /** 自动保存间隔（毫秒），默认 30000。 */
     void setInterval(int64_t ms) { m_intervalMs = ms; }
 
@@ -122,6 +126,7 @@ public:
 
 private:
     std::string  m_draftDir;
+    std::string  m_sandboxPath;
     int64_t      m_intervalMs    = 30'000;
     int          m_maxSnapshots  = 10;
     std::atomic<bool> m_dirty{false};
