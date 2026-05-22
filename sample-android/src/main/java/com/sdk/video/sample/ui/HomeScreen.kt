@@ -2,19 +2,9 @@ package com.sdk.video.sample.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -27,41 +17,39 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Subtitles
-import androidx.compose.material.icons.filled.Title
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Videocam
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.sdk.video.sample.state.AppViewModel
 import com.sdk.video.sample.state.TimelineViewModel
 
-private val Accent = Color(0xFF00D7FF)
-private val Accent2 = Color(0xFF7C5CFF)
-private val Surface = Color(0xFF181818)
-private val SurfaceLight = Color(0xFF242424)
-private val TextSecondary = Color(0xFF9A9A9A)
+private val Accent = Color(0xFF00D7FF)       // 剪映经典青色/青橙
+private val Accent2 = Color(0xFF7C5CFF)      // 极客紫
+private val Surface = Color(0xFF141416)       // 深色卡片背景
+private val SurfaceLight = Color(0xFF222225)  // 浅色卡片背景
+private val TextSecondary = Color(0xFF888892) // 辅助文字颜色
+private val BorderColor = Color(0xFF2B2B30)   // 卡片边框颜色
 
 private data class QuickEntry(
     val icon: ImageVector,
@@ -73,23 +61,26 @@ private data class QuickEntry(
 
 private data class DraftCard(
     val title: String,
-    val meta: String,
+    val duration: String,
+    val segmentCount: Int,
+    val info: String,
+    val timeStr: String,
     val accent: Color
 )
 
 private val quickEntries = listOf(
-    QuickEntry(Icons.Filled.AutoAwesome, "AI 一键成片", "自动剪辑、智能卡点和字幕生成", Color(0xFF7C5CFF), "import"),
-    QuickEntry(Icons.Filled.Subtitles, "智能字幕", "语音自动识别、样式一键匹配", Color(0xFF20C997), "text_editor"),
-    QuickEntry(Icons.Filled.AutoFixHigh, "热门特效", "滤镜、妆容、道具实时预览", Color(0xFFFF5C8A), "effects"),
-    QuickEntry(Icons.Filled.GraphicEq, "音乐卡点", "节拍检测、自动分段对齐", Color(0xFFFFB020), "capture"),
-    QuickEntry(Icons.Filled.Tune, "专业调色", "曲线、色轮、LUT、电影级色彩", Color(0xFF00BCD4), "timeline_editor"),
-    QuickEntry(Icons.Filled.Speed, "变速曲线", "慢动作、快进、曲线变速", Color(0xFFFF7043), "timeline_editor"),
+    QuickEntry(Icons.Filled.AutoAwesome, "AI 一键成片", "智能卡点与剪辑", Color(0xFF7C5CFF), "import"),
+    QuickEntry(Icons.Filled.Subtitles, "智能字幕", "语音识别一键匹配", Color(0xFF00C9A7), "text_editor"),
+    QuickEntry(Icons.Filled.AutoFixHigh, "热门特效", "实时分割与滤镜", Color(0xFFFF5C8A), "effects"),
+    QuickEntry(Icons.Filled.GraphicEq, "音乐卡点", "节拍检测自动对齐", Color(0xFFFFB020), "capture"),
+    QuickEntry(Icons.Filled.Tune, "专业调色", "电影级色彩调节", Color(0xFF00BCD4), "timeline_editor"),
+    QuickEntry(Icons.Filled.Speed, "曲线变速", "慢动作与动作平滑", Color(0xFFFF7043), "timeline_editor"),
 )
 
 private val draftCards = listOf(
-    DraftCard("城市漫游·青橙胶片", "9 段 · 01:28 · 刚刚", Color(0xFF00D7FF)),
-    DraftCard("产品开箱·节奏卡点", "5 段 · 00:42 · 昨天", Color(0xFFFFB020)),
-    DraftCard("知识口播·字幕增强", "3 段 · 02:10 · 3天前", Color(0xFF7C5CFF)),
+    DraftCard("2026 毕业季 · 纪念纪录片", "03:15", 12, "1080P · 30fps", "刚刚", Color(0xFF00D7FF)),
+    DraftCard("Weekend Vlog · 露营日记", "01:45", 8, "4K · 60fps", "昨天", Color(0xFFFFB020)),
+    DraftCard("国风卡点大片 · 剪辑工程", "00:30", 5, "1080P · 60fps", "3天前", Color(0xFF7C5CFF)),
 )
 
 @Composable
@@ -103,7 +94,11 @@ fun HomeScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0B0B0C))
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(Color(0xFF18181C), Color(0xFF0B0B0D))
+                )
+            )
             .verticalScroll(rememberScrollState())
     ) {
         Header()
@@ -125,7 +120,7 @@ fun HomeScreen(
             onImportNew = { navController.navigate("import") }
         )
         CapabilityStrip()
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(36.dp))
     }
 }
 
@@ -134,21 +129,39 @@ private fun Header() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 18.dp),
+            .padding(horizontal = 20.dp, vertical = 20.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text("创作中心", color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.Bold)
-            Text("拍摄 · 剪辑 · 特效 · 导出，一站式视频创作", color = TextSecondary, fontSize = 12.sp)
+            Text(
+                text = "创作中心",
+                color = Color.White,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 0.5.sp
+            )
+            Text(
+                text = "专业剪辑 · 智能特效 · 极致画质",
+                color = TextSecondary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium
+            )
         }
         Box(
             modifier = Modifier
-                .size(38.dp)
+                .size(42.dp)
                 .clip(CircleShape)
-                .background(SurfaceLight),
+                .background(Color(0xFF1E1E22))
+                .border(1.dp, Color(0xFF323238), CircleShape)
+                .clickable { /* settings or profile */ },
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Filled.ContentCut, contentDescription = "创作", tint = Accent, modifier = Modifier.size(20.dp))
+            Icon(
+                imageVector = Icons.Filled.ContentCut,
+                contentDescription = "剪辑",
+                tint = Accent,
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }
@@ -159,33 +172,76 @@ private fun HeroProjectActions(onNewProject: () -> Unit, onCapture: () -> Unit) 
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .background(Brush.horizontalGradient(listOf(Color(0xFF141E30), Color(0xFF111111))))
-            .padding(18.dp)
+            .shadow(16.dp, RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(20.dp))
+            .background(
+                Brush.linearGradient(
+                    colors = listOf(Color(0xFF1D263B), Color(0xFF131316))
+                )
+            )
+            .border(1.dp, Color(0xFF2E3D5E), RoundedCornerShape(20.dp))
+            .padding(20.dp)
     ) {
-        Text("从素材到成片，一步到位", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        Text("导入素材、多轨剪辑、智能字幕、电影调色、高清导出", color = TextSecondary, fontSize = 12.sp)
-        Spacer(Modifier.height(16.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(
+            text = "开启你的高光时刻",
+            color = Color.White,
+            fontSize = 21.sp,
+            fontWeight = FontWeight.ExtraBold
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = "支持多轨时间线剪辑、4K无损导出和实时AI人像分割",
+            color = TextSecondary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Normal
+        )
+        Spacer(Modifier.height(20.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             Button(
                 onClick = onNewProject,
-                modifier = Modifier.weight(1f).height(50.dp),
+                modifier = Modifier
+                    .weight(1.3f)
+                    .height(54.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Accent),
-                shape = RoundedCornerShape(14.dp)
+                shape = RoundedCornerShape(16.dp),
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
             ) {
-                Icon(Icons.Filled.Add, contentDescription = null, tint = Color.Black, modifier = Modifier.size(20.dp))
+                Icon(
+                    imageVector = Icons.Filled.Add,
+                    contentDescription = null,
+                    tint = Color.Black,
+                    modifier = Modifier.size(22.dp)
+                )
                 Spacer(Modifier.width(6.dp))
-                Text("开始创作", color = Color.Black, fontWeight = FontWeight.Bold)
+                Text(
+                    text = "开始创作",
+                    color = Color.Black,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 15.sp
+                )
             }
             OutlinedButton(
                 onClick = onCapture,
-                modifier = Modifier.weight(1f).height(50.dp),
-                border = BorderStroke(1.dp, Color(0xFF444444)),
-                shape = RoundedCornerShape(14.dp)
+                modifier = Modifier
+                    .weight(1f)
+                    .height(54.dp),
+                border = BorderStroke(1.2.dp, Color(0xFF4A4A58)),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
             ) {
-                Icon(Icons.Filled.Videocam, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                Icon(
+                    imageVector = Icons.Filled.Videocam,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
                 Spacer(Modifier.width(6.dp))
-                Text("拍同款", color = Color.White, fontWeight = FontWeight.SemiBold)
+                Text(
+                    text = "拍同款",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
             }
         }
     }
@@ -193,35 +249,57 @@ private fun HeroProjectActions(onNewProject: () -> Unit, onCapture: () -> Unit) 
 
 @Composable
 private fun QuickEntryRow(onOpen: (String) -> Unit) {
-    Column(modifier = Modifier.padding(top = 22.dp)) {
-        SectionTitle("创作工具", "SDK 能力入口")
+    Column(modifier = Modifier.padding(top = 26.dp)) {
+        SectionTitle("智能工具箱", "对标剪映核心 SDK 能力")
         LazyRow(
             contentPadding = PaddingValues(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxWidth()
         ) {
             items(quickEntries) { item ->
                 Column(
                     modifier = Modifier
-                        .width(116.dp)
-                        .height(122.dp)
-                        .clip(RoundedCornerShape(14.dp))
+                        .width(120.dp)
+                        .height(130.dp)
+                        .clip(RoundedCornerShape(16.dp))
                         .background(Surface)
+                        .border(1.dp, BorderColor, RoundedCornerShape(16.dp))
                         .clickable { onOpen(item.route) }
-                        .padding(12.dp),
+                        .padding(14.dp),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(40.dp)
                             .clip(CircleShape)
-                            .background(item.tint.copy(alpha = 0.18f)),
+                            .background(item.tint.copy(alpha = 0.12f))
+                            .border(1.dp, item.tint.copy(alpha = 0.25f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(item.icon, contentDescription = item.title, tint = item.tint, modifier = Modifier.size(21.dp))
+                        Icon(
+                            imageVector = item.icon,
+                            contentDescription = item.title,
+                            tint = item.tint,
+                            modifier = Modifier.size(22.dp)
+                        )
                     }
                     Column {
-                        Text(item.title, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        Text(item.subtitle, color = TextSecondary, fontSize = 10.sp)
+                        Text(
+                            text = item.title,
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = item.subtitle,
+                            color = TextSecondary,
+                            fontSize = 10.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
             }
@@ -234,81 +312,191 @@ private fun ContinueEditingBanner(count: Int, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 18.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(Color(0xFF14252A))
+            .padding(horizontal = 20.dp, vertical = 20.dp)
+            .shadow(8.dp, RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color(0xFF142B30))
+            .border(1.dp, Color(0xFF1C454C), RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
-            .padding(16.dp),
+            .padding(horizontal = 18.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Accent, modifier = Modifier.size(30.dp))
-        Spacer(Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text("继续编辑当前项目", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-            Text("$count 个片段已在时间线中", color = TextSecondary, fontSize = 12.sp)
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(Accent.copy(alpha = 0.2f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Filled.PlayArrow,
+                contentDescription = null,
+                tint = Accent,
+                modifier = Modifier.size(24.dp)
+            )
         }
-        Text("打开", color = Accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "继续上次的视频剪辑",
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "时间线中已有 $count 个片段未导出",
+                color = Accent.copy(alpha = 0.8f),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+        Text(
+            text = "恢复工程",
+            color = Accent,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
 
 @Composable
 private fun DraftSection(onOpenDraft: () -> Unit, onImportNew: () -> Unit) {
-    Column(modifier = Modifier.padding(top = 18.dp)) {
-        SectionTitle("最近草稿", "自动保存，随时续剪")
+    Column(modifier = Modifier.padding(top = 20.dp)) {
+        SectionTitle("最近草稿", "本地自动保存，随时继续创作")
         draftCards.forEach { draft ->
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 5.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .padding(horizontal = 20.dp, vertical = 6.dp)
+                    .clip(RoundedCornerShape(16.dp))
                     .background(Surface)
+                    .border(1.dp, BorderColor, RoundedCornerShape(16.dp))
                     .clickable(onClick = onOpenDraft)
-                    .padding(12.dp),
+                    .padding(14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // Draft Cover Box mimicking actual videos
                 Box(
                     modifier = Modifier
-                        .size(58.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(draft.accent.copy(alpha = 0.22f)),
+                        .size(80.dp, 56.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(draft.accent.copy(alpha = 0.2f), Color(0xFF1E1E24))
+                            )
+                        )
+                        .border(1.dp, BorderColor, RoundedCornerShape(8.dp)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Filled.Movie, contentDescription = null, tint = draft.accent, modifier = Modifier.size(28.dp))
+                    Icon(
+                        imageVector = Icons.Filled.Movie,
+                        contentDescription = null,
+                        tint = draft.accent,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    // Duration badge overlayed
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(4.dp)
+                            .background(Color(0xBB000000), RoundedCornerShape(3.dp))
+                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = draft.duration,
+                            color = Color.White,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(14.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(draft.title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                    Text(draft.meta, color = TextSecondary, fontSize = 12.sp)
+                    Text(
+                        text = draft.title,
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        text = "${draft.segmentCount} 个分段 · ${draft.info}",
+                        color = TextSecondary,
+                        fontSize = 11.sp
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = "更新时间: ${draft.timeStr}",
+                        color = TextSecondary.copy(alpha = 0.8f),
+                        fontSize = 10.sp
+                    )
+                }
+                IconButton(onClick = { /* menu actions */ }) {
+                    Icon(
+                        imageVector = Icons.Filled.MoreVert,
+                        contentDescription = "菜单",
+                        tint = TextSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
             }
         }
-        TextButton(
-            onClick = onImportNew,
-            modifier = Modifier.padding(horizontal = 14.dp)
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .clickable(onClick = onImportNew)
+                .padding(vertical = 12.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Filled.PhotoLibrary, contentDescription = null, tint = Accent, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
-            Text("导入素材，新建项目", color = Accent)
+            Icon(
+                imageVector = Icons.Filled.PhotoLibrary,
+                contentDescription = null,
+                tint = Accent,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "导入本地素材，新建项目",
+                color = Accent,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }
 
 @Composable
 private fun CapabilityStrip() {
-    Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
-        SectionTitle("核心能力", "拍摄 · 特效 · 编辑 · 导出")
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            listOf("实时美颜", "道具贴纸", "多轨编辑", "后台导出").forEachIndexed { index, text ->
-                val color = listOf(Accent, Accent2, Color(0xFFFFB020), Color(0xFF20C997))[index]
+    Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp)) {
+        SectionTitle("SDK 核心引擎能力", "底层高性能 C++ / EGL 驱动")
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            listOf("4K 零拷贝", "实时 AI 隔离", "多轨并发解码", "硬件级导出").forEachIndexed { index, text ->
+                val color = listOf(Accent, Accent2, Color(0xFFFFB020), Color(0xFF00C9A7))[index]
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .clip(RoundedCornerShape(10.dp))
-                        .background(color.copy(alpha = 0.16f))
-                        .padding(vertical = 10.dp),
+                        .background(color.copy(alpha = 0.1f))
+                        .border(1.dp, color.copy(alpha = 0.2f), RoundedCornerShape(10.dp))
+                        .padding(vertical = 12.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(text, color = color, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = text,
+                        color = color,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        textAlign = TextAlign.Center
+                    )
                 }
             }
         }
@@ -320,11 +508,21 @@ private fun SectionTitle(title: String, subtitle: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.Bottom
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.width(8.dp))
-        Text(subtitle, color = TextSecondary, fontSize = 11.sp)
+        Text(
+            text = title,
+            color = Color.White,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            text = subtitle,
+            color = TextSecondary,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium
+        )
     }
 }

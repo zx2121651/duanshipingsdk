@@ -26,22 +26,22 @@ fun ParameterSlider(
     formatValue: (Float) -> String = { "%.2f".format(it) },
     modifier: Modifier = Modifier
 ) {
-    Column(modifier = modifier.padding(vertical = 4.dp)) {
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-            Text(label, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium,
+    Column(modifier = modifier.padding(vertical = 6.dp)) {
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+            Text(label, color = Color(0xFFCCCCCC), fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
                  modifier = Modifier.weight(1f))
-            Text(formatValue(value), color = Color(0xFF4ADE80), fontSize = 13.sp)
+            Text(formatValue(value), color = Color(0xFF00D7FF), fontSize = 13.sp, fontWeight = FontWeight.Bold)
         }
         Slider(
             value = value,
             onValueChange = onValueChange,
             valueRange = valueRange,
             colors = SliderDefaults.colors(
-                thumbColor = Color(0xFF4ADE80),
-                activeTrackColor = Color(0xFF4ADE80),
-                inactiveTrackColor = Color(0x33FFFFFF)
+                thumbColor = Color.White,
+                activeTrackColor = Color(0xFF00D7FF),
+                inactiveTrackColor = Color(0xFF222226)
             ),
-            modifier = Modifier.padding(horizontal = 12.dp)
+            modifier = Modifier.padding(horizontal = 16.dp)
         )
     }
 }

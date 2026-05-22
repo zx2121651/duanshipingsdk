@@ -76,8 +76,24 @@ class TimelineViewModel : ViewModel() {
     private val _totalDurationUs = MutableStateFlow(0L)
     val totalDurationUs: StateFlow<Long> = _totalDurationUs.asStateFlow()
 
+    private val _keyframes = MutableStateFlow<List<Long>>(emptyList())
+    val keyframes: StateFlow<List<Long>> = _keyframes.asStateFlow()
+
     /** Playback clock — drives currentPositionUs at 30 fps during preview. */
     val player: TimelinePlayer by lazy { TimelinePlayer(viewModelScope, 0L) }
+
+    fun toggleKeyframe(posUs: Long) {
+        val list = _keyframes.value.toMutableList()
+        val threshold = 100_000L // 100ms tolerance
+        val existing = list.firstOrNull { Math.abs(it - posUs) < threshold }
+        if (existing != null) {
+            list.remove(existing)
+        } else {
+            list.add(posUs)
+            list.sort()
+        }
+        _keyframes.value = list
+    }
 
     fun setActiveTool(tool: TimelineTool?) {
         _activeTool.value = if (_activeTool.value == tool) null else tool

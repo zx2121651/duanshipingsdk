@@ -111,6 +111,11 @@ fun TimelineEditorScreen(
                 .padding(padding)
         ) {
             val timelineHandle = timelineVm.timelineManager.collectAsState().value?.getNativeHandle() ?: 0L
+            val positionUs by timelineVm.player.positionUs.collectAsState()
+            val keyframes by timelineVm.keyframes.collectAsState()
+            val hasKeyframeAtCurrent = remember(positionUs, keyframes) {
+                keyframes.any { Math.abs(it - positionUs) < 100_000L }
+            }
 
             if (clips.isNotEmpty() && timelineHandle != 0L) {
                 val clipPairs = clips.map { it.clipId to it.uri }
@@ -118,6 +123,8 @@ fun TimelineEditorScreen(
                     timelineHandle = timelineHandle,
                     clips = clipPairs,
                     player = timelineVm.player,
+                    hasKeyframeAtCurrent = hasKeyframeAtCurrent,
+                    onToggleKeyframe = { timelineVm.toggleKeyframe(positionUs) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
@@ -139,13 +146,12 @@ fun TimelineEditorScreen(
             )
 
             ClipTrackView(
-                clips = clips,
+                timelineVm = timelineVm,
                 selectedIndex = selectedIndex,
                 onSelectClip = { timelineVm.selectClip(it) },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF111111))
-                    .padding(vertical = 8.dp)
+                    .background(Color(0xFF141416))
             )
 
             ToolPanelContainer(

@@ -6,6 +6,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,7 +18,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -42,8 +45,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -149,11 +154,106 @@ fun ColorGradingPanel(
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         PanelTitle("专业调色")
+
+        // Interactive color wheels side by side
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            ColorWheel("阴影 Offset")
+            ColorWheel("中间调 Gamma")
+            ColorWheel("高光 Gain")
+        }
+
+        Spacer(Modifier.height(4.dp))
+
         ColorSlider("亮度", params.brightness, -1f..1f) { onParamChange("brightness", it) }
         ColorSlider("对比", params.contrast, -1f..1f) { onParamChange("contrast", it) }
         ColorSlider("饱和", params.saturation, -1f..1f) { onParamChange("saturation", it) }
         ColorSlider("色温", params.temperature, -1f..1f) { onParamChange("temperature", it) }
         ColorSlider("锐化", params.sharpen, 0f..1f) { onParamChange("sharpen", it) }
+    }
+}
+
+@Composable
+private fun ColorWheel(
+    label: String,
+    modifier: Modifier = Modifier
+) {
+    var offsetX by remember { mutableStateOf(0f) }
+    var offsetY by remember { mutableStateOf(0f) }
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+    ) {
+        Text(
+            text = label,
+            color = Color(0xFF888892),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(Modifier.height(8.dp))
+
+        Box(
+            modifier = Modifier
+                .size(72.dp)
+                .clip(CircleShape)
+                .background(
+                    Brush.sweepGradient(
+                        colors = listOf(
+                            Color(0xFFFF3B30), // Red
+                            Color(0xFFFFCC00), // Yellow
+                            Color(0xFF34C759), // Green
+                            Color(0xFF00C7BE), // Teal
+                            Color(0xFF007AFF), // Blue
+                            Color(0xFFAF52DE), // Purple
+                            Color(0xFFFF3B30)  // Red
+                        )
+                    )
+                )
+                .border(1.2.dp, Color(0xFF222226), CircleShape)
+                .pointerInput(Unit) {
+                    detectDragGestures { change, dragAmount ->
+                        change.consume()
+                        val newX = (offsetX + dragAmount.x).coerceIn(-60f, 60f)
+                        val newY = (offsetY + dragAmount.y).coerceIn(-60f, 60f)
+                        val dist = Math.sqrt((newX * newX + newY * newY).toDouble())
+                        val maxDist = 50f
+                        if (dist <= maxDist) {
+                            offsetX = newX
+                            offsetY = newY
+                        } else {
+                            val angle = Math.atan2(newY.toDouble(), newX.toDouble())
+                            offsetX = (maxDist * Math.cos(angle)).toFloat()
+                            offsetY = (maxDist * Math.sin(angle)).toFloat()
+                        }
+                    }
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(Color.Black.copy(alpha = 0.25f), Color.Transparent),
+                            radius = 120f
+                        )
+                    )
+            )
+
+            Box(
+                modifier = Modifier
+                    .offset(x = (offsetX / 2.5f).dp, y = (offsetY / 2.5f).dp)
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(Color.White)
+                    .border(1.5.dp, Color.Black, CircleShape)
+            )
+        }
     }
 }
 
@@ -174,11 +274,15 @@ private fun ColorSlider(
             onValueChange = onValueChange,
             valueRange = range,
             modifier = Modifier.weight(1f),
-            colors = SliderDefaults.colors(thumbColor = Accent, activeTrackColor = Accent)
+            colors = SliderDefaults.colors(
+                thumbColor = Color.White,
+                activeTrackColor = Accent,
+                inactiveTrackColor = Color(0xFF222226)
+            )
         )
         Text(
             "%.2f".format(value),
-            color = Color(0xFF888888),
+            color = Color(0xFF888892),
             fontSize = 11.sp,
             modifier = Modifier.width(38.dp),
             textAlign = TextAlign.End
