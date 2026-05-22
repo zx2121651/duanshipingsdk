@@ -153,6 +153,7 @@ set(CORE_SOURCES
     core/src/timeline/AudioEffects.cpp
     core/src/rhi/GLTexture.cpp
     core/src/rhi/GLRenderDevice.cpp
+    core/src/rhi/GLHardwareTexture.cpp
     core/src/rhi/GLBuffer.cpp
     core/src/rhi/GLVertexArray.cpp
     core/src/rhi/GLShaderProgram.cpp
@@ -160,6 +161,7 @@ set(CORE_SOURCES
     core/src/ai/TfliteInferenceEngine.cpp
     core/src/ai/SegmentationFilter.cpp
     core/src/ai/BeautyFilter.cpp
+    core/src/ai/InferenceEngine.cpp
     core/src/ai/FaceLandmarkDetector.cpp
     core/src/ai/FaceReshapeFilter.cpp
     core/src/ai/MakeupFilter.cpp

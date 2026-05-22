@@ -23,11 +23,15 @@
  */
 
 #include "../Filter.h"
+#include "../pipeline/PipelineNode.h"
+#include "InferenceEngine.h"
+#include <memory>
+
 
 namespace sdk {
 namespace video {
 
-class BeautyFilter : public Filter {
+class BeautyFilter : public Filter, public PipelineNode {
 public:
     BeautyFilter();
     ~BeautyFilter() override = default;
@@ -38,6 +42,14 @@ public:
     Result initialize() override;
     void   onProgramRecompiled() override;
 
+
+    // PipelineNode override
+    ResultPayload<VideoFrame> pullFrame(int64_t timestampNs) override;
+
+    // Set inference engine
+    void setInferenceEngine(std::shared_ptr<ai::InferenceEngine> engine) { m_inferenceEngine = engine; }
+
+    void release() override;
 protected:
     void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
     std::string getFragmentShaderSource() const override;
@@ -48,6 +60,18 @@ private:
     GLuint m_locTexelSize      = 0;
 
     void cacheUniformLocations();
+
+    std::shared_ptr<ai::InferenceEngine> m_inferenceEngine;
+
+    // Dual PBOs for async pixel readback
+    GLuint m_pbos[2] = {0, 0};
+    int m_pboIndex = 0;
+
+    // Dummy VBO for mesh vertices to demonstrate dynamic upload
+    GLuint m_meshVbo = 0;
+
+    void enqueueAsyncReadPixelsToInference(const VideoFrame& inputFrame);
+
 };
 
 } // namespace video

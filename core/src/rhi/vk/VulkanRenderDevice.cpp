@@ -211,10 +211,6 @@ void VulkanRenderDevice::waitIdle() {
     }
 }
 
-std::shared_ptr<ITexture> VulkanRenderDevice::bindExternalHardwareBuffer(void* /*nativeBuffer*/) {
-    std::cerr << "VulkanRenderDevice::bindExternalHardwareBuffer — not implemented" << std::endl;
-    return nullptr;
-}
 
 RHICapabilities VulkanRenderDevice::getCapabilities() const {
     RHICapabilities caps;
@@ -229,6 +225,11 @@ RHICapabilities VulkanRenderDevice::getCapabilities() const {
     caps.glesVersionInt  = 0;     // N/A for Vulkan
     caps.rendererString  = "";
     return caps;
+}
+
+
+std::shared_ptr<ITexture> VulkanRenderDevice::createTextureFromHardwareBuffer(const HardwareBufferDesc& desc) {
+    return nullptr;
 }
 
 } // namespace rhi

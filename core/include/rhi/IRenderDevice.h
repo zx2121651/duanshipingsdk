@@ -50,6 +50,13 @@ struct RHICapabilities {
     const char* rendererString   = "";    ///< GL_RENDERER or Metal device name
 };
 
+struct HardwareBufferDesc {
+    void* nativeBuffer; // Android: AHardwareBuffer* ; iOS: CVPixelBufferRef
+    int width;
+    int height;
+    int format; // OS-specific format hint
+};
+
 class IRenderDevice {
 public:
     virtual ~IRenderDevice() = default;
@@ -96,7 +103,7 @@ public:
     virtual void submit(ICommandBuffer* cmdBuffer) = 0;
 
     // External bindings
-    virtual std::shared_ptr<ITexture> bindExternalHardwareBuffer(void* nativeBuffer) = 0;
+    [[nodiscard]] virtual std::shared_ptr<ITexture> createTextureFromHardwareBuffer(const HardwareBufferDesc& desc) = 0;
 
     /**
      * @brief Query backend capability snapshot.
