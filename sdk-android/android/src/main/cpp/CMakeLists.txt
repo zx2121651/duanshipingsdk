@@ -12,68 +12,68 @@ FetchContent_MakeAvailable(oboe)
 
 # 定义核心源码文件
 set(CORE_SRC
-        ../../../../core/src/Filter.cpp
-        ../../../../core/src/FilterEngine.cpp
-        ../../../../core/src/Filters.cpp
-        ../../../../core/src/PropOverlayFilter.cpp
-        ../../../../core/src/FrameBuffer.cpp
-        ../../../../core/src/FrameBufferPool.cpp
-        ../../../../core/src/GLContextManager.cpp
-        ../../../../core/src/GLStateManager.cpp
-        ../../../../core/src/ShaderManager.cpp
-        ../../../../core/src/ThreadCheck.cpp
-        ../../../../core/src/pipeline/PipelineGraph.cpp
+        ../../../../../sdk-core/core/src/Filter.cpp
+        ../../../../../sdk-core/core/src/FilterEngine.cpp
+        ../../../../../sdk-core/core/src/Filters.cpp
+        ../../../../../sdk-core/core/src/PropOverlayFilter.cpp
+        ../../../../../sdk-core/core/src/FrameBuffer.cpp
+        ../../../../../sdk-core/core/src/FrameBufferPool.cpp
+        ../../../../../sdk-core/core/src/GLContextManager.cpp
+        ../../../../../sdk-core/core/src/GLStateManager.cpp
+        ../../../../../sdk-core/core/src/ShaderManager.cpp
+        ../../../../../sdk-core/core/src/ThreadCheck.cpp
+        ../../../../../sdk-core/core/src/pipeline/PipelineGraph.cpp
         AndroidAssetProvider.cpp
-        ../../../../core/src/timeline/Clip.cpp
-        ../../../../core/src/timeline/Track.cpp
-        ../../../../core/src/timeline/Timeline.cpp
-        ../../../../core/src/timeline/Compositor.cpp
-        ../../../../core/src/timeline/DecoderPool.cpp
-        ../../../../core/src/timeline/AudioMixer.cpp
-        ../../../../core/src/timeline/AudioEffects.cpp
-        ../../../../core/src/timeline/AudioDecoderAndroid.cpp
-        ../../../../core/src/timeline/VideoDecoderAndroid.cpp
-        ../../../../core/src/timeline/TimelineExporterAndroid.cpp
-        ../../../../core/src/timeline/FFmpegVideoDecoder.cpp
-        ../../../../core/src/ai/TfliteInferenceEngine.cpp
-        ../../../../core/src/ai/SegmentationFilter.cpp
-        ../../../../core/src/ai/BeautyFilter.cpp
-        ../../../../core/src/ai/InferenceEngine.cpp
-        ../../../../core/src/ai/FaceLandmarkDetector.cpp
-        ../../../../core/src/ai/FaceReshapeFilter.cpp
-        ../../../../core/src/ai/MakeupFilter.cpp
-        ../../../../core/src/ai/HairSegmentationFilter.cpp
-        ../../../../core/src/ai/BodyPoseDetector.cpp
-        ../../../../core/src/ai/GestureRecognizer.cpp
-        ../../../../core/src/ai/StickerRenderer.cpp
-        ../../../../core/src/ai/HandLandmarkDetector.cpp
-        ../../../../core/src/ai/AutoSubtitleEngine.cpp
-        ../../../../core/src/ai/ChromaKeyFilter.cpp
-        ../../../../core/src/ai/ExpressionDetector.cpp
-        ../../../../core/src/ai/VideoStabilizer.cpp
-        ../../../../core/src/ai/ArFaceAnchor.cpp
-        ../../../../core/src/ai/ParticleSystem.cpp
-        ../../../../core/src/ai/ObjectTracker.cpp
-        ../../../../core/src/ai/FaceMorphFilter.cpp
-        ../../../../core/src/ai/BodyEffectFilter.cpp
-        ../../../../core/src/ai/DepthEstimator.cpp
-        ../../../../core/src/timeline/TemplateEngine.cpp
-        ../../../../core/src/timeline/SplitScreenCompositor.cpp
-        ../../../../core/src/timeline/SmartCropController.cpp
-        ../../../../core/src/timeline/HistogramAnalyzer.cpp
-        ../../../../core/src/timeline/ColorGradingFilter.cpp
-        ../../../../core/src/EffectPackageUpdater.cpp
-        ../../../../core/src/timeline/SmartCoverSelector.cpp
-        ../../../../core/src/timeline/DraftAutoSave.cpp
-        ../../../../core/src/audio/VoiceChangerFilter.cpp
-        ../../../../core/src/EffectPlugin.cpp
-        ../../../../core/src/rhi/GLTexture.cpp
-        ../../../../core/src/rhi/GLRenderDevice.cpp
-        ../../../../core/src/rhi/GLHardwareTexture.cpp
-        ../../../../core/src/rhi/GLBuffer.cpp
-        ../../../../core/src/rhi/GLVertexArray.cpp
-        ../../../../core/src/rhi/GLShaderProgram.cpp
-        ../../../../core/src/rhi/RenderDeviceFactory.cpp
+        ../../../../../sdk-core/core/src/timeline/Clip.cpp
+        ../../../../../sdk-core/core/src/timeline/Track.cpp
+        ../../../../../sdk-core/core/src/timeline/Timeline.cpp
+        ../../../../../sdk-core/core/src/timeline/Compositor.cpp
+        ../../../../../sdk-core/core/src/timeline/DecoderPool.cpp
+        ../../../../../sdk-core/core/src/timeline/AudioMixer.cpp
+        ../../../../../sdk-core/core/src/timeline/AudioEffects.cpp
+        ../../../../../sdk-core/core/src/timeline/AudioDecoderAndroid.cpp
+        ../../../../../sdk-core/core/src/timeline/VideoDecoderAndroid.cpp
+        ../../../../../sdk-core/core/src/timeline/TimelineExporterAndroid.cpp
+        ../../../../../sdk-core/core/src/timeline/FFmpegVideoDecoder.cpp
+        ../../../../../sdk-core/core/src/ai/TfliteInferenceEngine.cpp
+        ../../../../../sdk-core/core/src/ai/SegmentationFilter.cpp
+        ../../../../../sdk-core/core/src/ai/BeautyFilter.cpp
+        ../../../../../sdk-core/core/src/ai/InferenceEngine.cpp
+        ../../../../../sdk-core/core/src/ai/FaceLandmarkDetector.cpp
+        ../../../../../sdk-core/core/src/ai/FaceReshapeFilter.cpp
+        ../../../../../sdk-core/core/src/ai/MakeupFilter.cpp
+        ../../../../../sdk-core/core/src/ai/HairSegmentationFilter.cpp
+        ../../../../../sdk-core/core/src/ai/BodyPoseDetector.cpp
+        ../../../../../sdk-core/core/src/ai/GestureRecognizer.cpp
+        ../../../../../sdk-core/core/src/ai/StickerRenderer.cpp
+        ../../../../../sdk-core/core/src/ai/HandLandmarkDetector.cpp
+        ../../../../../sdk-core/core/src/ai/AutoSubtitleEngine.cpp
+        ../../../../../sdk-core/core/src/ai/ChromaKeyFilter.cpp
+        ../../../../../sdk-core/core/src/ai/ExpressionDetector.cpp
+        ../../../../../sdk-core/core/src/ai/VideoStabilizer.cpp
+        ../../../../../sdk-core/core/src/ai/ArFaceAnchor.cpp
+        ../../../../../sdk-core/core/src/ai/ParticleSystem.cpp
+        ../../../../../sdk-core/core/src/ai/ObjectTracker.cpp
+        ../../../../../sdk-core/core/src/ai/FaceMorphFilter.cpp
+        ../../../../../sdk-core/core/src/ai/BodyEffectFilter.cpp
+        ../../../../../sdk-core/core/src/ai/DepthEstimator.cpp
+        ../../../../../sdk-core/core/src/timeline/TemplateEngine.cpp
+        ../../../../../sdk-core/core/src/timeline/SplitScreenCompositor.cpp
+        ../../../../../sdk-core/core/src/timeline/SmartCropController.cpp
+        ../../../../../sdk-core/core/src/timeline/HistogramAnalyzer.cpp
+        ../../../../../sdk-core/core/src/timeline/ColorGradingFilter.cpp
+        ../../../../../sdk-core/core/src/EffectPackageUpdater.cpp
+        ../../../../../sdk-core/core/src/timeline/SmartCoverSelector.cpp
+        ../../../../../sdk-core/core/src/timeline/DraftAutoSave.cpp
+        ../../../../../sdk-core/core/src/audio/VoiceChangerFilter.cpp
+        ../../../../../sdk-core/core/src/EffectPlugin.cpp
+        ../../../../../sdk-core/core/src/rhi/GLTexture.cpp
+        ../../../../../sdk-core/core/src/rhi/GLRenderDevice.cpp
+        ../../../../../sdk-core/core/src/rhi/GLHardwareTexture.cpp
+        ../../../../../sdk-core/core/src/rhi/GLBuffer.cpp
+        ../../../../../sdk-core/core/src/rhi/GLVertexArray.cpp
+        ../../../../../sdk-core/core/src/rhi/GLShaderProgram.cpp
+        ../../../../../sdk-core/core/src/rhi/RenderDeviceFactory.cpp
 )
 
 add_library(video-sdk SHARED
@@ -87,7 +87,7 @@ add_library(video-sdk SHARED
 
 # 包含路径
 target_include_directories(video-sdk PRIVATE
-    ../../../../core/include
+    ../../../../../sdk-core/core/include
     ${oboe_SOURCE_DIR}/include
 )
 
@@ -99,13 +99,13 @@ option(WITH_VULKAN "Enable Vulkan RHI backend" ON)
 if(WITH_VULKAN)
     target_compile_definitions(video-sdk PRIVATE HAS_VULKAN)
     target_sources(video-sdk PRIVATE
-        ../../../../core/src/rhi/vk/VulkanContext.cpp
-        ../../../../core/src/rhi/vk/VulkanMemoryAllocator.cpp
-        ../../../../core/src/rhi/vk/VulkanBuffer.cpp
-        ../../../../core/src/rhi/vk/VulkanTexture.cpp
-        ../../../../core/src/rhi/vk/VulkanShaderProgram.cpp
-        ../../../../core/src/rhi/vk/VulkanCommandBuffer.cpp
-        ../../../../core/src/rhi/vk/VulkanRenderDevice.cpp
+        ../../../../../sdk-core/core/src/rhi/vk/VulkanContext.cpp
+        ../../../../../sdk-core/core/src/rhi/vk/VulkanMemoryAllocator.cpp
+        ../../../../../sdk-core/core/src/rhi/vk/VulkanBuffer.cpp
+        ../../../../../sdk-core/core/src/rhi/vk/VulkanTexture.cpp
+        ../../../../../sdk-core/core/src/rhi/vk/VulkanShaderProgram.cpp
+        ../../../../../sdk-core/core/src/rhi/vk/VulkanCommandBuffer.cpp
+        ../../../../../sdk-core/core/src/rhi/vk/VulkanRenderDevice.cpp
     )
     message(STATUS "Android: Vulkan RHI backend ENABLED")
 endif()
