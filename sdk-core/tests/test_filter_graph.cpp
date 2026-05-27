@@ -57,8 +57,8 @@ void test_filter_graph_creation() {
     // Because it's graph mode now, processing a frame with no context and no real texture should safely fail and return Texture{0,0,0}
     Texture inTex{1, 1920, 1080};
     auto outRes = engine.processFrame(inTex, 1920, 1080);
-
-    assert(!outRes.isOk() && "Should fail gracefully because GL context is not bound/mocked here");
+    // Under Mock GL, all GL operations are mocked to succeed, so processFrame should succeed.
+    assert(outRes.isOk() && "Under Mock GL, processFrame should succeed");
 
     std::cout << "test_filter_graph_creation passed" << std::endl;
 }

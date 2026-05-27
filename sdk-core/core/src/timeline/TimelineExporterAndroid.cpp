@@ -1,6 +1,9 @@
 #include "../../include/timeline/TimelineExporter.h"
 #include "../../include/timeline/AudioMixer.h"
 #include "../../include/timeline/SyncClock.h"
+#include "../../include/FilterEngine.h"
+#include "../../include/timeline/Compositor.h"
+
 
 #ifdef __ANDROID__
 #include <EGL/egl.h>
@@ -189,6 +192,17 @@ private:
             }
         } g;
 
+        // RAII Guard to reset DecoderPool before EGL Context is destroyed.
+        // It must be declared after 'g' so that it is destroyed BEFORE 'g'.
+        struct DecoderPoolGuard {
+            std::shared_ptr<Compositor> compositor;
+            ~DecoderPoolGuard() {
+                if (compositor) {
+                    compositor->setDecoderPool(nullptr);
+                }
+            }
+        } poolGuard { compositor };
+
         // --- 2. Configure MediaCodec Encoder ---
         AMediaFormat* format = AMediaFormat_new();
         AMediaFormat_setString(format, AMEDIAFORMAT_KEY_MIME, "video/avc");
@@ -270,6 +284,41 @@ private:
         if (!eglMakeCurrent(g.display, g.eglSurface, g.eglSurface, g.eglContext)) {
             return Result::error(ErrorCode::ERR_EXPORTER_GL_CONTEXT_FAILED, "Failed to eglMakeCurrent");
         }
+
+        // --- 3b. Initialize Thread-Isolated Export FilterEngine ---
+        auto originalFilterEngine = compositor->getFilterEngine();
+        auto exportFilterEngine = std::make_shared<FilterEngine>();
+
+        if (originalFilterEngine) {
+            exportFilterEngine->setAssetProvider(originalFilterEngine->getShaderManager()->getAssetProvider());
+            exportFilterEngine->setPreferredBackend(originalFilterEngine->getPreferredBackend());
+        }
+
+        // Initialize on the current background thread under the headless EGL context
+        Result initRes = exportFilterEngine->initialize();
+        if (!initRes.isOk()) {
+            LOGE("Failed to initialize export FilterEngine: %s", initRes.getMessage().c_str());
+            return initRes;
+        }
+
+        // RAII Guard to automatically restore compositor engine and release resource on any return
+        struct ExportEngineGuard {
+            std::shared_ptr<Compositor> compositor;
+            std::shared_ptr<FilterEngine> originalEngine;
+            std::shared_ptr<FilterEngine> exportEngine;
+
+            ~ExportEngineGuard() {
+                if (compositor && originalEngine) {
+                    compositor->setFilterEngine(originalEngine);
+                }
+                if (exportEngine) {
+                    exportEngine->release();
+                }
+            }
+        } engineGuard { compositor, originalFilterEngine, exportFilterEngine };
+
+        // Bind the new exporter filter engine to the compositor
+        compositor->setFilterEngine(exportFilterEngine);
 
         typedef EGLBoolean (EGLAPIENTRYP PFNEGLPRESENTATIONTIMEANDROIDPROC)(EGLDisplay dpy, EGLSurface sur, khronos_stime_nanoseconds_t time);
         auto eglPresentationTimeANDROID = (PFNEGLPRESENTATIONTIMEANDROIDPROC)eglGetProcAddress("eglPresentationTimeANDROID");

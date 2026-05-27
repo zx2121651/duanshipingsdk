@@ -325,6 +325,10 @@ static void tc_c09_template_bulk_load() {
         path = "../assets/templates";
         templates = TemplateEngine::loadAllFromDirectory(path);
     }
+    if (templates.empty()) {
+        path = "../../assets/templates";
+        templates = TemplateEngine::loadAllFromDirectory(path);
+    }
 
     // We expect 3 original + 10 new = 13 templates
     std::cout << "TC-C09: Loaded " << templates.size() << " templates from " << path << std::endl;

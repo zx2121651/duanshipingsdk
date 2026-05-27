@@ -64,6 +64,9 @@ public:
     // 当前实际渲染倍率 [minScale, maxScale]
     float getDsrScale() const { return m_dsrScale; }
 
+    std::shared_ptr<FilterEngine> getFilterEngine() const;
+    void setFilterEngine(std::shared_ptr<FilterEngine> engine);
+
     Result renderFrameAtTime(int64_t timelineNs, FrameBufferPtr outputFb);
 
     PerformanceMetrics getMetrics() const { return m_metricsCollector.getMetrics(); }
@@ -100,13 +103,15 @@ private:
     // ---------------------------------------------------------------------------
     // GPU timestamp query (GL_EXT_disjoint_timer_query on Android GLES)
     // ---------------------------------------------------------------------------
-    unsigned int m_gpuQuery         = 0;   // GLuint, 0 = not allocated
-    bool         m_gpuQueryPending  = false;
-    bool         m_gpuTimerInited   = false;
-    bool         m_gpuTimerOk       = false;  // extension available
+    static constexpr int GPU_QUERY_BUFFERS = 2;
+    unsigned int m_gpuQueries[GPU_QUERY_BUFFERS] = {0, 0};   // GLuint
+    bool         m_gpuQueriesPending[GPU_QUERY_BUFFERS] = {false, false};
+    int          m_gpuQueryIndex   = 0;
+    bool         m_gpuTimerInited  = false;
+    bool         m_gpuTimerOk      = false;  // extension available
 
     bool  initGpuTimer();
-    float retrievePendingGpuTimeMs();  // returns -1 if not ready / unavailable
+    float retrieveGpuTimeMs(int index);  // returns -1 if not ready / unavailable
 
     // ---------------------------------------------------------------------------
     // 通用顶点着色器源（所有四边形程序共用）

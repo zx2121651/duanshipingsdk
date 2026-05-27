@@ -1,0 +1,45 @@
+{
+  "buildFiles": [
+    "D:\\duanshipingsdk-main\\android\\android\\.cxx\\RelWithDebInfo\\2g211d2g\\x86\\_deps\\oboe-src\\CMakeLists.txt",
+    "D:\\duanshipingsdk-main\\android\\android\\src\\main\\cpp\\CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "C:\\Users\\Administrator\\AppData\\Local\\Android\\Sdk\\cmake\\3.22.1\\bin\\ninja.exe",
+      "-C",
+      "D:\\duanshipingsdk-main\\android\\android\\.cxx\\RelWithDebInfo\\2g211d2g\\x86",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "C:\\Users\\Administrator\\AppData\\Local\\Android\\Sdk\\cmake\\3.22.1\\bin\\ninja.exe",
+    "-C",
+    "D:\\duanshipingsdk-main\\android\\android\\.cxx\\RelWithDebInfo\\2g211d2g\\x86",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {
+    "oboe::@34d0455163043826f65a": {
+      "toolchain": "toolchain",
+      "abi": "x86",
+      "artifactName": "oboe",
+      "output": "D:\\duanshipingsdk-main\\android\\android\\.cxx\\RelWithDebInfo\\2g211d2g\\x86\\_deps\\oboe-build\\liboboe.a"
+    },
+    "video-sdk::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "x86",
+      "artifactName": "video-sdk",
+      "output": "D:\\duanshipingsdk-main\\android\\android\\build\\intermediates\\cxx\\RelWithDebInfo\\2g211d2g\\obj\\x86\\libvideo-sdk.so",
+      "runtimeFiles": []
+    }
+  },
+  "toolchains": {
+    "toolchain": {
+      "cCompilerExecutable": "C:\\Users\\Administrator\\AppData\\Local\\Android\\Sdk\\ndk\\25.1.8937393\\toolchains\\llvm\\prebuilt\\windows-x86_64\\bin\\clang.exe",
+      "cppCompilerExecutable": "C:\\Users\\Administrator\\AppData\\Local\\Android\\Sdk\\ndk\\25.1.8937393\\toolchains\\llvm\\prebuilt\\windows-x86_64\\bin\\clang++.exe"
+    }
+  },
+  "cFileExtensions": [],
+  "cppFileExtensions": [
+    "cpp"
+  ]
+}

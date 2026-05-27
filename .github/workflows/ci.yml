@@ -98,6 +98,7 @@ jobs:
           restore-keys: gradle-
 
       - name: Run Android unit tests
+        working-directory: android
         run: |
           export ANDROID_SDK_ROOT=$ANDROID_HOME
           ./gradlew :android:test --continue
@@ -106,7 +107,7 @@ jobs:
         if: always()
         uses: EnricoMi/publish-unit-test-result-action@v2
         with:
-          files: android/build/test-results/**/*.xml
+          files: android/android/build/test-results/**/*.xml
 
   # ── 3. Android Debug Build (assemble) ────────────────────────────────────
   android-build:
@@ -141,16 +142,18 @@ jobs:
           restore-keys: gradle-
 
       - name: Build SDK (Debug)
+        working-directory: android
         run: ./gradlew :android:assembleDebug --stacktrace
 
       - name: Build sample-android (Debug)
+        working-directory: android
         run: ./gradlew :sample-android:assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: sample-debug-apk
-          path: sample-android/build/outputs/apk/debug/*.apk
+          path: android/samples/android/build/outputs/apk/debug/*.apk
           retention-days: 14
 
   # ── 4. Device Matrix (Firebase Test Lab) ─────────────────────────────────
@@ -184,6 +187,7 @@ jobs:
           restore-keys: gradle-
 
       - name: Build instrumented test APK
+        working-directory: android
         run: ./gradlew :sample-android:assembleDebugAndroidTest
 
       - name: Authenticate to Google Cloud
@@ -199,8 +203,8 @@ jobs:
             firebase test android run \
               --project "${{ secrets.FIREBASE_PROJECT_ID }}" \
               --type instrumentation \
-              --app    sample-android/build/outputs/apk/debug/sample-android-debug.apk \
-              --test   sample-android/build/outputs/apk/androidTest/debug/sample-android-debug-androidTest.apk \
+              --app    android/samples/android/build/outputs/apk/debug/sample-android-debug.apk \
+              --test   android/samples/android/build/outputs/apk/androidTest/debug/sample-android-debug-androidTest.apk \
               --device model=redfin,version=30,locale=en,orientation=portrait \
               --device model=oriole,version=31,locale=en,orientation=portrait \
               --device model=panther,version=33,locale=en,orientation=portrait \

@@ -51,9 +51,12 @@ VulkanBuffer::VulkanBuffer(VkDevice device,
 }
 
 VulkanBuffer::~VulkanBuffer() {
-    if (m_buffer != VK_NULL_HANDLE)
+    if (m_buffer != VK_NULL_HANDLE && m_device != VK_NULL_HANDLE) {
         vkDestroyBuffer(m_device, m_buffer, nullptr);
-    m_allocator->free(m_alloc);
+    }
+    if (m_allocator) {
+        m_allocator->free(m_alloc);
+    }
 }
 
 void* VulkanBuffer::map(size_t offset, size_t size, BufferAccess /*access*/) {

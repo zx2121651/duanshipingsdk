@@ -1,0 +1,39 @@
+{
+  "buildFiles": [
+    "D:\\duanshipingsdk-main\\android\\android\\.cxx\\Debug\\4i2x6z2s\\armeabi-v7a\\_deps\\oboe-src\\CMakeLists.txt",
+    "D:\\duanshipingsdk-main\\android\\android\\src\\main\\cpp\\CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "C:\\Users\\Administrator\\AppData\\Local\\Android\\Sdk\\cmake\\3.22.1\\bin\\ninja.exe",
+      "-C",
+      "D:\\duanshipingsdk-main\\android\\android\\.cxx\\Debug\\4i2x6z2s\\armeabi-v7a",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "C:\\Users\\Administrator\\AppData\\Local\\Android\\Sdk\\cmake\\3.22.1\\bin\\ninja.exe",
+    "-C",
+    "D:\\duanshipingsdk-main\\android\\android\\.cxx\\Debug\\4i2x6z2s\\armeabi-v7a",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {
+    "video-sdk::@6890427a1f51a3e7e1df": {
+      "artifactName": "video-sdk",
+      "abi": "armeabi-v7a",
+      "output": "D:\\duanshipingsdk-main\\android\\android\\build\\intermediates\\cxx\\Debug\\4i2x6z2s\\obj\\armeabi-v7a\\libvideo-sdk.so",
+      "runtimeFiles": [
+        "D:\\duanshipingsdk-main\\android\\android\\src\\main\\jniLibs\\ffmpeg\\armeabi-v7a\\libavcodec.so",
+        "D:\\duanshipingsdk-main\\android\\android\\src\\main\\jniLibs\\ffmpeg\\armeabi-v7a\\libavformat.so",
+        "D:\\duanshipingsdk-main\\android\\android\\src\\main\\jniLibs\\ffmpeg\\armeabi-v7a\\libavutil.so",
+        "D:\\duanshipingsdk-main\\android\\android\\src\\main\\jniLibs\\ffmpeg\\armeabi-v7a\\libswscale.so"
+      ]
+    },
+    "oboe::@34d0455163043826f65a": {
+      "artifactName": "oboe",
+      "abi": "armeabi-v7a",
+      "output": "D:\\duanshipingsdk-main\\android\\android\\.cxx\\Debug\\4i2x6z2s\\armeabi-v7a\\_deps\\oboe-build\\liboboe.a",
+      "runtimeFiles": []
+    }
+  }
+}

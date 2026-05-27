@@ -1,11 +1,11 @@
 #version 300 es
 layout(location = 0) in vec4 position;
 layout(location = 1) in vec4 inputTextureCoordinate;
-layout(std140) uniform OESParams {
-    mat4 textureMatrix;
-    int flipHorizontal;
-    int flipVertical;
-};
+
+uniform mat4 textureMatrix;
+uniform int flipHorizontal;
+uniform int flipVertical;
+
 out vec2 textureCoordinate;
 void main() {
     gl_Position = position;

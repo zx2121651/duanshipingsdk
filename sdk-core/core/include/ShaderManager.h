@@ -16,6 +16,7 @@ public:
 
     // Set the asset provider for loading initial shader sources
     void setAssetProvider(std::shared_ptr<IAssetProvider> provider);
+    std::shared_ptr<IAssetProvider> getAssetProvider() const { return m_assetProvider; }
 
     // Retrieve the shader source for a given name/path.
     // Uses the cached hot-updated version if available, otherwise falls back to asset loading.

@@ -17,6 +17,13 @@
 #include <cstring>
 #include <cmath>
 #include <memory>
+#include <fstream>
+
+#ifdef _WIN32
+#   include <direct.h>
+#else
+#   include <unistd.h>
+#endif
 
 #include "../core/include/ai/FaceMorphFilter.h"
 #include "../core/include/ai/BodyEffectFilter.h"
@@ -24,7 +31,9 @@
 #include "../core/include/timeline/HistogramAnalyzer.h"
 #include "../core/include/ai/DepthEstimator.h"
 #include "../core/include/timeline/SplitScreenCompositor.h"
+#include "../core/include/EffectPackageUpdater.h"
 
+using namespace sdk::video;
 using namespace sdk::video::ai;
 using namespace sdk::video::timeline;
 
@@ -297,6 +306,99 @@ static void testSplitScreenCompositor() {
 }
 
 // ---------------------------------------------------------------------------
+// Tests 38-44: EffectPackageUpdater Cancel Protection
+// ---------------------------------------------------------------------------
+class MockHttpClientForCancel : public IHttpClient {
+public:
+    int get(const std::string& url, std::string& body) override {
+        body = "{\"packages\":[{\"id\":\"pkg_test\",\"name\":\"Test\",\"version\":\"1.0.0\",\"download_url\":\"http://test.zip\",\"checksum\":\"\",\"checksum_type\":\"\",\"size_bytes\":100,\"category\":\"sticker\"}]}";
+        return 200;
+    }
+
+    int download(const std::string& url,
+                 const std::string& destPath,
+                 int64_t            resumeBytes,
+                 std::function<void(int64_t, int64_t)> onProgress) override {
+        // 模拟下载过程，调用一次 progress 回调
+        if (onProgress) {
+            onProgress(50, 100);
+        }
+        // 模拟外部触发了 cancel
+        if (cancelCallback) {
+            cancelCallback();
+        }
+        // 调用第二次 progress，测试 cancel 后状态不被覆盖
+        if (onProgress) {
+            onProgress(100, 100);
+        }
+        // 模拟写入临时文件
+        std::ofstream f(destPath, std::ios::binary);
+        f.write("mock data", 9);
+        f.close();
+        return 200;
+    }
+
+    std::function<void()> cancelCallback;
+};
+
+static void testEffectPackageUpdaterCancel() {
+    std::cout << "\n=== EffectPackageUpdater Cancel Protection ===\n";
+
+    // 创建安装目录
+    std::string testInstallDir = "test_effects_dir";
+    auto updater = std::make_shared<EffectPackageUpdater>(testInstallDir);
+    auto client = std::make_shared<MockHttpClientForCancel>();
+    updater->setHttpClient(client);
+    updater->setManifestUrl("http://manifest.json");
+
+    // 检查更新
+    auto updates = updater->checkForUpdatesSync();
+    ASSERT_TRUE(updates.size() == 1, "T38: find remote package");
+    ASSERT_TRUE(updates[0].id == "pkg_test", "T39: package id matches");
+
+    client->cancelCallback = [&]() {
+        updater->cancelDownload("pkg_test");
+    };
+
+    bool callbackInvoked = false;
+    bool downloadSuccess = false;
+    std::string errStr;
+
+    updater->downloadPackage("pkg_test", 
+        [](const DownloadProgress& dp) {
+            // progress 回调
+        },
+        [&](const std::string& packageId, bool success, const std::string& installPath, const std::string& error) {
+            callbackInvoked = true;
+            downloadSuccess = success;
+            errStr = error;
+        }
+    );
+
+    ASSERT_TRUE(callbackInvoked, "T40: complete callback invoked");
+    ASSERT_TRUE(!downloadSuccess, "T41: download was not marked success");
+    ASSERT_TRUE(errStr == "Download cancelled", "T42: error message matches 'Download cancelled'");
+
+    // 校验临时文件是否被删除
+    std::string tmpPath = testInstallDir + "/pkg_test.zip.tmp";
+    std::ifstream chk(tmpPath);
+    ASSERT_TRUE(!chk.is_open(), "T43: temporary file cleanup successful");
+
+    // 校验本地 Manifest 没有被写入这个包
+    ASSERT_TRUE(!updater->isInstalled("pkg_test"), "T44: package was not registered in local manifest");
+
+    // 清理
+    updater->uninstallAll();
+    // 移除测试文件夹和临时文件
+    std::remove((testInstallDir + "/manifest.json").c_str());
+#ifdef _WIN32
+    _rmdir(testInstallDir.c_str());
+#else
+    rmdir(testInstallDir.c_str());
+#endif
+}
+
+// ---------------------------------------------------------------------------
 int main() {
     std::cout << "=== test_remaining_gaps ===\n";
 
@@ -306,6 +408,7 @@ int main() {
     testHistogramAnalyzer();
     testDepthEstimator();
     testSplitScreenCompositor();
+    testEffectPackageUpdaterCancel();
 
     std::cout << "\n\033[32mAll remaining gap tests PASSED.\033[0m\n";
     return 0;

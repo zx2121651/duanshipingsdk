@@ -27,13 +27,13 @@ jobs:
       # Phase-1 Verification Step: Build the SDK Library (Primary Product)
       # This ensures the core SDK code is valid and can be compiled independently.
       - name: "SDK Library: Build (Primary Product)"
-        working-directory: ./
+        working-directory: android
         run: ./gradlew :android:assembleDebug --stacktrace
 
       # Phase-1 Verification Step: Run SDK Unit Tests
       # Verify the core logic of the SDK.
       - name: "SDK Library: Run Unit Tests"
-        working-directory: ./
+        working-directory: android
         run: ./gradlew :android:testDebugUnitTest --stacktrace
 
       - name: "SDK Library: Upload Test Report"
@@ -42,12 +42,12 @@ jobs:
         with:
           name: android-test-reports
           path: |
-            android/build/reports/tests/testDebugUnitTest/
-            android/build/test-results/testDebugUnitTest/
+            android/android/build/reports/tests/testDebugUnitTest/
+            android/android/build/test-results/testDebugUnitTest/
 
       # Step 3: Build the Sample App (Integration Verification)
       # This verifies that the SDK can be correctly integrated into a host application.
       # This step depends on the success of the SDK Library build.
       - name: "Sample App: Build (Integration Verification)"
-        working-directory: ./
+        working-directory: android
         run: ./gradlew :sample-android:assembleDebug --stacktrace

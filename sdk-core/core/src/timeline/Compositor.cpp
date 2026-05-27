@@ -58,9 +58,10 @@ Compositor::Compositor(std::shared_ptr<Timeline> timeline, std::shared_ptr<Filte
 
 Compositor::~Compositor() {
 #ifdef __ANDROID__
-    if (m_gpuQuery != 0 && s_glDeleteQueriesEXT) {
-        s_glDeleteQueriesEXT(1, &m_gpuQuery);
-        m_gpuQuery = 0;
+    if (s_glDeleteQueriesEXT) {
+        s_glDeleteQueriesEXT(2, m_gpuQueries);
+        m_gpuQueries[0] = 0;
+        m_gpuQueries[1] = 0;
     }
 #endif
 }
@@ -121,9 +122,9 @@ bool Compositor::initGpuTimer() {
         m_gpuTimerOk = false;
         return false;
     }
-    s_glGenQueriesEXT(1, &m_gpuQuery);
-    m_gpuTimerOk = (m_gpuQuery != 0);
-    LOGI("DSR/GPU timer: GL_EXT_disjoint_timer_query enabled (query=%u)", m_gpuQuery);
+    s_glGenQueriesEXT(2, m_gpuQueries);
+    m_gpuTimerOk = (m_gpuQueries[0] != 0 && m_gpuQueries[1] != 0);
+    LOGI("DSR/GPU timer: GL_EXT_disjoint_timer_query enabled (queries=%u,%u)", m_gpuQueries[0], m_gpuQueries[1]);
 #else
     // 桌面 OpenGL: 直接使用 CPU 计时即可，GL query 在此环境不需要
     m_gpuTimerOk = false;
@@ -131,15 +132,18 @@ bool Compositor::initGpuTimer() {
     return m_gpuTimerOk;
 }
 
-float Compositor::retrievePendingGpuTimeMs() {
+float Compositor::retrieveGpuTimeMs(int index) {
 #ifdef __ANDROID__
-    if (!m_gpuTimerOk || !m_gpuQueryPending || !s_glGetQueryObjectuivEXT) return -1.0f;
+    if (!m_gpuTimerOk || index < 0 || index >= GPU_QUERY_BUFFERS) return -1.0f;
+    if (!m_gpuQueriesPending[index] || !s_glGetQueryObjectuivEXT) return -1.0f;
+    
     GLuint available = 0;
-    s_glGetQueryObjectuivEXT(m_gpuQuery, GL_QUERY_RESULT_AVAILABLE_EXT, &available);
-    if (!available) return -1.0f; // GPU 还未完成
+    s_glGetQueryObjectuivEXT(m_gpuQueries[index], GL_QUERY_RESULT_AVAILABLE_EXT, &available);
+    if (!available) return -1.0f; // GPU 还没执行完
+
     GLuint resultNs = 0;
-    s_glGetQueryObjectuivEXT(m_gpuQuery, GL_QUERY_RESULT_EXT, &resultNs);
-    m_gpuQueryPending = false;
+    s_glGetQueryObjectuivEXT(m_gpuQueries[index], GL_QUERY_RESULT_EXT, &resultNs);
+    m_gpuQueriesPending[index] = false;
     return static_cast<float>(resultNs) * 1e-6f; // ns → ms
 #else
     return -1.0f;
@@ -363,16 +367,21 @@ Result Compositor::renderFrameAtTime(int64_t timelineNs, FrameBufferPtr outputFb
     }
 
     // ------------------------------------------------------------------
-    // GPU timer: 尝试获取上一帧的 GPU 写入时间（异步，不阻塞渲染线程）
+    // GPU timer: 尝试获取上一帧的 GPU 写入时间（异步，从前一个 Query 读）
     // ------------------------------------------------------------------
     initGpuTimer();
-    float gpuTimeMs = retrievePendingGpuTimeMs(); // -1 表示无法获取
+    int prevQueryIndex = (m_gpuQueryIndex + 1) % GPU_QUERY_BUFFERS;
+    float gpuTimeMs = retrieveGpuTimeMs(prevQueryIndex); // -1 表示尚未就绪
 
     // 开始新一帧 GPU 查询
 #ifdef __ANDROID__
     if (m_gpuTimerOk && s_glBeginQueryEXT) {
-        s_glBeginQueryEXT(GL_TIME_ELAPSED_EXT, m_gpuQuery);
-        m_gpuQueryPending = true;
+        // 如果当前这个缓冲区还被上上帧的 pending 占着，先强行清除它（即便尚未就绪也设为可用）
+        if (m_gpuQueriesPending[m_gpuQueryIndex]) {
+            retrieveGpuTimeMs(m_gpuQueryIndex);
+        }
+        s_glBeginQueryEXT(GL_TIME_ELAPSED_EXT, m_gpuQueries[m_gpuQueryIndex]);
+        m_gpuQueriesPending[m_gpuQueryIndex] = true;
     }
 #endif
 
@@ -398,13 +407,24 @@ Result Compositor::renderFrameAtTime(int64_t timelineNs, FrameBufferPtr outputFb
         outputFb->unbind();
 
 #ifdef __ANDROID__
-        if (m_gpuTimerOk && s_glEndQueryEXT) s_glEndQueryEXT(GL_TIME_ELAPSED_EXT);
+        if (m_gpuTimerOk && s_glEndQueryEXT && m_gpuQueriesPending[m_gpuQueryIndex]) {
+            s_glEndQueryEXT(GL_TIME_ELAPSED_EXT);
+        }
 #endif
+        m_gpuQueryIndex = (m_gpuQueryIndex + 1) % GPU_QUERY_BUFFERS;
+
         auto end_time = std::chrono::high_resolution_clock::now();
-        float duration_ms = (gpuTimeMs >= 0.0f) ? gpuTimeMs
-            : std::chrono::duration<float, std::milli>(end_time - start_time).count();
-        m_metricsCollector.recordFrameTime(duration_ms);
-        updateDsrScale(duration_ms);
+        float cpuTimeMs = std::chrono::duration<float, std::milli>(end_time - start_time).count();
+
+        if (m_gpuTimerOk) {
+            if (gpuTimeMs >= 0.0f) {
+                m_metricsCollector.recordFrameTime(gpuTimeMs);
+                updateDsrScale(gpuTimeMs);
+            }
+        } else {
+            m_metricsCollector.recordFrameTime(cpuTimeMs);
+            updateDsrScale(cpuTimeMs);
+        }
         return Result::ok();
     }
 
@@ -565,15 +585,46 @@ Result Compositor::renderFrameAtTime(int64_t timelineNs, FrameBufferPtr outputFb
     }
 
 #ifdef __ANDROID__
-    if (m_gpuTimerOk && s_glEndQueryEXT) s_glEndQueryEXT(GL_TIME_ELAPSED_EXT);
+    if (m_gpuTimerOk && s_glEndQueryEXT && m_gpuQueriesPending[m_gpuQueryIndex]) {
+        s_glEndQueryEXT(GL_TIME_ELAPSED_EXT);
+    }
 #endif
+
+    // 轮转双缓冲索引
+    m_gpuQueryIndex = (m_gpuQueryIndex + 1) % GPU_QUERY_BUFFERS;
+
     auto end_time = std::chrono::high_resolution_clock::now();
-    // 优先使用 GPU 时间（更准确），回退到 CPU 时间
-    float duration_ms = (gpuTimeMs >= 0.0f) ? gpuTimeMs
-        : std::chrono::duration<float, std::milli>(end_time - start_time).count();
-    m_metricsCollector.recordFrameTime(duration_ms);
-    updateDsrScale(duration_ms);
+    float cpuTimeMs = std::chrono::duration<float, std::milli>(end_time - start_time).count();
+
+    // -----------------------------------------------------------------
+    // DSR 性能反馈处理：根据实际的测量时间源进行更新
+    // -----------------------------------------------------------------
+    if (m_gpuTimerOk) {
+        // 如果底层支持 GPU 计时器，我们【只在】获取到有效 GPU 渲染时间时才反馈 DSR
+        // 从而完美杜绝未就绪帧回退到极低的 CPU 提交时间引起的抖动与假性恢复
+        if (gpuTimeMs >= 0.0f) {
+            m_metricsCollector.recordFrameTime(gpuTimeMs);
+            updateDsrScale(gpuTimeMs);
+        }
+    } else {
+        // 在非 Android/不支持 GPU Timer 环境下，回退使用 CPU 命令耗时
+        m_metricsCollector.recordFrameTime(cpuTimeMs);
+        updateDsrScale(cpuTimeMs);
+    }
+
     return res;
+}
+
+std::shared_ptr<FilterEngine> Compositor::getFilterEngine() const {
+    return m_filterEngine;
+}
+
+void Compositor::setFilterEngine(std::shared_ptr<FilterEngine> engine) {
+    m_filterEngine = engine;
+    m_copyProgram.reset();
+    m_blendProgram.reset();
+    m_transitionPrograms.clear();
+    m_overlayProgram.reset();
 }
 
 } // namespace timeline

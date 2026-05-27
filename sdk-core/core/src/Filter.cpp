@@ -1,5 +1,6 @@
 #include <array>
 #include "../include/Filter.h"
+#include "../include/Log.h"
 #include <iostream>
 #include <cstdlib>
 
@@ -88,7 +89,7 @@ GLuint Filter::loadShader(GLenum shaderType, const char* pSource) {
                 char* buf = (char*)std::malloc(infoLen);
                 if (buf) {
                     glGetShaderInfoLog(shader, infoLen, NULL, buf);
-                    std::cerr << "Could not compile shader " << shaderType << ":\n" << buf << std::endl;
+                    LOGE("Could not compile shader %d:\n%s", shaderType, buf);
                     std::free(buf);
                 }
                 glDeleteShader(shader);
@@ -101,10 +102,17 @@ GLuint Filter::loadShader(GLenum shaderType, const char* pSource) {
 
 GLuint Filter::createProgram(const char* pVertexSource, const char* pFragmentSource) {
     GLuint vertexShader = loadShader(GL_VERTEX_SHADER, pVertexSource);
-    if (!vertexShader) return 0;
+    if (!vertexShader) {
+        LOGE("Failed to load vertex shader!");
+        return 0;
+    }
 
     GLuint pixelShader = loadShader(GL_FRAGMENT_SHADER, pFragmentSource);
-    if (!pixelShader) return 0;
+    if (!pixelShader) {
+        LOGE("Failed to load fragment shader!");
+        glDeleteShader(vertexShader);
+        return 0;
+    }
 
     GLuint program = glCreateProgram();
     if (program) {
@@ -120,7 +128,7 @@ GLuint Filter::createProgram(const char* pVertexSource, const char* pFragmentSou
                 char* buf = (char*)std::malloc(bufLength);
                 if (buf) {
                     glGetProgramInfoLog(program, bufLength, NULL, buf);
-                    std::cerr << "Could not link program:\n" << buf << std::endl;
+                    LOGE("Could not link program:\n%s", buf);
                     std::free(buf);
                 }
             }
@@ -128,6 +136,9 @@ GLuint Filter::createProgram(const char* pVertexSource, const char* pFragmentSou
             program = 0;
         }
     }
+    // Flag shaders for deletion so they're cleaned up when program is deleted
+    glDeleteShader(vertexShader);
+    glDeleteShader(pixelShader);
     return program;
 }
 

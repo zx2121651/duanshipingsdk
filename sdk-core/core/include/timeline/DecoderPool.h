@@ -69,7 +69,7 @@ public:
      * @note 线程安全。可在任意线程调用（下次 getFrame() 时生效）。
      */
     void setFallbackStrategy(DecoderFallbackStrategy strategy) {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         m_strategy = strategy;
     }
 
@@ -86,13 +86,13 @@ public:
      * 线程安全。
      */
     void setExactSeekMode(bool enable) {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         m_exactSeekMode = enable;
     }
     bool isExactSeekMode() const { return m_exactSeekMode; }
 
 private:
-    std::mutex m_mutex;
+    std::recursive_mutex m_mutex;
 
     // 核心限制：防止多轨画中画导致 OOM/Jetsam
     static constexpr int MAX_CONCURRENT_DECODERS = 4;

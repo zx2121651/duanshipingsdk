@@ -126,8 +126,17 @@ ResultPayload<Texture> FilterEngine::processFrame(const Texture& textureIn, int 
 
         if (!outFrame.isValid()) {
             LOGE("Pipeline produced an invalid output frame (missing texture)");
-            return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Pipeline produced an invalid output frame (missing texture)");
+            return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Pipeline frame is invalid");
         }
+
+        m_pendingFrames[outFrame.textureId] = outFrame;
+        m_pendingFrameIds.push_back(outFrame.textureId);
+        while (m_pendingFrameIds.size() > 3) {
+            uint32_t oldestId = m_pendingFrameIds.front();
+            m_pendingFrameIds.erase(m_pendingFrameIds.begin());
+            m_pendingFrames.erase(oldestId);
+        }
+
         return ResultPayload<Texture>::ok(Texture{outFrame.textureId, outFrame.width, outFrame.height});
     }
 
@@ -159,9 +168,9 @@ void FilterEngine::updateParameterMat4(const std::string& key, const float* matr
 }
 
 void FilterEngine::release() {
-    if (!m_initialized) {
-        return;
-    }
+    // 强制先释放所有由逻辑设备创建出的 RHI 依赖资源
+    m_quadVao = nullptr;
+    m_quadVbo = nullptr;
 
     // 1. Graph release and reset
     if (m_graph) {
@@ -172,8 +181,10 @@ void FilterEngine::release() {
     // 2. Node reference nullification
     m_cameraNode = nullptr;
     m_outputNode = nullptr;
+    m_pendingFrames.clear();
+    m_pendingFrameIds.clear();
 
-    // 3. RHI device nullification
+    // 3. RHI device nullification (这会析构 VulkanRenderDevice，销毁逻辑设备句柄)
     m_renderDevice = nullptr;
 
     // 4. FrameBufferPool and MetricsCollector clearing
@@ -272,6 +283,40 @@ Result FilterEngine::buildCameraPipeline() {
         LOGE("buildCameraPipeline() called before initialize()");
         return Result::error(ErrorCode::ERR_RENDER_NOT_INITIALIZED, "FilterEngine not initialized");
     }
+
+    // Camera pipeline must always start with an OES2RGBFilter to convert
+    // GL_TEXTURE_EXTERNAL_OES into a regular GL_TEXTURE_2D that downstream
+    // filters and the Android display layer (sampler2D) can sample.
+    bool hasOESFilter = false;
+    if (m_graph) {
+        for (const auto& node : m_graph->getNodes()) {
+            if (auto filterNode = std::dynamic_pointer_cast<FilterNode>(node)) {
+                if (std::dynamic_pointer_cast<OES2RGBFilter>(filterNode->getFilter())) {
+                    hasOESFilter = true;
+                    break;
+                }
+            }
+        }
+    }
+    if (!hasOESFilter) {
+        auto oesFilter = std::make_shared<OES2RGBFilter>();
+        oesFilter->setShaderManager(m_shaderManager);
+        oesFilter->setRenderDevice(m_renderDevice);
+        oesFilter->setQuadVao(m_quadVao);
+        auto initRes = oesFilter->initialize();
+        if (!initRes.isOk()) {
+            LOGE("Failed to initialize OES2RGBFilter: %s", initRes.getMessage().c_str());
+            return initRes;
+        }
+        if (!m_graph) {
+            m_graph = std::make_shared<PipelineGraph>();
+        }
+        auto oesNode = std::make_shared<FilterNode>("OES2RGB", oesFilter);
+        oesNode->setFrameBufferPool(&m_frameBufferPool);
+        oesNode->setTargetPrecision(FBOPrecision::RGBA8888);
+        m_graph->addNode(oesNode);
+    }
+
     auto cameraNode = std::make_shared<CameraInputNode>("Camera");
     Result res = rebuildGraph(cameraNode);
     if (res.isOk()) {
@@ -398,6 +443,8 @@ void FilterEngine::onContextLost() {
     }
     m_cameraNode = nullptr;
     m_outputNode = nullptr;
+    m_pendingFrames.clear();
+    m_pendingFrameIds.clear();
     m_renderDevice = nullptr;
     m_frameBufferPool.clear();
     m_metricsCollector.clear();
@@ -456,6 +503,14 @@ void FilterEngine::onTrimMemory(int level) {
     } else if (level >= TRIM_RUNNING_MODERATE) {
         m_frameBufferPool.setVramBudget(192 * MB);
         LOGI("onTrimMemory(%d): VRAM budget → 192 MB", level);
+    }
+}
+
+void FilterEngine::markFrameRendered(uint32_t textureId) {
+    m_pendingFrames.erase(textureId);
+    auto it = std::find(m_pendingFrameIds.begin(), m_pendingFrameIds.end(), textureId);
+    if (it != m_pendingFrameIds.end()) {
+        m_pendingFrameIds.erase(it);
     }
 }
 

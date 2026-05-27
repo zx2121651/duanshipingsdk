@@ -94,10 +94,14 @@ VulkanTexture::VulkanTexture(VkDevice device,
 }
 
 VulkanTexture::~VulkanTexture() {
-    if (m_sampler   != VK_NULL_HANDLE) vkDestroySampler(m_device, m_sampler, nullptr);
-    if (m_imageView != VK_NULL_HANDLE) vkDestroyImageView(m_device, m_imageView, nullptr);
-    if (m_image     != VK_NULL_HANDLE) vkDestroyImage(m_device, m_image, nullptr);
-    m_allocator->free(m_alloc);
+    if (m_device != VK_NULL_HANDLE) {
+        if (m_sampler   != VK_NULL_HANDLE) vkDestroySampler(m_device, m_sampler, nullptr);
+        if (m_imageView != VK_NULL_HANDLE) vkDestroyImageView(m_device, m_imageView, nullptr);
+        if (m_image     != VK_NULL_HANDLE) vkDestroyImage(m_device, m_image, nullptr);
+    }
+    if (m_allocator) {
+        m_allocator->free(m_alloc);
+    }
 }
 
 VkDescriptorImageInfo VulkanTexture::descriptorInfo() const {

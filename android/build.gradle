@@ -1,0 +1,86 @@
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+// Prerequisites: JDK 17, Android SDK 34, Android NDK 25.1.8937393
+plugins {
+    id 'com.android.application' version '8.2.1' apply false
+    id 'com.android.library' version '8.2.1' apply false
+    id 'org.jetbrains.kotlin.android' version '1.9.22' apply false
+}
+
+ext {
+    androidCompileSdk = 34
+    androidMinSdk = 24
+    androidTargetSdk = 34
+    androidVersionCode = 1
+    androidVersionName = "1.0"
+    composeCompilerVersion = "1.5.8"
+    kotlinJvmTarget = "17"
+
+    versions = [
+            activityCompose   : "1.8.2",
+            appcompat         : "1.6.1",
+            cameraX           : "1.3.1",
+            coil              : "2.6.0",
+            composeBom        : "2023.10.01",
+            constraintLayout  : "2.1.4",
+            coreKtx           : "1.12.0",
+            junit             : "4.13.2",
+            lifecycle         : "2.7.0",
+            material          : "1.11.0",
+            mockitoCore       : "5.11.0",
+            mockitoInline     : "5.2.0",
+            navigationCompose : "2.7.7",
+            orgJson           : "20231013",
+            testCore          : "1.5.0",
+            testExtJunit      : "1.1.5",
+            testRules         : "1.5.0",
+            testRunner        : "1.5.2",
+            coroutinesTest    : "1.7.3",
+            workManager       : "2.9.0"
+    ]
+}
+
+def configureAndroidModule = { Project module ->
+    module.android {
+        compileSdk rootProject.ext.androidCompileSdk
+
+        defaultConfig {
+            minSdk rootProject.ext.androidMinSdk
+            testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        }
+
+        compileOptions {
+            sourceCompatibility JavaVersion.VERSION_17
+            targetCompatibility JavaVersion.VERSION_17
+        }
+
+        buildFeatures {
+            compose true
+        }
+
+        composeOptions {
+            kotlinCompilerExtensionVersion = rootProject.ext.composeCompilerVersion
+        }
+    }
+}
+
+subprojects { module ->
+    plugins.withId('com.android.application') {
+        configureAndroidModule(module)
+    }
+
+    plugins.withId('com.android.library') {
+        configureAndroidModule(module)
+    }
+
+    plugins.withId('org.jetbrains.kotlin.android') {
+        kotlin {
+            jvmToolchain(17)
+        }
+
+        tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+            kotlinOptions {
+                jvmTarget = rootProject.ext.kotlinJvmTarget
+            }
+        }
+    }
+}

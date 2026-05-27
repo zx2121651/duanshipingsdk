@@ -18,7 +18,7 @@ Result Compositor::initOverlayProgram(){ return Result::ok(); }
 
 void  Compositor::updateDsrScale(float /*frameTimeMs*/) {}
 bool  Compositor::initGpuTimer()              { return false; }
-float Compositor::retrievePendingGpuTimeMs()  { return -1.0f; }
+float Compositor::retrieveGpuTimeMs(int /*index*/)  { return -1.0f; }
 
 void Compositor::drawQuad() {}
 

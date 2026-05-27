@@ -43,7 +43,7 @@ DecoderPool::~DecoderPool() {
 }
 
 void DecoderPool::registerMedia(const std::string& clipId, const std::string& sourcePath) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
 
     // 如果已经存在，先释放旧的，确保 m_activeDecoderCount 和 decoder 资源正确回收
     if (m_decoders.find(clipId) != m_decoders.end()) {
@@ -67,7 +67,7 @@ void DecoderPool::registerMedia(const std::string& clipId, const std::string& so
 }
 
 void DecoderPool::releaseMedia(const std::string& clipId) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
     auto it = m_decoders.find(clipId);
     if (it != m_decoders.end()) {
         auto ctx = it->second;
@@ -92,7 +92,7 @@ void DecoderPool::releaseMedia(const std::string& clipId) {
 }
 
 void DecoderPool::clear() {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
     for (auto& pair : m_decoders) {
         if (pair.second->decoder) {
             pair.second->decoder->close();
@@ -140,7 +140,7 @@ void DecoderPool::evictDecodersIfNeeded() {
 }
 
 ResultPayload<Texture> DecoderPool::getFrame(const std::string& clipId, int64_t localTimeNs, bool requiresExactSeek) {
-    std::unique_lock<std::mutex> lock(m_mutex);
+    std::unique_lock<std::recursive_mutex> lock(m_mutex);
 
     auto it = m_decoders.find(clipId);
     if (it == m_decoders.end()) {
@@ -182,6 +182,14 @@ ResultPayload<Texture> DecoderPool::getFrame(const std::string& clipId, int64_t 
         // FFmpegVideoDecoder::getFrameAt 内部是向后查找，如果 timeNs < 当前 pts 则必须 seek
         Result seekRes = ctx->softDecoder->seekExact(localTimeNs);
         if (!seekRes.isOk()) {
+            // IMAGE 类型素材（JPEG/PNG）只有一帧 (t=0)，seek 到后续帧时 FFmpeg
+            // 会到达 EOF 并返回错误。此时若有缓存帧，使用"冻结末帧"策略返回缓存，
+            // 保证整个时长内画面持续可见（与所有主流播放器行为一致）。
+            if (ctx->lastDecodedFrame.id != 0) {
+                LOGW("SW seek failed for clip %s at %lld (freeze-last-frame): %s",
+                     clipId.c_str(), (long long)localTimeNs, seekRes.getMessage().c_str());
+                return ResultPayload<Texture>::ok(ctx->lastDecodedFrame);
+            }
             LOGE("Software seek failed for clip %s to %lld: %s", clipId.c_str(), (long long)localTimeNs, seekRes.getMessage().c_str());
             return ResultPayload<Texture>::error(seekRes.getErrorCode(), "Software seek failed for " + clipId + ": " + seekRes.getMessage());
         }
@@ -192,7 +200,15 @@ ResultPayload<Texture> DecoderPool::getFrame(const std::string& clipId, int64_t 
             ctx->lastDecodedTimeNs = localTimeNs;
             ctx->isInitialized = true;
         } else {
-            LOGE("Software decoder returned error for clip %s at %lld: %s", clipId.c_str(), (long long)localTimeNs, frameRes.getMessage().c_str());
+            // 解码失败（ERR_DECODER_FRAME_DROP / EOF 等非致命错误）：
+            // 优先返回上一次成功解码的缓存帧，避免黑屏。
+            if (ctx->lastDecodedFrame.id != 0) {
+                LOGW("SW getFrameAt failed for clip %s at %lld (freeze-last-frame): %s",
+                     clipId.c_str(), (long long)localTimeNs, frameRes.getMessage().c_str());
+                return ResultPayload<Texture>::ok(ctx->lastDecodedFrame);
+            }
+            LOGE("Software decoder returned error for clip %s at %lld: %s",
+                 clipId.c_str(), (long long)localTimeNs, frameRes.getMessage().c_str());
         }
         return frameRes;
     }
@@ -218,7 +234,6 @@ ResultPayload<Texture> DecoderPool::getFrame(const std::string& clipId, int64_t 
 
         if (ctx->hwFailed && m_strategy != DecoderFallbackStrategy::HW_ONLY) {
             LOGI("Immediate fallback to software for clip %s due to HW activation failure", clipId.c_str());
-            lock.unlock();
             return getFrame(clipId, localTimeNs, true);
         }
     }
@@ -234,8 +249,7 @@ ResultPayload<Texture> DecoderPool::getFrame(const std::string& clipId, int64_t 
             ctx->decoder = nullptr;
             m_activeDecoderCount--;
 
-            // 解锁，然后递归转交软解处理
-            lock.unlock();
+            // 递归转交软解处理
             return getFrame(clipId, localTimeNs, true);
         }
 
@@ -256,12 +270,18 @@ ResultPayload<Texture> DecoderPool::getFrame(const std::string& clipId, int64_t 
                 ctx->decoder = nullptr;
                 m_activeDecoderCount--;
 
-                lock.unlock();
                 return getFrame(clipId, localTimeNs, true);
             }
 
             // 否则可能是暂时性的丢帧 (ERR_DECODER_FRAME_DROP)
-            LOGW("Hardware decoder returned error for clip %s at %lld: %s", clipId.c_str(), (long long)localTimeNs, frameRes.getMessage().c_str());
+            // 同样使用冻结末帧策略：若有缓存帧，返回上一帧而非错误，避免闪烁/黑屏。
+            if (ctx->lastDecodedFrame.id != 0) {
+                LOGW("HW decoder frame-drop for clip %s at %lld (freeze-last-frame): %s",
+                     clipId.c_str(), (long long)localTimeNs, frameRes.getMessage().c_str());
+                return ResultPayload<Texture>::ok(ctx->lastDecodedFrame);
+            }
+            LOGW("Hardware decoder returned error for clip %s at %lld: %s",
+                 clipId.c_str(), (long long)localTimeNs, frameRes.getMessage().c_str());
             return frameRes;
         }
     } else {
@@ -272,7 +292,7 @@ ResultPayload<Texture> DecoderPool::getFrame(const std::string& clipId, int64_t 
 }
 
 void DecoderPool::prefetchFrame(const std::string& clipId, int64_t upcomingTimeNs) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
     auto it = m_decoders.find(clipId);
     if (it == m_decoders.end()) return;
 

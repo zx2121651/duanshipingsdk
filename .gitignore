@@ -1,6 +1,8 @@
 android/build/
 build/
 build_*/
+dist/
+release/
 .gradle/
 local.properties
 ios/build/

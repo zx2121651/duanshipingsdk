@@ -26,6 +26,7 @@
 #include <atomic>
 #include <cstdint>
 #include <cstdlib>   // abs
+#include <mutex>
 
 namespace sdk {
 namespace video {
@@ -89,6 +90,8 @@ public:
         m_lastAudioNs.store(0, std::memory_order_relaxed);
         m_currentOffsetNs.store(0, std::memory_order_relaxed);
         m_smoothedOffsetNs.store(0, std::memory_order_relaxed);
+        
+        std::lock_guard<std::mutex> lock(m_mutex);
         m_windowHead = 0;
         m_windowCount = 0;
         for (auto& v : m_window) v = 0;
@@ -100,8 +103,7 @@ private:
     std::atomic<int64_t> m_currentOffsetNs{0};
     std::atomic<int64_t> m_smoothedOffsetNs{0};
 
-    // Simple circular buffer for sliding window average (not mutex-protected;
-    // minor races here are acceptable — the result is used only for advisory logging).
+    mutable std::mutex   m_mutex;
     int64_t m_window[WINDOW_SIZE]{};
     int     m_windowHead  = 0;
     int     m_windowCount = 0;
@@ -111,6 +113,7 @@ private:
         int64_t aTs = m_lastAudioNs.load(std::memory_order_relaxed);
         if (vTs == 0 || aTs == 0) return;  // not enough data yet
 
+        std::lock_guard<std::mutex> lock(m_mutex);
         int64_t instantOffset = vTs - aTs;
         m_currentOffsetNs.store(instantOffset, std::memory_order_relaxed);
 
@@ -119,7 +122,8 @@ private:
         m_windowHead = (m_windowHead + 1) % WINDOW_SIZE;
         if (m_windowCount < WINDOW_SIZE) ++m_windowCount;
 
-        // Compute average
+        // Compute average (with defensive divide-by-zero check)
+        if (m_windowCount == 0) return;
         int64_t sum = 0;
         for (int i = 0; i < m_windowCount; ++i) sum += m_window[i];
         m_smoothedOffsetNs.store(sum / m_windowCount, std::memory_order_relaxed);

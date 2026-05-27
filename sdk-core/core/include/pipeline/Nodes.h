@@ -46,7 +46,9 @@ public:
     }
 
     void release() override {
-        if (m_filter) m_filter->release();
+        // Do not call m_filter->release() here.
+        // The Filter's GL resources are managed by the Filter object's lifetime (via its destructor).
+        // Releasing it here destroys the GL program of the filter even if it is reused in another graph node (e.g. during rebuild).
     }
 
     ResultPayload<VideoFrame> pullFrame(int64_t timestampNs) override {

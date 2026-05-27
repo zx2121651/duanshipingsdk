@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="GradleSettings">
+    <option name="linkedExternalProjectsSettings">
+      <GradleProjectSettings>
+        <option name="testRunner" value="CHOOSE_PER_TEST" />
+        <option name="externalProjectPath" value="$PROJECT_DIR$" />
+        <option name="gradleJvm" value="#GRADLE_LOCAL_JAVA_HOME" />
+        <option name="modules">
+          <set>
+            <option value="$PROJECT_DIR$" />
+            <option value="$PROJECT_DIR$/android" />
+            <option value="$PROJECT_DIR$/core-android/model" />
+            <option value="$PROJECT_DIR$/core-android/ui" />
+            <option value="$PROJECT_DIR$/features/capture" />
+            <option value="$PROJECT_DIR$/features/diagnostics" />
+            <option value="$PROJECT_DIR$/features/editor" />
+            <option value="$PROJECT_DIR$/features/effects" />
+            <option value="$PROJECT_DIR$/features/export" />
+            <option value="$PROJECT_DIR$/features/home" />
+            <option value="$PROJECT_DIR$/features/import" />
+            <option value="$PROJECT_DIR$/samples/android" />
+          </set>
+        </option>
+      </GradleProjectSettings>
+    </option>
+  </component>
+</project>

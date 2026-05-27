@@ -44,6 +44,11 @@ struct MockHwDecoder : VideoDecoder {
 std::shared_ptr<VideoDecoder> createPlatformDecoder() {
     return std::make_shared<MockHwDecoder>();
 }
+#ifndef HAS_FFMPEG_DECODER
+std::shared_ptr<VideoDecoder> createSoftwareDecoder_FFmpeg() {
+    return std::make_shared<SoftwareVideoDecoder>();
+}
+#endif
 } } }
 
 // ---------------------------------------------------------------------------

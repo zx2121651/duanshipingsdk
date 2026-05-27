@@ -68,7 +68,7 @@ std::shared_ptr<IRenderDevice> RenderDeviceFactory::create(
 #if defined(__APPLE__) && defined(HAS_METAL)
         resolved = BackendType::METAL;
 #elif defined(__ANDROID__) && defined(HAS_VULKAN)
-        resolved = ctxManager.isVulkanSupported() ? BackendType::VULKAN : BackendType::GLES;
+        resolved = BackendType::GLES;
 #else
         resolved = BackendType::GLES;
 #endif

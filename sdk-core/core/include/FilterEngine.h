@@ -14,6 +14,7 @@
 #include "FilterFactory.h"
 #include <string>
 #include <vector>
+#include <unordered_map>
 #include <any>
 #include "rhi/IRenderDevice.h"
 #include "rhi/RenderDeviceFactory.h"
@@ -88,6 +89,7 @@ public:
     PerformanceMetrics getPerformanceMetrics() const { return m_metricsCollector.getMetrics(); }
     void recordDroppedFrame() { if (m_initialized) m_metricsCollector.recordDroppedFrame(); }
     Result updateShaderSource(const std::string& name, const std::string& source);
+    void markFrameRendered(uint32_t textureId);
 
     /**
      * @brief P1-6: Call when the EGL/EAGL context is lost (e.g. app backgrounded, driver eviction).
@@ -173,6 +175,9 @@ private:
     rhi::BackendType m_activeBackend    = rhi::BackendType::GLES;
 
     Result rebuildGraph(std::shared_ptr<PipelineNode> inputNode);
+
+    std::unordered_map<uint32_t, VideoFrame> m_pendingFrames;
+    std::vector<uint32_t> m_pendingFrameIds;
 };
 
 using FilterEnginePtr = std::shared_ptr<FilterEngine>;

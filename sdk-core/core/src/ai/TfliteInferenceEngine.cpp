@@ -40,9 +40,9 @@ namespace ai {
 // ---------------------------------------------------------------------------
 struct TfliteInferenceEngine::Impl {
 #ifdef HAS_TFLITE
-    std::unique_ptr<tflite::FlatBufferModel>        model;
-    std::unique_ptr<tflite::ops::builtin::BuiltinOpResolver> resolver;
-    std::unique_ptr<tflite::Interpreter>             interpreter;
+    TfLiteModel*              model = nullptr;
+    TfLiteInterpreterOptions* options = nullptr;
+    TfLiteInterpreter*        interpreter = nullptr;
 #   ifdef HAS_TFLITE_GPU_DELEGATE
     TfLiteDelegate* gpuDelegate = nullptr;
 #   endif

@@ -373,10 +373,26 @@ void EffectPackageUpdater::downloadPackage(const std::string& packageId,
                                 prog, downloaded, total, ""};
             {
                 std::lock_guard<std::mutex> lk(m_mutex);
+                auto it = m_downloads.find(packageId);
+                // 防护 1：如果已被外部 cancel，不覆盖状态，且不再回调 progress
+                if (it != m_downloads.end() && it->second.state == DownloadState::CANCELLED) {
+                    return;
+                }
                 m_downloads[packageId] = dp;
             }
             if (onProgress) onProgress(dp);
         });
+
+    // 防护 2：下载完成后，优先检查是否在下载途中被外部取消
+    {
+        std::lock_guard<std::mutex> lk(m_mutex);
+        auto it = m_downloads.find(packageId);
+        if (it != m_downloads.end() && it->second.state == DownloadState::CANCELLED) {
+            std::remove(tmpPath.c_str());
+            if (onComplete) onComplete(packageId, false, "", "Download cancelled");
+            return;
+        }
+    }
 
     if (httpCode != 200 && httpCode != 206) {
         std::string err = "HTTP " + std::to_string(httpCode);
@@ -390,9 +406,19 @@ void EffectPackageUpdater::downloadPackage(const std::string& packageId,
 
     // Verify
     {
+        std::lock_guard<std::mutex> lk(m_mutex);
+        auto it = m_downloads.find(packageId);
+        // 防护 3：在校验前检查取消状态
+        if (it != m_downloads.end() && it->second.state == DownloadState::CANCELLED) {
+            std::remove(tmpPath.c_str());
+            if (onComplete) onComplete(packageId, false, "", "Download cancelled");
+            return;
+        }
         DownloadProgress dp{packageId, DownloadState::VERIFYING, 0.99f, 0, 0, ""};
+        m_downloads[packageId] = dp;
         if (onProgress) onProgress(dp);
     }
+
     if (!verifyChecksum(tmpPath, pkg.checksum, pkg.checksumType)) {
         std::remove(tmpPath.c_str());
         std::string err = "Checksum mismatch for " + packageId;
@@ -406,9 +432,19 @@ void EffectPackageUpdater::downloadPackage(const std::string& packageId,
 
     // Extract
     {
+        std::lock_guard<std::mutex> lk(m_mutex);
+        auto it = m_downloads.find(packageId);
+        // 防护 4：在解压前检查取消状态
+        if (it != m_downloads.end() && it->second.state == DownloadState::CANCELLED) {
+            std::remove(tmpPath.c_str());
+            if (onComplete) onComplete(packageId, false, "", "Download cancelled");
+            return;
+        }
         DownloadProgress dp{packageId, DownloadState::EXTRACTING, 0.995f, 0, 0, ""};
+        m_downloads[packageId] = dp;
         if (onProgress) onProgress(dp);
     }
+
     if (!extractZip(tmpPath, destDir)) {
         std::remove(tmpPath.c_str());
         std::string err = "Extraction failed for " + packageId;
@@ -424,6 +460,13 @@ void EffectPackageUpdater::downloadPackage(const std::string& packageId,
     // Update local manifest
     {
         std::lock_guard<std::mutex> lk(m_mutex);
+        auto it = m_downloads.find(packageId);
+        // 防护 5：在写入 Manifest 之前再次检查取消状态
+        if (it != m_downloads.end() && it->second.state == DownloadState::CANCELLED) {
+            if (onComplete) onComplete(packageId, false, "", "Download cancelled");
+            return;
+        }
+
         auto& local     = m_localManifest[packageId];
         local.id               = packageId;
         local.name             = pkg.name;

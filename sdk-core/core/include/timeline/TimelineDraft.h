@@ -105,6 +105,16 @@ inline std::string detectSandboxPath(const std::string& filePath) {
     return "";
 }
 
+inline bool startsWithIgnoreCase(const std::string& str, const std::string& prefix) {
+    if (str.size() < prefix.size()) return false;
+    for (size_t i = 0; i < prefix.size(); ++i) {
+        if (std::tolower(str[i]) != std::tolower(prefix[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
 inline std::string serializePath(const std::string& path, const std::string& draftRoot, const std::string& sandboxRoot) {
     if (path.empty()) return path;
     
@@ -112,13 +122,15 @@ inline std::string serializePath(const std::string& path, const std::string& dra
     std::string normDraftRoot = normalizePath(draftRoot);
     std::string normSandboxRoot = normalizePath(sandboxRoot);
     
-    if (!normDraftRoot.empty() && normPath.compare(0, normDraftRoot.size(), normDraftRoot) == 0) {
+    if (!normDraftRoot.empty() && startsWithIgnoreCase(normPath, normDraftRoot)) {
         return "<DRAFT_ROOT>/" + normPath.substr(normDraftRoot.size());
     }
-    if (!normSandboxRoot.empty() && normPath.compare(0, normSandboxRoot.size(), normSandboxRoot) == 0) {
+    if (!normSandboxRoot.empty() && startsWithIgnoreCase(normPath, normSandboxRoot)) {
         return "<SANDBOX>/" + normPath.substr(normSandboxRoot.size());
     }
-    return path;
+    // External path: return normalized (forward-slash) form so the colon in
+    // Windows drive letters (e.g. "D:/") is NOT double-escaped later.
+    return normPath;
 }
 
 inline std::string deserializePath(const std::string& path, const std::string& draftRoot, const std::string& sandboxRoot) {
@@ -161,9 +173,11 @@ inline void serializeClip(std::ostringstream& ss, const ClipPtr& clip, const std
     if (auto stk = std::dynamic_pointer_cast<StickerClip>(clip)) {
         std::string serializedPath = serializePath(stk->getSourcePath(), draftRoot, sandboxRoot);
         // STICKER:<id>:<srcPath>:<srcDur>:<tlIn>:<cx>:<cy>:<scale>:<rot>
+        // NOTE: path is stored verbatim (not colon-escaped) so Windows drive letters
+        //       such as "D:/" are preserved literally. Deserialization handles this.
         ss << "STICKER:"
            << escapeColons(clipId)                   << ":"
-           << escapeColons(serializedPath)           << ":"
+           << serializedPath                         << ":"
            << stk->getSourceDuration()               << ":"
            << stk->getTimelineIn()                   << ":"
            << stk->centerX                           << ":"
@@ -174,9 +188,12 @@ inline void serializeClip(std::ostringstream& ss, const ClipPtr& clip, const std
     }
     // ── Generic Clip ─────────────────────────────────────────────────────────
     std::string serializedPath = serializePath(clip->getSourcePath(), draftRoot, sandboxRoot);
+    // NOTE: path is stored verbatim (not colon-escaped) so that Windows drive
+    //       letters such as "D:/" appear literally in the draft file.
+    //       Deserialization detects and re-joins the split drive-letter field.
     ss << "C:"
        << escapeColons(clipId)                          << ":"
-       << escapeColons(serializedPath)                  << ":"
+       << serializedPath                                << ":"  // no escapeColons on path
        << static_cast<int>(clip->getType())             << ":"
        << clip->getSourceDuration()                     << ":"
        << clip->getTrimIn()                             << ":"
@@ -280,23 +297,39 @@ inline std::shared_ptr<Timeline> deserializeTimeline(const std::string& content,
         } else if (tag == "C" && timeline && currentTrack) {
             // C:id:src:mediaType:srcDur:trimIn:trimOut:tlIn:speed:vol:rev:
             //   scale:rotation:tx:ty:inT:inTDur:outT:outTDur
-            if (parts.size() < 19) continue;
-            std::string id      = detail::unescapeColons(parts[1]);
-            std::string src     = detail::unescapeColons(parts[2]);
+            // NOTE: the path field is stored verbatim (no colon-escaping), so a
+            // Windows absolute path like "D:/movies/a.mp4" creates an extra ":".
+            // We detect this by checking whether parts[2] is a single drive letter.
+            std::string id = detail::unescapeColons(parts[1]);
+            std::string src;
+            int fo = 0; // field offset caused by Windows drive-letter colon
+            if (parts.size() > 3
+                && parts[2].size() == 1
+                && std::isalpha((unsigned char)parts[2][0])
+                && !parts[3].empty() && parts[3][0] == '/') {
+                // New format: drive letter split → rejoin as "X:/rest"
+                src = std::string(1, parts[2][0]) + ":" + parts[3];
+                fo = 1;
+            } else {
+                // Placeholder path (<DRAFT_ROOT>/…, <SANDBOX>/…) or legacy
+                // escaped path (D\c/…) — unescapeColons handles both.
+                src = detail::unescapeColons(parts[2]);
+            }
+            if (parts.size() < static_cast<size_t>(19 + fo)) continue;
             src = detail::deserializePath(src, draftRoot, sandboxRoot);
-            Clip::MediaType mt  = static_cast<Clip::MediaType>(std::stoi(parts[3]));
-            int64_t srcDur      = std::stoll(parts[4]);
-            int64_t trimIn      = std::stoll(parts[5]);
-            int64_t trimOut     = std::stoll(parts[6]);
-            int64_t tlIn        = std::stoll(parts[7]);
-            float   speed       = std::stof(parts[8]);
-            // parts[9]  = volume (stored in keyframes, we set static fallback)
-            bool    rev         = (parts[10] == "1");
-            // parts[11] = scale, parts[12..14] = rotation/tx/ty (not settable via public API here)
-            std::string inT     = detail::unescapeColons(parts[15]);
-            int64_t inTDur      = std::stoll(parts[16]);
-            std::string outT    = detail::unescapeColons(parts[17]);
-            int64_t outTDur     = std::stoll(parts[18]);
+            Clip::MediaType mt  = static_cast<Clip::MediaType>(std::stoi(parts[3 + fo]));
+            int64_t srcDur      = std::stoll(parts[4 + fo]);
+            int64_t trimIn      = std::stoll(parts[5 + fo]);
+            int64_t trimOut     = std::stoll(parts[6 + fo]);
+            int64_t tlIn        = std::stoll(parts[7 + fo]);
+            float   speed       = std::stof(parts[8 + fo]);
+            // parts[9+fo] = volume (stored in keyframes, we set static fallback)
+            bool    rev         = (parts[10 + fo] == "1");
+            // parts[11+fo]=scale, parts[12..14+fo]=rotation/tx/ty
+            std::string inT     = detail::unescapeColons(parts[15 + fo]);
+            int64_t inTDur      = std::stoll(parts[16 + fo]);
+            std::string outT    = detail::unescapeColons(parts[17 + fo]);
+            int64_t outTDur     = std::stoll(parts[18 + fo]);
 
             auto clip = std::make_shared<Clip>(id, src, mt);
             clip->setSourceDuration(srcDur);
@@ -351,19 +384,30 @@ inline std::shared_ptr<Timeline> deserializeTimeline(const std::string& content,
 
         } else if (tag == "STICKER" && timeline && currentTrack) {
             // STICKER:<id>:<srcPath>:<srcDur>:<tlIn>:<cx>:<cy>:<scale>:<rot>
-            if (parts.size() < 9) continue;
-            std::string id  = detail::unescapeColons(parts[1]);
-            std::string src = detail::unescapeColons(parts[2]);
+            // Path is verbatim; detect Windows drive-letter split same as C: above.
+            std::string id = detail::unescapeColons(parts[1]);
+            std::string src;
+            int fo = 0;
+            if (parts.size() > 3
+                && parts[2].size() == 1
+                && std::isalpha((unsigned char)parts[2][0])
+                && !parts[3].empty() && parts[3][0] == '/') {
+                src = std::string(1, parts[2][0]) + ":" + parts[3];
+                fo = 1;
+            } else {
+                src = detail::unescapeColons(parts[2]);
+            }
+            if (parts.size() < static_cast<size_t>(9 + fo)) continue;
             src = detail::deserializePath(src, draftRoot, sandboxRoot);
-            int64_t srcDur  = std::stoll(parts[3]);
-            int64_t tlIn    = std::stoll(parts[4]);
+            int64_t srcDur  = std::stoll(parts[3 + fo]);
+            int64_t tlIn    = std::stoll(parts[4 + fo]);
             auto stk = std::make_shared<StickerClip>(id, src);
             stk->setSourceDuration(srcDur);
             stk->setTimelineIn(tlIn);
-            stk->centerX         = std::stof(parts[5]);
-            stk->centerY         = std::stof(parts[6]);
-            stk->stickerScale    = std::stof(parts[7]);
-            stk->stickerRotation = std::stof(parts[8]);
+            stk->centerX         = std::stof(parts[5 + fo]);
+            stk->centerY         = std::stof(parts[6 + fo]);
+            stk->stickerScale    = std::stof(parts[7 + fo]);
+            stk->stickerRotation = std::stof(parts[8 + fo]);
             currentTrack->addClip(stk);
         }
     }
