@@ -179,16 +179,29 @@ struct EngineWrapper {
     void renderToRecordingSurface(Texture tex, int width, int height, int64_t timestampNs) {
         if (recordingSurface == EGL_NO_SURFACE || eglDisplay == EGL_NO_DISPLAY) return;
 
-        // Save current draw surface
+        // Save current draw surface & context dynamically to prevent context mismatch/invalidation
         EGLSurface drawSurface = eglGetCurrentSurface(EGL_DRAW);
         EGLSurface readSurface = eglGetCurrentSurface(EGL_READ);
+        EGLContext currentContext = eglGetCurrentContext();
+
+        if (drawSurface == EGL_NO_SURFACE || currentContext == EGL_NO_CONTEXT) {
+            __android_log_print(ANDROID_LOG_WARN, "NativeBridge", 
+                "renderToRecordingSurface: drawSurface (%p) or currentContext (%p) is invalid at entry!",
+                drawSurface, currentContext);
+        }
 
         // Save OpenGL state
         GLint lastViewport[4];
         glGetIntegerv(GL_VIEWPORT, lastViewport);
+        GLint lastFbo = 0;
+        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &lastFbo);
+        GLint lastProgram = 0;
+        glGetIntegerv(GL_CURRENT_PROGRAM, &lastProgram);
 
-        // Make recording surface current
-        if (!eglMakeCurrent(eglDisplay, recordingSurface, recordingSurface, sharedContext)) {
+        // Make recording surface current using the guaranteed-active currentContext
+        if (!eglMakeCurrent(eglDisplay, recordingSurface, recordingSurface, currentContext)) {
+            __android_log_print(ANDROID_LOG_ERROR, "NativeBridge", 
+                "renderToRecordingSurface ERROR: eglMakeCurrent to recordingSurface failed! err=0x%x", eglGetError());
             return;
         }
 
@@ -196,6 +209,7 @@ struct EngineWrapper {
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
         glViewport(0, 0, width, height);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         glUseProgram(recordProgram);
@@ -228,10 +242,19 @@ struct EngineWrapper {
             eglPresentationTimeANDROID(eglDisplay, recordingSurface, timestampNs);
         }
 
+        glFlush();
         eglSwapBuffers(eglDisplay, recordingSurface);
 
         // Restore original display surface
-        eglMakeCurrent(eglDisplay, drawSurface, readSurface, sharedContext);
+        if (!eglMakeCurrent(eglDisplay, drawSurface, readSurface, currentContext)) {
+            __android_log_print(ANDROID_LOG_ERROR, "NativeBridge", 
+                "renderToRecordingSurface ERROR: eglMakeCurrent restore failed! err=0x%x, drawSurface=%p", 
+                eglGetError(), drawSurface);
+        }
+
+        // Restore saved OpenGL states cleanly
+        glBindFramebuffer(GL_FRAMEBUFFER, lastFbo);
+        glUseProgram(lastProgram);
         glViewport(lastViewport[0], lastViewport[1], lastViewport[2], lastViewport[3]);
     }
 #endif
