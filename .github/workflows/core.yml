@@ -21,14 +21,14 @@ jobs:
           sudo apt-get install -y libgles2-mesa-dev libegl1-mesa-dev g++ cmake make
 
       - name: Configure CMake
-        run: cmake -B build -S . -DUSE_MOCK_GL=ON
+        run: cd sdk-core && cmake -B build -S . -DUSE_MOCK_GL=ON
 
       # Phase-1 Verification Step: Build Core Engine
       - name: Build Core
-        run: cmake --build build --config Release
+        run: cd sdk-core && cmake --build build --config Release
 
       # Phase-1 Verification Step: Run Core Unit Tests
       - name: Run Tests
         run: |
-          cd build
+          cd sdk-core/build
           ctest --output-on-failure
