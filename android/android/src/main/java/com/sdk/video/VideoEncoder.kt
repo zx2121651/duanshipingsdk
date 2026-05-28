@@ -243,30 +243,33 @@ class VideoEncoder(
 
                 if (readBytes > 0) {
                     val codec = audioCodec ?: break
-                    val inputBufferIndex = codec.dequeueInputBuffer(10000)
-                    if (inputBufferIndex >= 0) {
-                        val inputBuffer = codec.getInputBuffer(inputBufferIndex)
-                        inputBuffer?.clear()
-                        inputBuffer?.put(buffer, 0, readBytes)
+                    try {
+                        val inputBufferIndex = codec.dequeueInputBuffer(10000)
+                        if (inputBufferIndex >= 0) {
+                            val inputBuffer = codec.getInputBuffer(inputBufferIndex)
+                            inputBuffer?.clear()
+                            inputBuffer?.put(buffer, 0, readBytes)
 
-                        // [PTS Drift Fix]: Use the total number of samples encoded as a stable clock.
-                        // This prevents drift between audio and video by tying PTS to the actual data volume,
-                        // starting from the synchronized system-time anchor.
-                        // P0-1: Stereo 16-bit = 4 bytes per frame (2 bytes/sample × 2 channels)
-                        val samplesRead = readBytes / 4 // stereo 16-bit frames
-                        val pts = (startTimeNs + (totalSamplesEncoded * 1000000000L / audioSampleRate)) / 1000
-                        totalSamplesEncoded += samplesRead
+                            // [PTS Drift Fix]: Use the total number of samples encoded as a stable clock.
+                            // This prevents drift between audio and video by tying PTS to the actual data volume,
+                            // starting from the synchronized system-time anchor.
+                            // P0-1: Stereo 16-bit = 4 bytes per frame (2 bytes/sample × 2 channels)
+                            val samplesRead = readBytes / 4 // stereo 16-bit frames
+                            val pts = (startTimeNs + (totalSamplesEncoded * 1000000000L / audioSampleRate)) / 1000
+                            totalSamplesEncoded += samplesRead
 
-                        synchronized(syncLock) {
-                            lastAudioPtsUs = pts
-                        }
+                            synchronized(syncLock) {
+                                lastAudioPtsUs = pts
+                            }
 
-                        try {
                             codec.queueInputBuffer(inputBufferIndex, 0, readBytes, pts, 0)
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Audio codec exception", e)
-                            break
                         }
+                    } catch (e: IllegalStateException) {
+                        Log.w(TAG, "Audio codec state exception in loop, probably stopped: ${e.message}")
+                        break
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Audio codec exception in loop", e)
+                        break
                     }
                 } else {
                     // 如果底层队列暂时没数据，稍作休眠防止空转 CPU
