@@ -34,7 +34,7 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
 
     // Performance field updated via JNI reflection
     @JvmField
-    var lastFrameTimeMs: Long = 0L
+    var lastFrameTimeMs: Long = -1L
 
     private var recordingStartTimeNs: Long = 0L
     private var lastVideoPtsNs: Long = -1L
@@ -167,7 +167,7 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
             // 如果返回值是负数，表示产生了错误
             if (outputTexId >= 0) {
                 onFrameProcessedListener?.invoke(outputTexId)
-                if (lastFrameTimeMs > 0) {
+                if (lastFrameTimeMs >= 0) {
                     onPerformanceUpdateListener?.invoke(lastFrameTimeMs)
                 }
             } else {

@@ -1,4 +1,5 @@
 #include "../include/FilterEngine.h"
+#include "../include/GLStateManager.h"
 #define LOG_TAG "FilterEngine"
 #include "../include/Log.h"
 #include "rhi/GLRenderDevice.h"
@@ -66,6 +67,7 @@ Result FilterEngine::initialize() {
 }
 
 ResultPayload<Texture> FilterEngine::processFrame(const Texture& textureIn, int width, int height) {
+    GLStateManager::getInstance().invalidateCache();
     if (!m_initialized) {
         LOGE("processFrame() called before initialize(). Did you forget to call initialize()?");
         return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_NOT_INITIALIZED, "FilterEngine not initialized before processing frame");
