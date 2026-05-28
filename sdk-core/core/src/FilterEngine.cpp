@@ -128,7 +128,7 @@ ResultPayload<Texture> FilterEngine::processFrame(const Texture& textureIn, int 
 
         if (!outFrame.isValid()) {
             LOGE("Pipeline produced an invalid output frame (missing texture)");
-            return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Pipeline frame is invalid");
+            return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Pipeline produced an invalid output frame (missing texture)");
         }
 
         m_pendingFrames[outFrame.textureId] = outFrame;

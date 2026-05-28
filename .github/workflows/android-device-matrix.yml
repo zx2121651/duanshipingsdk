@@ -50,7 +50,7 @@ jobs:
 
       - name: Build debug APK + test APK
         run: |
-          chmod +x gradlew
+          cd android && chmod +x gradlew
           ./gradlew :sample-android:assembleDebug \
                     :sample-android:assembleDebugAndroidTest \
                     --no-daemon --stacktrace
