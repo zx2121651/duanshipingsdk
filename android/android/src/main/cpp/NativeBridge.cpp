@@ -10,6 +10,10 @@
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 #include <GLES3/gl3.h>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <queue>
 #endif
 
 
@@ -88,8 +92,19 @@ struct EngineWrapper {
     EGLSurface recordingSurface = EGL_NO_SURFACE;
     EGLContext sharedContext = EGL_NO_CONTEXT;
 
-    // Passthrough shader for rendering to MediaCodec surface
-    GLuint recordProgram = 0;
+    // Asynchronous Recording Thread State
+    std::thread recordThread;
+    std::mutex recordMutex;
+    std::condition_variable recordCond;
+    struct RecordTask {
+        uint32_t texId;
+        int64_t timestampNs;
+    };
+    std::queue<RecordTask> recordQueue;
+    bool recordThreadRunning = false;
+    EGLContext recordContext = EGL_NO_CONTEXT;
+    int recordWidth = 720;
+    int recordHeight = 1280;
 #endif
 
     EngineWrapper() {
@@ -100,8 +115,6 @@ struct EngineWrapper {
     ~EngineWrapper() {
 #ifndef WIN32
         releaseRecordingSurface();
-        glDeleteProgram(recordProgram);
-        recordProgram = 0;
 #endif
     }
 
@@ -109,7 +122,7 @@ struct EngineWrapper {
     bool setupRecordingSurface(JNIEnv* env, jobject surface) {
         if (!surface) return false;
 
-        // Cleanup existing surface before overwriting
+        // Cleanup existing surface & stop thread before overwriting
         releaseRecordingSurface();
 
         recordingWindow = ANativeWindow_fromSurface(env, surface);
@@ -139,9 +152,48 @@ struct EngineWrapper {
 
         EGLint surfaceAttribs[] = {EGL_NONE};
         recordingSurface = eglCreateWindowSurface(eglDisplay, config, recordingWindow, surfaceAttribs);
+        if (recordingSurface == EGL_NO_SURFACE) {
+            __android_log_print(ANDROID_LOG_ERROR, "NativeBridge", "Failed to create EGL recording surface!");
+            ANativeWindow_release(recordingWindow);
+            recordingWindow = nullptr;
+            return false;
+        }
 
-        // Compile simple passthrough program if not done
-        if (recordProgram == 0) {
+        // Spawn Asynchronous Record Thread
+        {
+            std::lock_guard<std::mutex> lock(recordMutex);
+            recordThreadRunning = true;
+            // Clear queue
+            while (!recordQueue.empty()) recordQueue.pop();
+        }
+
+        recordThread = std::thread([this, config]() {
+            // Create EGL context shared with main context
+            EGLint contextAttribs[] = {
+                EGL_CONTEXT_CLIENT_VERSION, 3,
+                EGL_NONE
+            };
+            recordContext = eglCreateContext(eglDisplay, config, sharedContext, contextAttribs);
+            if (recordContext == EGL_NO_CONTEXT) {
+                __android_log_print(ANDROID_LOG_ERROR, "NativeBridge", "Recording thread failed to create shared EGLContext!");
+                std::lock_guard<std::mutex> lock(recordMutex);
+                recordThreadRunning = false;
+                return;
+            }
+
+            if (!eglMakeCurrent(eglDisplay, recordingSurface, recordingSurface, recordContext)) {
+                __android_log_print(ANDROID_LOG_ERROR, "NativeBridge", "Recording thread failed to make EGL recording context current!");
+                eglDestroyContext(eglDisplay, recordContext);
+                recordContext = EGL_NO_CONTEXT;
+                std::lock_guard<std::mutex> lock(recordMutex);
+                recordThreadRunning = false;
+                return;
+            }
+
+            __android_log_print(ANDROID_LOG_INFO, "NativeBridge", "Recording GL thread initialized successfully with shared Context.");
+
+            // Compile shaders inside worker thread GL Context
+            GLuint threadProgram = 0;
             std::string vsrc_str = "";
             std::string fsrc_str = "";
 
@@ -171,14 +223,8 @@ void main() {
     c = texture(tex, vtc);
 })";
 
-            if (!vsrc) {
-                __android_log_print(ANDROID_LOG_WARN, "NativeBridge", "record_passthrough.vert is empty, using fallback.");
-                vsrc = DEFAULT_RECORD_VERT;
-            }
-            if (!fsrc) {
-                __android_log_print(ANDROID_LOG_WARN, "NativeBridge", "record_passthrough.frag is empty, using fallback.");
-                fsrc = DEFAULT_RECORD_FRAG;
-            }
+            if (!vsrc) vsrc = DEFAULT_RECORD_VERT;
+            if (!fsrc) fsrc = DEFAULT_RECORD_FRAG;
 
             auto compile = [](GLenum type, const char* s, const char* name) {
                 GLuint sh = glCreateShader(type);
@@ -193,7 +239,7 @@ void main() {
                         std::vector<char> infoLog(infoLen);
                         glGetShaderInfoLog(sh, infoLen, NULL, infoLog.data());
                         __android_log_print(ANDROID_LOG_ERROR, "NativeBridge",
-                            "Shader compile error (%s): %s", name, infoLog.data());
+                            "Shader compile error in worker (%s): %s", name, infoLog.data());
                     }
                     glDeleteShader(sh);
                     return (GLuint)0;
@@ -204,23 +250,23 @@ void main() {
             GLuint vs = compile(GL_VERTEX_SHADER, vsrc, "vertex");
             GLuint fs = compile(GL_FRAGMENT_SHADER, fsrc, "fragment");
             if (vs != 0 && fs != 0) {
-                recordProgram = glCreateProgram();
-                glAttachShader(recordProgram, vs);
-                glAttachShader(recordProgram, fs);
-                glLinkProgram(recordProgram);
+                threadProgram = glCreateProgram();
+                glAttachShader(threadProgram, vs);
+                glAttachShader(threadProgram, fs);
+                glLinkProgram(threadProgram);
                 GLint linked = 0;
-                glGetProgramiv(recordProgram, GL_LINK_STATUS, &linked);
+                glGetProgramiv(threadProgram, GL_LINK_STATUS, &linked);
                 if (!linked) {
                     GLint infoLen = 0;
-                    glGetProgramiv(recordProgram, GL_INFO_LOG_LENGTH, &infoLen);
+                    glGetProgramiv(threadProgram, GL_INFO_LOG_LENGTH, &infoLen);
                     if (infoLen > 1) {
                         std::vector<char> infoLog(infoLen);
-                        glGetProgramInfoLog(recordProgram, infoLen, NULL, infoLog.data());
+                        glGetProgramInfoLog(threadProgram, infoLen, NULL, infoLog.data());
                         __android_log_print(ANDROID_LOG_ERROR, "NativeBridge",
-                            "Shader link error: %s", infoLog.data());
+                            "Shader link error in worker: %s", infoLog.data());
                     }
-                    glDeleteProgram(recordProgram);
-                    recordProgram = 0;
+                    glDeleteProgram(threadProgram);
+                    threadProgram = 0;
                 }
                 glDeleteShader(vs);
                 glDeleteShader(fs);
@@ -228,11 +274,93 @@ void main() {
                 if (vs != 0) glDeleteShader(vs);
                 if (fs != 0) glDeleteShader(fs);
             }
-        }
-        return recordProgram != 0;
+
+            // Loop and draw
+            while (true) {
+                RecordTask task;
+                int currentW = 720;
+                int currentH = 1280;
+                {
+                    std::unique_lock<std::mutex> lk(recordMutex);
+                    recordCond.wait(lk, [this]() { return !recordThreadRunning || !recordQueue.empty(); });
+                    if (!recordThreadRunning && recordQueue.empty()) {
+                        break;
+                    }
+                    task = recordQueue.front();
+                    recordQueue.pop();
+                    currentW = recordWidth;
+                    currentH = recordHeight;
+                }
+
+                if (threadProgram != 0 && recordingSurface != EGL_NO_SURFACE) {
+                    // Draw onto recording surface
+                    glDisable(GL_BLEND);
+                    glDisable(GL_DEPTH_TEST);
+                    glDisable(GL_CULL_FACE);
+                    glDisable(GL_SCISSOR_TEST);
+
+                    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                    glViewport(0, 0, currentW, currentH);
+                    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+                    glClear(GL_COLOR_BUFFER_BIT);
+
+                    glUseProgram(threadProgram);
+                    glActiveTexture(GL_TEXTURE0);
+                    glBindTexture(GL_TEXTURE_2D, task.texId);
+
+                    glBindVertexArray(0);
+                    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+                    static const float p[] = {-1,-1, 1,-1, -1,1, 1,1};
+                    static const float t[] = {0,0, 1,0, 0,1, 1,1};
+
+                    glEnableVertexAttribArray(0);
+                    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, p);
+                    glEnableVertexAttribArray(1);
+                    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, t);
+
+                    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+                    glDisableVertexAttribArray(0);
+                    glDisableVertexAttribArray(1);
+
+                    typedef EGLBoolean (EGLAPIENTRYP PFNEGLPRESENTATIONTIMEANDROIDPROC)(EGLDisplay dpy, EGLSurface sur, khronos_stime_nanoseconds_t time);
+                    static PFNEGLPRESENTATIONTIMEANDROIDPROC eglPresentationTimeANDROID =
+                        (PFNEGLPRESENTATIONTIMEANDROIDPROC)eglGetProcAddress("eglPresentationTimeANDROID");
+
+                    if (eglPresentationTimeANDROID) {
+                        eglPresentationTimeANDROID(eglDisplay, recordingSurface, task.timestampNs);
+                    }
+
+                    glFlush();
+                    eglSwapBuffers(eglDisplay, recordingSurface);
+                }
+            }
+
+            if (threadProgram != 0) {
+                glDeleteProgram(threadProgram);
+            }
+            eglMakeCurrent(eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+            eglDestroyContext(eglDisplay, recordContext);
+            recordContext = EGL_NO_CONTEXT;
+            __android_log_print(ANDROID_LOG_INFO, "NativeBridge", "Recording worker loop terminated.");
+        });
+
+        return true;
     }
 
     void releaseRecordingSurface() {
+        {
+            std::lock_guard<std::mutex> lock(recordMutex);
+            recordThreadRunning = false;
+            while (!recordQueue.empty()) recordQueue.pop();
+        }
+        recordCond.notify_all();
+
+        if (recordThread.joinable()) {
+            recordThread.join();
+        }
+
         if (eglDisplay != EGL_NO_DISPLAY && recordingSurface != EGL_NO_SURFACE) {
             eglDestroySurface(eglDisplay, recordingSurface);
             recordingSurface = EGL_NO_SURFACE;
@@ -244,148 +372,20 @@ void main() {
     }
 
     void renderToRecordingSurface(Texture tex, int width, int height, int64_t timestampNs) {
-        if (recordingSurface == EGL_NO_SURFACE || eglDisplay == EGL_NO_DISPLAY || recordProgram == 0) return;
+        std::lock_guard<std::mutex> lock(recordMutex);
+        if (!recordThreadRunning) return;
 
-        // Clear any previous GL errors to avoid polluting current recording process
-        while (glGetError() != GL_NO_ERROR);
+        recordWidth = width;
+        recordHeight = height;
 
-        // Save current draw surface & context dynamically to prevent context mismatch/invalidation
-        EGLSurface drawSurface = eglGetCurrentSurface(EGL_DRAW);
-        EGLSurface readSurface = eglGetCurrentSurface(EGL_READ);
-        EGLContext currentContext = eglGetCurrentContext();
-
-        if (drawSurface == EGL_NO_SURFACE || currentContext == EGL_NO_CONTEXT) {
-            __android_log_print(ANDROID_LOG_WARN, "NativeBridge", 
-                "renderToRecordingSurface: drawSurface (%p) or currentContext (%p) is invalid at entry!",
-                drawSurface, currentContext);
+        // Prevent memory leak or backlog by dropping oldest frames under high load
+        if (recordQueue.size() > 5) {
+            __android_log_print(ANDROID_LOG_WARN, "NativeBridge", "Recording queue full, dropping frame to avoid layout freeze!");
+            recordQueue.pop();
         }
 
-        // Save OpenGL state
-        GLint lastViewport[4];
-        glGetIntegerv(GL_VIEWPORT, lastViewport);
-        GLint lastFbo = 0;
-        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &lastFbo);
-        GLint lastProgram = 0;
-        glGetIntegerv(GL_CURRENT_PROGRAM, &lastProgram);
-
-        // Save VAO/VBO/EBO/Texture state
-        GLint lastVao = 0;
-        glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &lastVao);
-        GLint lastVbo = 0;
-        glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &lastVbo);
-        GLint lastEbo = 0;
-        glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &lastEbo);
-        GLint lastTex = 0;
-        glGetIntegerv(GL_TEXTURE_BINDING_2D, &lastTex);
-        GLint lastActiveTex = 0;
-        glGetIntegerv(GL_ACTIVE_TEXTURE, &lastActiveTex);
-
-        // Save Attribute states
-        GLint isAttrib0Enabled = 0;
-        GLint isAttrib1Enabled = 0;
-        glGetVertexAttribiv(0, GL_VERTEX_ATTRIB_ARRAY_ENABLED, &isAttrib0Enabled);
-        glGetVertexAttribiv(1, GL_VERTEX_ATTRIB_ARRAY_ENABLED, &isAttrib1Enabled);
-
-        // Save Capabilities
-        GLboolean isBlendEnabled = glIsEnabled(GL_BLEND);
-        GLboolean isDepthTestEnabled = glIsEnabled(GL_DEPTH_TEST);
-        GLboolean isCullFaceEnabled = glIsEnabled(GL_CULL_FACE);
-        GLboolean isScissorTestEnabled = glIsEnabled(GL_SCISSOR_TEST);
-
-        // Synchronize display commands before making the recording surface current
-        glFinish();
-
-        // Make recording surface current using the guaranteed-active currentContext
-        if (!eglMakeCurrent(eglDisplay, recordingSurface, recordingSurface, currentContext)) {
-            __android_log_print(ANDROID_LOG_ERROR, "NativeBridge", 
-                "renderToRecordingSurface ERROR: eglMakeCurrent to recordingSurface failed! err=0x%x", eglGetError());
-            return;
-        }
-
-        // Disable blending and tests to draw straight onto the surface
-        glDisable(GL_BLEND);
-        glDisable(GL_DEPTH_TEST);
-        glDisable(GL_CULL_FACE);
-        glDisable(GL_SCISSOR_TEST);
-
-        // Must bind default framebuffer (0) so we draw to the window surface, not the last FBO
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-        glViewport(0, 0, width, height);
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-
-        glUseProgram(recordProgram);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, tex.id);
-
-        // Protect against VAO/VBO state bleed from FilterEngine
-        glBindVertexArray(0);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-        // Android recording requires fixing vertical orientation typically
-        static const float p[] = {-1,-1, 1,-1, -1,1, 1,1};
-        static const float t[] = {0,0, 1,0, 0,1, 1,1};
-
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, p);
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, t);
-
-        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-
-        glDisableVertexAttribArray(0);
-        glDisableVertexAttribArray(1);
-
-        typedef EGLBoolean (EGLAPIENTRYP PFNEGLPRESENTATIONTIMEANDROIDPROC)(EGLDisplay dpy, EGLSurface sur, khronos_stime_nanoseconds_t time);
-        static PFNEGLPRESENTATIONTIMEANDROIDPROC eglPresentationTimeANDROID =
-            (PFNEGLPRESENTATIONTIMEANDROIDPROC)eglGetProcAddress("eglPresentationTimeANDROID");
-
-        if (eglPresentationTimeANDROID) {
-            eglPresentationTimeANDROID(eglDisplay, recordingSurface, timestampNs);
-        }
-
-        // Flush and swap buffers to present
-        glFlush();
-        eglSwapBuffers(eglDisplay, recordingSurface);
-
-        // Synchronize commands on recording surface before returning to display
-        glFinish();
-
-        // Restore original display surface
-        if (!eglMakeCurrent(eglDisplay, drawSurface, readSurface, currentContext)) {
-            __android_log_print(ANDROID_LOG_ERROR, "NativeBridge", 
-                "renderToRecordingSurface ERROR: eglMakeCurrent restore failed! err=0x%x, drawSurface=%p", 
-                eglGetError(), drawSurface);
-        }
-
-        // Restore saved OpenGL states cleanly
-        glActiveTexture(lastActiveTex);
-        glBindTexture(GL_TEXTURE_2D, lastTex);
-        glBindBuffer(GL_ARRAY_BUFFER, lastVbo);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, lastEbo);
-        glBindVertexArray(lastVao);
-
-        // Restore Attributes
-        if (isAttrib0Enabled) glEnableVertexAttribArray(0); else glDisableVertexAttribArray(0);
-        if (isAttrib1Enabled) glEnableVertexAttribArray(1); else glDisableVertexAttribArray(1);
-
-        // Restore Capabilities
-        if (isBlendEnabled) glEnable(GL_BLEND); else glDisable(GL_BLEND);
-        if (isDepthTestEnabled) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
-        if (isCullFaceEnabled) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
-        if (isScissorTestEnabled) glEnable(GL_SCISSOR_TEST); else glDisable(GL_SCISSOR_TEST);
-
-        glBindFramebuffer(GL_FRAMEBUFFER, lastFbo);
-        glUseProgram(lastProgram);
-        glViewport(lastViewport[0], lastViewport[1], lastViewport[2], lastViewport[3]);
-
-        // Consume any recording GL errors and log them, ensuring no leakage to outer loops
-        GLenum err;
-        while ((err = glGetError()) != GL_NO_ERROR) {
-            __android_log_print(ANDROID_LOG_ERROR, "NativeBridge", 
-                "renderToRecordingSurface GL ERROR: 0x%x during recording draw!", err);
-        }
+        recordQueue.push({tex.id, timestampNs});
+        recordCond.notify_one();
     }
 #endif
 };
