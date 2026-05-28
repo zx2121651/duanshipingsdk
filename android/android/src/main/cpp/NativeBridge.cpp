@@ -421,10 +421,6 @@ Java_com_sdk_video_RenderEngine_nativeProcessFrame(JNIEnv *env, jobject thiz, jl
         return static_cast<int>(ErrorCode::ERR_RENDER_INVALID_STATE);
     }
 
-#ifndef WIN32
-    wrapper->renderToRecordingSurface(outTex, width, height, timestampNs);
-#endif
-
     auto end = std::chrono::high_resolution_clock::now();
     long long durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
@@ -1238,6 +1234,18 @@ Java_com_sdk_video_RenderEngine_nativeGetExpressions(
     jfloatArray arr = env->NewFloatArray(12);
     env->SetFloatArrayRegion(arr, 0, 12, buf);
     return arr;
+}
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeRenderToRecordingSurface(
+    JNIEnv* env, jobject, jlong handle, jint textureId, jint width, jint height, jlong timestampNs)
+{
+#ifndef WIN32
+    EngineWrapper* wrapper = reinterpret_cast<EngineWrapper*>(handle);
+    if (!wrapper) return;
+    Texture tex = { static_cast<uint32_t>(textureId), static_cast<uint32_t>(width), static_cast<uint32_t>(height) };
+    wrapper->renderToRecordingSurface(tex, width, height, timestampNs);
+#endif
 }
 
 } // extern "C"

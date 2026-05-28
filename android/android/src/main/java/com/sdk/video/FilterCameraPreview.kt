@@ -41,6 +41,7 @@ fun FilterCameraPreview(
                 modifier = Modifier.fillMaxSize(),
                 factory = { context ->
                     val texIdHolder = java.util.concurrent.atomic.AtomicInteger(-1)
+                    val ptsHolder = java.util.concurrent.atomic.AtomicLong(-1L)
 
                     GLSurfaceView(context).apply {
                         preserveEGLContextOnPause = true
@@ -157,6 +158,11 @@ fun FilterCameraPreview(
                                     GLES20.glDisableVertexAttribArray(positionHandle)
                                     GLES20.glDisableVertexAttribArray(texCoordHandle)
 
+                                    val pts = ptsHolder.get()
+                                    if (pts >= 0L && filterManager.isRecording()) {
+                                        filterManager.renderToRecordingSurface(texId, pts)
+                                    }
+
                                     filterManager.markFrameRendered(texId)
                                 }
                             }
@@ -166,8 +172,9 @@ fun FilterCameraPreview(
 
                         // 直接回调：native 每处理完一帧（GL 线程），同步通知显示层
                         // 绕过协程/SharedFlow，彻底消除调度延迟和 detach 丢帧风险
-                        filterManager.onFrameOutput = { texId ->
+                        filterManager.onFrameOutput = { texId, timestampNs ->
                             texIdHolder.set(texId)
+                            ptsHolder.set(timestampNs)
                             requestRender()
                         }
                     }

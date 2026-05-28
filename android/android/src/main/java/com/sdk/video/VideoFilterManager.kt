@@ -95,7 +95,7 @@ class VideoFilterManager(private val context: android.content.Context,
      * 直接回调（绕过协程/SharedFlow）：在 GL 线程直接通知显示层。
      * FilterCameraPreview 设置此回调以实现零延迟帧更新。
      */
-    var onFrameOutput: ((Int) -> Unit)? = null
+    var onFrameOutput: ((Int, Long) -> Unit)? = null
 
     /**
      * 核心输出流：向外发射每次渲染完成后的纹理 ID。
@@ -162,12 +162,12 @@ class VideoFilterManager(private val context: android.content.Context,
             }
 
             // 设置底层每处理完一帧的回调监听
-            renderEngine.onFrameProcessedListener = { outputTexId ->
+            renderEngine.onFrameProcessedListener = { outputTexId, timestampNs ->
                 // Note: outputTexId < 0 cases are now handled by onRenderErrorListener
                 if (outputTexId >= 0) {
                     // 双通道通知：
                     // 1. 直接回调（GL 线程，零延迟）→ 显示层立即同步纹理 ID
-                    onFrameOutput?.invoke(outputTexId)
+                    onFrameOutput?.invoke(outputTexId, timestampNs)
                     // 2. SharedFlow（协程消费）→ 供录制等其他消费者使用
                     val emitted = _processedFrames.tryEmit(Result.success(outputTexId))
                     if (!emitted) {
@@ -558,5 +558,13 @@ class VideoFilterManager(private val context: android.content.Context,
 
         // 安全中止外层监听器
         scope.cancel() // 取消协程域中的所有任务
+    }
+
+    fun isRecording(): Boolean {
+        return videoEncoder != null
+    }
+
+    fun renderToRecordingSurface(textureId: Int, timestampNs: Long) {
+        renderEngine.renderToRecordingSurface(textureId, timestampNs)
     }
 }

@@ -43,7 +43,7 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     @Volatile
     var speedRate: Float = 1.0f
 
-    var onFrameProcessedListener: ((outputTextureId: Int) -> Unit)? = null
+    var onFrameProcessedListener: ((outputTextureId: Int, timestampNs: Long) -> Unit)? = null
     var onPerformanceUpdateListener: ((durationMs: Long) -> Unit)? = null
     var onRenderErrorListener: ((errorCode: Int, errorMessage: String) -> Unit)? = null
 
@@ -166,7 +166,7 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
 
             // 如果返回值是负数，表示产生了错误
             if (outputTexId >= 0) {
-                onFrameProcessedListener?.invoke(outputTexId)
+                onFrameProcessedListener?.invoke(outputTexId, timestampNs)
                 if (lastFrameTimeMs > 0) {
                     onPerformanceUpdateListener?.invoke(lastFrameTimeMs)
                 }
@@ -180,6 +180,14 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     }
 
     // Recording API
+    fun renderToRecordingSurface(textureId: Int, timestampNs: Long) {
+        handleLock.read {
+            if (nativeHandle != 0L) {
+                nativeRenderToRecordingSurface(nativeHandle, textureId, width, height, timestampNs)
+            }
+        }
+    }
+
     fun setRecordingAnchor(anchorTimeNs: Long) {
         recordingStartTimeNs = anchorTimeNs
         lastVideoPtsNs = -1L
@@ -630,6 +638,7 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     private external fun nativeInit(assetManager: android.content.res.AssetManager): Long
     private external fun nativeRelease(handle: Long)
     private external fun nativeProcessFrame(handle: Long, textureId: Int, width: Int, height: Int, matrix: FloatArray, timestampNs: Long): Int
+    private external fun nativeRenderToRecordingSurface(handle: Long, textureId: Int, width: Int, height: Int, timestampNs: Long)
     private external fun nativeSetRecordingSurface(handle: Long, surface: Surface?)
     private external fun nativeUpdateParameterFloat(handle: Long, key: String, value: Float)
     private external fun nativeUpdateParameterInt(handle: Long, key: String, value: Int)
