@@ -150,19 +150,86 @@ struct EngineWrapper {
                 fsrc_str = filterEngine->getShaderManager()->getShaderSource("record_passthrough.frag");
             }
 
-            const char* vsrc = vsrc_str.c_str();
-            const char* fsrc = fsrc_str.c_str();
+            const char* vsrc = vsrc_str.empty() ? nullptr : vsrc_str.c_str();
+            const char* fsrc = fsrc_str.empty() ? nullptr : fsrc_str.c_str();
 
-            auto compile = [](GLenum type, const char* s) {
-                GLuint sh = glCreateShader(type); glShaderSource(sh, 1, &s, NULL); glCompileShader(sh); return sh;
+            const char* DEFAULT_RECORD_VERT = R"(#version 300 es
+layout(location=0) in vec4 position;
+layout(location=1) in vec2 inputTextureCoordinate;
+out vec2 vtc;
+void main() {
+    gl_Position = position;
+    vtc = inputTextureCoordinate;
+})";
+
+            const char* DEFAULT_RECORD_FRAG = R"(#version 300 es
+precision mediump float;
+in vec2 vtc;
+out vec4 c;
+uniform sampler2D tex;
+void main() {
+    c = texture(tex, vtc);
+})";
+
+            if (!vsrc) {
+                __android_log_print(ANDROID_LOG_WARN, "NativeBridge", "record_passthrough.vert is empty, using fallback.");
+                vsrc = DEFAULT_RECORD_VERT;
+            }
+            if (!fsrc) {
+                __android_log_print(ANDROID_LOG_WARN, "NativeBridge", "record_passthrough.frag is empty, using fallback.");
+                fsrc = DEFAULT_RECORD_FRAG;
+            }
+
+            auto compile = [](GLenum type, const char* s, const char* name) {
+                GLuint sh = glCreateShader(type);
+                glShaderSource(sh, 1, &s, NULL);
+                glCompileShader(sh);
+                GLint compiled = 0;
+                glGetShaderiv(sh, GL_COMPILE_STATUS, &compiled);
+                if (!compiled) {
+                    GLint infoLen = 0;
+                    glGetShaderiv(sh, GL_INFO_LOG_LENGTH, &infoLen);
+                    if (infoLen > 1) {
+                        std::vector<char> infoLog(infoLen);
+                        glGetShaderInfoLog(sh, infoLen, NULL, infoLog.data());
+                        __android_log_print(ANDROID_LOG_ERROR, "NativeBridge",
+                            "Shader compile error (%s): %s", name, infoLog.data());
+                    }
+                    glDeleteShader(sh);
+                    return (GLuint)0;
+                }
+                return sh;
             };
-            GLuint vs = compile(GL_VERTEX_SHADER, vsrc);
-            GLuint fs = compile(GL_FRAGMENT_SHADER, fsrc);
-            recordProgram = glCreateProgram();
-            glAttachShader(recordProgram, vs); glAttachShader(recordProgram, fs);
-            glLinkProgram(recordProgram);
+
+            GLuint vs = compile(GL_VERTEX_SHADER, vsrc, "vertex");
+            GLuint fs = compile(GL_FRAGMENT_SHADER, fsrc, "fragment");
+            if (vs != 0 && fs != 0) {
+                recordProgram = glCreateProgram();
+                glAttachShader(recordProgram, vs);
+                glAttachShader(recordProgram, fs);
+                glLinkProgram(recordProgram);
+                GLint linked = 0;
+                glGetProgramiv(recordProgram, GL_LINK_STATUS, &linked);
+                if (!linked) {
+                    GLint infoLen = 0;
+                    glGetProgramiv(recordProgram, GL_INFO_LOG_LENGTH, &infoLen);
+                    if (infoLen > 1) {
+                        std::vector<char> infoLog(infoLen);
+                        glGetProgramInfoLog(recordProgram, infoLen, NULL, infoLog.data());
+                        __android_log_print(ANDROID_LOG_ERROR, "NativeBridge",
+                            "Shader link error: %s", infoLog.data());
+                    }
+                    glDeleteProgram(recordProgram);
+                    recordProgram = 0;
+                }
+                glDeleteShader(vs);
+                glDeleteShader(fs);
+            } else {
+                if (vs != 0) glDeleteShader(vs);
+                if (fs != 0) glDeleteShader(fs);
+            }
         }
-        return true;
+        return recordProgram != 0;
     }
 
     void releaseRecordingSurface() {
@@ -177,7 +244,10 @@ struct EngineWrapper {
     }
 
     void renderToRecordingSurface(Texture tex, int width, int height, int64_t timestampNs) {
-        if (recordingSurface == EGL_NO_SURFACE || eglDisplay == EGL_NO_DISPLAY) return;
+        if (recordingSurface == EGL_NO_SURFACE || eglDisplay == EGL_NO_DISPLAY || recordProgram == 0) return;
+
+        // Clear any previous GL errors to avoid polluting current recording process
+        while (glGetError() != GL_NO_ERROR);
 
         // Save current draw surface & context dynamically to prevent context mismatch/invalidation
         EGLSurface drawSurface = eglGetCurrentSurface(EGL_DRAW);
@@ -198,12 +268,45 @@ struct EngineWrapper {
         GLint lastProgram = 0;
         glGetIntegerv(GL_CURRENT_PROGRAM, &lastProgram);
 
+        // Save VAO/VBO/EBO/Texture state
+        GLint lastVao = 0;
+        glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &lastVao);
+        GLint lastVbo = 0;
+        glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &lastVbo);
+        GLint lastEbo = 0;
+        glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &lastEbo);
+        GLint lastTex = 0;
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &lastTex);
+        GLint lastActiveTex = 0;
+        glGetIntegerv(GL_ACTIVE_TEXTURE, &lastActiveTex);
+
+        // Save Attribute states
+        GLint isAttrib0Enabled = 0;
+        GLint isAttrib1Enabled = 0;
+        glGetVertexAttribiv(0, GL_VERTEX_ATTRIB_ARRAY_ENABLED, &isAttrib0Enabled);
+        glGetVertexAttribiv(1, GL_VERTEX_ATTRIB_ARRAY_ENABLED, &isAttrib1Enabled);
+
+        // Save Capabilities
+        GLboolean isBlendEnabled = glIsEnabled(GL_BLEND);
+        GLboolean isDepthTestEnabled = glIsEnabled(GL_DEPTH_TEST);
+        GLboolean isCullFaceEnabled = glIsEnabled(GL_CULL_FACE);
+        GLboolean isScissorTestEnabled = glIsEnabled(GL_SCISSOR_TEST);
+
+        // Synchronize display commands before making the recording surface current
+        glFinish();
+
         // Make recording surface current using the guaranteed-active currentContext
         if (!eglMakeCurrent(eglDisplay, recordingSurface, recordingSurface, currentContext)) {
             __android_log_print(ANDROID_LOG_ERROR, "NativeBridge", 
                 "renderToRecordingSurface ERROR: eglMakeCurrent to recordingSurface failed! err=0x%x", eglGetError());
             return;
         }
+
+        // Disable blending and tests to draw straight onto the surface
+        glDisable(GL_BLEND);
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_CULL_FACE);
+        glDisable(GL_SCISSOR_TEST);
 
         // Must bind default framebuffer (0) so we draw to the window surface, not the last FBO
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -242,8 +345,12 @@ struct EngineWrapper {
             eglPresentationTimeANDROID(eglDisplay, recordingSurface, timestampNs);
         }
 
+        // Flush and swap buffers to present
         glFlush();
         eglSwapBuffers(eglDisplay, recordingSurface);
+
+        // Synchronize commands on recording surface before returning to display
+        glFinish();
 
         // Restore original display surface
         if (!eglMakeCurrent(eglDisplay, drawSurface, readSurface, currentContext)) {
@@ -253,9 +360,32 @@ struct EngineWrapper {
         }
 
         // Restore saved OpenGL states cleanly
+        glActiveTexture(lastActiveTex);
+        glBindTexture(GL_TEXTURE_2D, lastTex);
+        glBindBuffer(GL_ARRAY_BUFFER, lastVbo);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, lastEbo);
+        glBindVertexArray(lastVao);
+
+        // Restore Attributes
+        if (isAttrib0Enabled) glEnableVertexAttribArray(0); else glDisableVertexAttribArray(0);
+        if (isAttrib1Enabled) glEnableVertexAttribArray(1); else glDisableVertexAttribArray(1);
+
+        // Restore Capabilities
+        if (isBlendEnabled) glEnable(GL_BLEND); else glDisable(GL_BLEND);
+        if (isDepthTestEnabled) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
+        if (isCullFaceEnabled) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
+        if (isScissorTestEnabled) glEnable(GL_SCISSOR_TEST); else glDisable(GL_SCISSOR_TEST);
+
         glBindFramebuffer(GL_FRAMEBUFFER, lastFbo);
         glUseProgram(lastProgram);
         glViewport(lastViewport[0], lastViewport[1], lastViewport[2], lastViewport[3]);
+
+        // Consume any recording GL errors and log them, ensuring no leakage to outer loops
+        GLenum err;
+        while ((err = glGetError()) != GL_NO_ERROR) {
+            __android_log_print(ANDROID_LOG_ERROR, "NativeBridge", 
+                "renderToRecordingSurface GL ERROR: 0x%x during recording draw!", err);
+        }
     }
 #endif
 };
