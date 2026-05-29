@@ -23,6 +23,8 @@
 		1A00000000000102 /* AudioEffects.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000102 /* AudioEffects.cpp */; };
 		1A00000000000020 /* GLTexture.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000022 /* GLTexture.cpp */; };
 		1A00000000000021 /* GLRenderDevice.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000023 /* GLRenderDevice.cpp */; };
+		1A00000000000033 /* GLHardwareTexture.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000033 /* GLHardwareTexture.cpp */; };
+		1B00000000000033 /* GLHardwareTexture.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLHardwareTexture.cpp; path = ../sdk-core/core/src/rhi/GLHardwareTexture.cpp; sourceTree = SOURCE_ROOT; };
 		1A00000000000030 /* GLBuffer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000030 /* GLBuffer.cpp */; };
 		1A00000000000031 /* GLVertexArray.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000031 /* GLVertexArray.cpp */; };
 		1A00000000000032 /* GLShaderProgram.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000032 /* GLShaderProgram.cpp */; };
@@ -40,6 +42,8 @@
 		1A00000000000016 /* Track.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000019 /* Track.cpp */; };
 		1A00000000000017 /* TimelineExporterIOS.mm in Sources */ = {isa = PBXBuildFile; fileRef = 1B0000000000001A /* TimelineExporterIOS.mm */; };
 		1A00000000000018 /* VideoDecoderIOS.mm in Sources */ = {isa = PBXBuildFile; fileRef = 1B0000000000001B /* VideoDecoderIOS.mm */; };
+				1A00000000000033 /* GLHardwareTexture.cpp in Sources */,
+				1B00000000000033 /* GLHardwareTexture.cpp */,
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -62,6 +66,7 @@
 		1B00000000000102 /* AudioEffects.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = AudioEffects.cpp; path = ../sdk-core/core/src/timeline/AudioEffects.cpp; sourceTree = SOURCE_ROOT; };
 		1B00000000000022 /* GLTexture.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLTexture.cpp; path = ../sdk-core/core/src/rhi/GLTexture.cpp; sourceTree = SOURCE_ROOT; };
 		1B00000000000023 /* GLRenderDevice.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLRenderDevice.cpp; path = ../sdk-core/core/src/rhi/GLRenderDevice.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000033 /* GLHardwareTexture.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLHardwareTexture.cpp; path = ../sdk-core/core/src/rhi/GLHardwareTexture.cpp; sourceTree = SOURCE_ROOT; };
 		1B00000000000030 /* GLBuffer.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLBuffer.cpp; path = ../sdk-core/core/src/rhi/GLBuffer.cpp; sourceTree = SOURCE_ROOT; };
 		1B00000000000031 /* GLVertexArray.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLVertexArray.cpp; path = ../sdk-core/core/src/rhi/GLVertexArray.cpp; sourceTree = SOURCE_ROOT; };
 		1B00000000000032 /* GLShaderProgram.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLShaderProgram.cpp; path = ../sdk-core/core/src/rhi/GLShaderProgram.cpp; sourceTree = SOURCE_ROOT; };
@@ -79,6 +84,7 @@
 		1B00000000000019 /* Track.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = Track.cpp; path = ../sdk-core/core/src/timeline/Track.cpp; sourceTree = SOURCE_ROOT; };
 		1B0000000000001A /* TimelineExporterIOS.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = TimelineExporterIOS.mm; path = ../sdk-core/core/src/timeline/TimelineExporterIOS.mm; sourceTree = SOURCE_ROOT; };
 		1B0000000000001B /* VideoDecoderIOS.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = VideoDecoderIOS.mm; path = ../sdk-core/core/src/timeline/VideoDecoderIOS.mm; sourceTree = SOURCE_ROOT; };
+				1B00000000000033 /* GLHardwareTexture.cpp */,
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -96,11 +102,13 @@
 			isa = PBXGroup;
 			children = (
 				1D00000000000002 /* Classes */,
+			path = Classes;
 				1B0000000000000A /* VideoSDK.framework */,
 			);
 			sourceTree = "<group>";
 		};
 		1D00000000000002 /* Classes */ = {
+			path = Classes;
 			isa = PBXGroup;
 			children = (
 				1B00000000000001 /* FilterEngine.swift */,
@@ -121,6 +129,7 @@
 				1B00000000000102 /* AudioEffects.cpp */,
 				1B00000000000022 /* GLTexture.cpp */,
 				1B00000000000023 /* GLRenderDevice.cpp */,
+		1B00000000000033 /* GLHardwareTexture.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLHardwareTexture.cpp; path = ../sdk-core/core/src/rhi/GLHardwareTexture.cpp; sourceTree = SOURCE_ROOT; };
 				1B0000000000000E /* FrameBuffer.cpp */,
 				1B0000000000000F /* FrameBufferPool.cpp */,
 				1B00000000000010 /* GLContextManager.cpp */,
@@ -135,6 +144,7 @@
 				1B00000000000019 /* Track.cpp */,
 				1B0000000000001A /* TimelineExporterIOS.mm */,
 				1B0000000000001B /* VideoDecoderIOS.mm */,
+				1B00000000000033 /* GLHardwareTexture.cpp */,
 			);
 			path = Classes;
 			sourceTree = "<group>";
@@ -221,6 +231,7 @@
 				1A00000000000102 /* AudioEffects.cpp in Sources */,
 				1A00000000000020 /* GLTexture.cpp in Sources */,
 				1A00000000000021 /* GLRenderDevice.cpp in Sources */,
+		1A00000000000033 /* GLHardwareTexture.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000033 /* GLHardwareTexture.cpp */; };
 				1A00000000000030 /* GLBuffer.cpp in Sources */,
 				1A00000000000031 /* GLVertexArray.cpp in Sources */,
 				1A00000000000032 /* GLShaderProgram.cpp in Sources */,
@@ -238,6 +249,7 @@
 				1A00000000000016 /* Track.cpp in Sources */,
 				1A00000000000017 /* TimelineExporterIOS.mm in Sources */,
 				1A00000000000018 /* VideoDecoderIOS.mm in Sources */,
+				1A00000000000033 /* GLHardwareTexture.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
