@@ -38,8 +38,8 @@ public:
     uint32_t getWidth() const override { return m_width; }
     uint32_t getHeight() const override { return m_height; }
     uint32_t getId() const override { return m_id; }
+    uint32_t getTarget() const override { return m_target; }
     TextureFormat getFormat() const override { return TextureFormat::RGBA8; } // Logical default
-    uint32_t getTarget() const { return m_target; }
 
 private:
     uint32_t m_id;

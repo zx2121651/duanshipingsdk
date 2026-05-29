@@ -1,6 +1,19 @@
 #include "../include/FilterEngine.h"
 #define LOG_TAG "FilterEngine"
 #include "../include/Log.h"
+
+#ifdef __APPLE__
+    #include <OpenGLES/ES3/gl.h>
+#elif defined(__ANDROID__)
+    #include <GLES3/gl3.h>
+#else
+    #include "GLES3/gl3.h"
+#endif
+
+#ifndef GL_NO_ERROR
+#define GL_NO_ERROR 0
+#endif
+
 #include "rhi/GLRenderDevice.h"
 #include "../include/rhi/RenderDeviceFactory.h"
 #include <iostream>
@@ -98,11 +111,46 @@ ResultPayload<Texture> FilterEngine::processFrame(const Texture& textureIn, int 
         if (!res.isOk()) {
             return ResultPayload<Texture>::error(res.getErrorCode(), "Pipeline auto-rebuild failed: " + res.getMessage());
         }
+
+        // Post-rebuild error check
+        GLenum postRebuildErr = glGetError();
+        if (postRebuildErr != GL_NO_ERROR) {
+            LOGE("FilterEngine: GL Error detected after pipeline rebuild: 0x%x", postRebuildErr);
+        }
+
         m_isGraphDirty = false;
     }
 
     if (m_graph && m_outputNode) {
         LOGD("Processing frame: input %u, size %dx%d", textureIn.id, width, height);
+
+        // Task 2: Insert a rigorous pre-check glGetError() block right before sync buffers are swapped or SurfaceTexture updates.
+        GLenum err = glGetError();
+        if (err != GL_NO_ERROR) {
+            LOGE("FilterEngine: GL Error detected BEFORE frame processing: 0x%x. Resetting state...", err);
+
+            // Task 2: Dump the shader pipeline uniform compilation states
+            for (const auto& node : m_graph->getNodes()) {
+                if (auto filterNode = std::dynamic_pointer_cast<FilterNode>(node)) {
+                    auto filter = filterNode->getFilter();
+                    if (filter) {
+                        LOGW("Node %s: programId %u",
+                             filterNode->getName().c_str(),
+                             filter->getProgramId());
+                    }
+                }
+            }
+
+            // Task 2: Reset the active bound texture unit status instead of allowing it to blind downstream FBO drawing nodes.
+            for (int i = 0; i < 4; ++i) {
+                glActiveTexture(GL_TEXTURE0 + i);
+                glBindTexture(GL_TEXTURE_2D, 0);
+                glBindTexture(0x8D65 /* GL_TEXTURE_EXTERNAL_OES */, 0);
+            }
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            glUseProgram(0);
+        }
+
         if (m_cameraNode) {
             VideoFrame inFrame;
             inFrame.textureId = textureIn.id;
@@ -126,7 +174,7 @@ ResultPayload<Texture> FilterEngine::processFrame(const Texture& textureIn, int 
 
         if (!outFrame.isValid()) {
             LOGE("Pipeline produced an invalid output frame (missing texture)");
-            return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Pipeline frame is invalid");
+            return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Pipeline produced an invalid output frame");
         }
 
         m_pendingFrames[outFrame.textureId] = outFrame;
@@ -299,6 +347,7 @@ Result FilterEngine::buildCameraPipeline() {
         }
     }
     if (!hasOESFilter) {
+        LOGW("OES2RGBFilter NOT FOUND in current graph. Adding it automatically.");
         auto oesFilter = std::make_shared<OES2RGBFilter>();
         oesFilter->setShaderManager(m_shaderManager);
         oesFilter->setRenderDevice(m_renderDevice);

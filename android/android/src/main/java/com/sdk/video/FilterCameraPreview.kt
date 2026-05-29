@@ -81,7 +81,10 @@ fun FilterCameraPreview(
                             }
 
                             override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
-                                filterManager.scope.launch {
+                                // Task 3: Offload CameraX/Engine initialization to a background context.
+                                // Although initialize() eventually runs on GL thread, the setup orchestration
+                                // shouldn't block the SurfaceCreated callback which can be invoked by Main.
+                                filterManager.scope.launch(Dispatchers.Default) {
                                     val res = filterManager.initialize()
                                     if (res.isFailure) {
                                         android.util.Log.e(

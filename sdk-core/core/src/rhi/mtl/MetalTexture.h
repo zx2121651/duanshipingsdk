@@ -23,6 +23,7 @@ public:
     uint32_t getWidth()  const override { return m_width; }
     uint32_t getHeight() const override { return m_height; }
     uint32_t getId()     const override { return 0; } // N/A for Metal
+    uint32_t getTarget() const override { return 0; } // N/A for Metal
     TextureFormat getFormat() const override { return m_format; }
 
     MTLTextureRef mtlTexture() const { return m_texture; }
