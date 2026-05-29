@@ -43,15 +43,15 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		1B00000000000001 /* FilterEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Classes/FilterEngine.swift; sourceTree = "<group>"; };
-		1B00000000000002 /* FilterCameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Classes/FilterCameraView.swift; sourceTree = "<group>"; };
-		1B00000000000003 /* VideoExportConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Classes/VideoExportConfig.swift; sourceTree = "<group>"; };
-		1B00000000000004 /* VideoFilterManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Classes/VideoFilterManager.swift; sourceTree = "<group>"; };
-		1B00000000000005 /* VideoEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Classes/VideoEncoder.swift; sourceTree = "<group>"; };
-		1B00000000000006 /* IOSAssetProvider.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = Classes/IOSAssetProvider.mm; sourceTree = "<group>"; };
-		1B00000000000007 /* FilterEngineWrapper.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = Classes/FilterEngineWrapper.mm; sourceTree = "<group>"; };
-		1B00000000000008 /* IOSAssetProvider.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Classes/IOSAssetProvider.h; sourceTree = "<group>"; };
-		1B00000000000009 /* FilterEngineWrapper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Classes/FilterEngineWrapper.h; sourceTree = "<group>"; };
+		1B00000000000001 /* FilterEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterEngine.swift; sourceTree = "<group>"; };
+		1B00000000000002 /* FilterCameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterCameraView.swift; sourceTree = "<group>"; };
+		1B00000000000003 /* VideoExportConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoExportConfig.swift; sourceTree = "<group>"; };
+		1B00000000000004 /* VideoFilterManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFilterManager.swift; sourceTree = "<group>"; };
+		1B00000000000005 /* VideoEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoEncoder.swift; sourceTree = "<group>"; };
+		1B00000000000006 /* IOSAssetProvider.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = IOSAssetProvider.mm; sourceTree = "<group>"; };
+		1B00000000000007 /* FilterEngineWrapper.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = FilterEngineWrapper.mm; sourceTree = "<group>"; };
+		1B00000000000008 /* IOSAssetProvider.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = IOSAssetProvider.h; sourceTree = "<group>"; };
+		1B00000000000009 /* FilterEngineWrapper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = FilterEngineWrapper.h; sourceTree = "<group>"; };
 		1B0000000000000A /* VideoSDK.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = VideoSDK.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		1B0000000000000B /* GLStateManager.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLStateManager.cpp; path = ../sdk-core/core/src/GLStateManager.cpp; sourceTree = SOURCE_ROOT; };
 		1B0000000000000C /* FilterEngine.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = FilterEngine.cpp; path = ../sdk-core/core/src/FilterEngine.cpp; sourceTree = SOURCE_ROOT; };
