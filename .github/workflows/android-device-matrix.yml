@@ -49,6 +49,7 @@ jobs:
           key: ndk-${{ runner.os }}-${{ hashFiles('android/build.gradle') }}
 
       - name: Build debug APK + test APK
+        working-directory: android
         run: |
           chmod +x gradlew
           ./gradlew :sample-android:assembleDebug \
