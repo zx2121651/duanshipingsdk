@@ -20,6 +20,7 @@
 #include <sstream>
 #include <fstream>
 #include <vector>
+#include <cstring>
 #include <cstdio>
 
 namespace sdk {
