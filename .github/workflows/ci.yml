@@ -40,6 +40,8 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Install CMake + Ninja
         run: |
@@ -48,7 +50,7 @@ jobs:
 
       - name: Configure (host, no Android)
         run: |
-          cmake -B build/host \
+          cmake -B build/host -S sdk-core \
             -DCMAKE_BUILD_TYPE=Debug \
             -DUSE_MOCK_GL=ON \
             -G Ninja
@@ -81,6 +83,8 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
@@ -116,6 +120,8 @@ jobs:
     needs: android-unit-tests
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
@@ -167,6 +173,8 @@ jobs:
       (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/'))
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
@@ -236,6 +244,8 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Install CMake + Ninja
         run: |
@@ -244,7 +254,7 @@ jobs:
 
       - name: Configure host benchmark build
         run: |
-          cmake -B build/perf \
+          cmake -B build/perf -S sdk-core \
             -DCMAKE_BUILD_TYPE=Release \
             -DUSE_MOCK_GL=ON \
             -G Ninja
