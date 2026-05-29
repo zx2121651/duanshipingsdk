@@ -15,7 +15,6 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          submodules: recursive
 
       - name: Setup Xcode version
         uses: maxim-lobanov/setup-xcode@v1
