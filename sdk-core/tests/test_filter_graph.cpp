@@ -130,7 +130,7 @@ void test_filter_engine_invalid_output() {
 
     assert(!res.isOk());
     assert(res.getErrorCode() == ErrorCode::ERR_RENDER_INVALID_STATE);
-    assert(res.getMessage().find("invalid output frame") != std::string::npos);
+    assert(res.getMessage().find("Pipeline frame is invalid") != std::string::npos);
 
     std::cout << "test_filter_engine_invalid_output passed" << std::endl;
 }

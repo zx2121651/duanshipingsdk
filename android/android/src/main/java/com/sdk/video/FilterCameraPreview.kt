@@ -46,7 +46,10 @@ fun FilterCameraPreview(
 
                     GLSurfaceView(context).apply {
                         preserveEGLContextOnPause = true
-                        filterManager.glThreadDispatcher = { runnable -> queueEvent(runnable) }
+                        filterManager.glThreadDispatcher = { runnable ->
+                            queueEvent(runnable)
+                            requestRender()
+                        }
                         setEGLContextClientVersion(3)
 
                         val renderer = object : GLSurfaceView.Renderer {
