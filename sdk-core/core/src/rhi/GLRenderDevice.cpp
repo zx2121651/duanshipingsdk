@@ -203,7 +203,11 @@ void GLShaderResourceSet::bindTexture(uint32_t slot, std::shared_ptr<ITexture> t
 void GLShaderResourceSet::apply() {
     for (const auto& b : m_bindings) {
         glActiveTexture(GL_TEXTURE0 + b.slot);
-        glBindTexture(GL_TEXTURE_2D, b.texture ? b.texture->getId() : 0);
+        if (b.texture) {
+            glBindTexture(b.texture->getTarget(), b.texture->getId());
+        } else {
+            glBindTexture(GL_TEXTURE_2D, 0);
+        }
     }
 }
 
@@ -420,27 +424,40 @@ std::shared_ptr<ITexture> GLRenderDevice::createTexture(const TextureDesc& desc)
                        internalFormat == GL_COMPRESSED_RGBA_ASTC_6x6_KHR ||
                        internalFormat == GL_COMPRESSED_RGBA_ASTC_8x8_KHR);
 
-    if (isCompressed) {
-        glCompressedTexImage2D(texTarget, 0, internalFormat, desc.width, desc.height, 0, 0, nullptr);
+    if (texTarget != GL_TEXTURE_EXTERNAL_OES) {
+        if (isCompressed) {
+            glCompressedTexImage2D(texTarget, 0, internalFormat, desc.width, desc.height, 0, 0, nullptr);
+        } else {
+            glTexImage2D(texTarget, 0, internalFormat, desc.width, desc.height, 0, baseFormat, pixelType, nullptr);
+        }
     } else {
-        glTexImage2D(texTarget, 0, internalFormat, desc.width, desc.height, 0, baseFormat, pixelType, nullptr);
+        // Task 1: Block any storage reallocation (glTexImage2D) on OES textures
+        std::cerr << "RHI Warning: Attempted to call glTexImage2D on GL_TEXTURE_EXTERNAL_OES, ignoring." << std::endl;
     }
 
     // Filter & wrap — min filter uses mip if >1 mip level
-    GLenum minFilter = (desc.mipLevels > 1) ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR;
-    glTexParameteri(texTarget, GL_TEXTURE_MIN_FILTER, minFilter);
-    glTexParameteri(texTarget, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(texTarget, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(texTarget, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    if (texTarget == GL_TEXTURE_EXTERNAL_OES) {
+        // Task 1: Intercept sampler parameter assignments for OES textures: override and force clamp modes to GL_CLAMP_TO_EDGE and filters to GL_LINEAR.
+        glTexParameteri(texTarget, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(texTarget, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(texTarget, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(texTarget, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    } else {
+        GLenum minFilter = (desc.mipLevels > 1) ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR;
+        glTexParameteri(texTarget, GL_TEXTURE_MIN_FILTER, minFilter);
+        glTexParameteri(texTarget, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(texTarget, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(texTarget, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-    // Generate mipmaps if requested
-    if (desc.mipLevels > 1) {
-        glGenerateMipmap(texTarget);
+        // Generate mipmaps if requested
+        if (desc.mipLevels > 1) {
+            glGenerateMipmap(texTarget);
+        }
     }
 
     glBindTexture(texTarget, 0);
 
-    auto tex = std::make_shared<GLTexture>(id, desc.width, desc.height, desc.format, desc.mipLevels);
+    auto tex = std::make_shared<GLTexture>(id, desc.width, desc.height, desc.format, desc.mipLevels, texTarget);
     tex->setOwnsHandle(true);
     return tex;
 }
@@ -664,6 +681,7 @@ std::shared_ptr<ITexture> GLRenderDevice::createTextureFromHardwareBuffer(const 
 
     glBindTexture(GL_TEXTURE_EXTERNAL_OES, id);
     s_glEGLImageTargetTexture2DOES(GL_TEXTURE_EXTERNAL_OES, eglImage);
+    // Task 1: STRICTLY ENFORCE the use of GL_TEXTURE_EXTERNAL_OES and override parameters
     glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);

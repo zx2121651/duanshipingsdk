@@ -13,6 +13,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 import android.opengl.GLES20
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 @Composable
@@ -84,7 +85,10 @@ fun FilterCameraPreview(
                             }
 
                             override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
-                                filterManager.scope.launch {
+                                // Task 3: Offload CameraX/Engine initialization to a background context.
+                                // Although initialize() eventually runs on GL thread, the setup orchestration
+                                // shouldn't block the SurfaceCreated callback which can be invoked by Main.
+                                filterManager.scope.launch(Dispatchers.Default) {
                                     val res = filterManager.initialize()
                                     if (res.isFailure) {
                                         android.util.Log.e(

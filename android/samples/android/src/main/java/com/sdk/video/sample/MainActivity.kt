@@ -109,11 +109,14 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startCamera() {
+        // Task 3: Decouple structural operations from the Android UI main thread.
+        // Use a background thread for CameraX provider acquisition and binding negotiation.
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
         cameraProviderFuture.addListener({
-            val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
+            lifecycleScope.launch(Dispatchers.Default) {
+                val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
 
-            val resolutionSelector = ResolutionSelector.Builder()
+                val resolutionSelector = ResolutionSelector.Builder()
                 .setResolutionStrategy(
                     ResolutionStrategy(
                         Size(1080, 1920),
@@ -168,15 +171,16 @@ class MainActivity : ComponentActivity() {
                 filterManager = newManager
             }
 
-            try {
-                cameraProvider.unbindAll()
-                val camera = cameraProvider.bindToLifecycle(this@MainActivity, cameraSelector, preview, imageCapture)
-                viewModel.bindCamera(camera)
-            } catch (exc: Exception) {
-                Log.e(TAG, "Use case binding failed", exc)
-                Toast.makeText(this@MainActivity, "Camera failed", Toast.LENGTH_SHORT).show()
+            runOnUiThread {
+                try {
+                    cameraProvider.unbindAll()
+                    val camera = cameraProvider.bindToLifecycle(this@MainActivity, cameraSelector, preview, imageCapture)
+                    viewModel.bindCamera(camera)
+                } catch (exc: Exception) {
+                    Log.e(TAG, "Use case binding failed", exc)
+                    Toast.makeText(this@MainActivity, "Camera failed", Toast.LENGTH_SHORT).show()
+                }
             }
-
         }, ContextCompat.getMainExecutor(this))
     }
 

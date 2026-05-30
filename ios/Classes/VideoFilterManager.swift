@@ -56,7 +56,7 @@ public actor VideoFilterManager {
     /**
      * 核心输出流：接收者可以通过 `for await result in processedFrames` 不断获取处理后的帧。
      */
-    public let processedFrames: AsyncStream<Result<CVPixelBuffer, Error>>
+    nonisolated public let processedFrames: AsyncStream<Result<CVPixelBuffer, Error>>
 
     public init() {
         self.engine = FilterEngine()

@@ -1,17 +1,17 @@
 #import "FilterEngineWrapper.h"
-#import "../../core/include/FilterEngine.h"
+#import "../../sdk-core/core/include/FilterEngine.h"
 #import "IOSAssetProvider.h"
-#import "../../core/include/Filters.h"
+#import "../../sdk-core/core/include/Filters.h"
 #import <OpenGLES/ES3/glext.h>
 #import <OpenGLES/ES2/glext.h>
 
 using namespace sdk::video;
 
 #define HAS_METAL
-#import "../../core/src/rhi/mtl/MetalRenderDevice.h"
+#import "../../sdk-core/core/src/rhi/mtl/MetalRenderDevice.h"
 #import <Metal/Metal.h>
 #import <CoreVideo/CVMetalTextureCache.h>
-#include "../../core/src/rhi/mtl/MetalRenderDevice.h"
+#include "../../sdk-core/core/src/rhi/mtl/MetalRenderDevice.h"
 
 #import <CoreVideo/CVOpenGLESTextureCache.h>
 

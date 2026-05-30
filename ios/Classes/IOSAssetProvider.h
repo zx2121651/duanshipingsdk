@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../core/include/IAssetProvider.h"
+#include "../../sdk-core/core/include/IAssetProvider.h"
 
 namespace sdk {
 namespace video {

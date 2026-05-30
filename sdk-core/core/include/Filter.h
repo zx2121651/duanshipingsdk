@@ -55,6 +55,9 @@ protected:
 
     // Common attributes/uniforms
     uint32_t m_inputImageTextureHandle;
+
+public:
+    uint32_t getProgramId() const { return m_programId; }
 };
 
 using FilterPtr = std::shared_ptr<Filter>;

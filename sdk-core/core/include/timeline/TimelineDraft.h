@@ -22,6 +22,7 @@
 #include <vector>
 #include <cstring>
 #include <cstdio>
+#include <cstring>
 
 namespace sdk {
 namespace video {

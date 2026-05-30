@@ -22,6 +22,7 @@ public:
     uint32_t getWidth()  const override { return m_width; }
     uint32_t getHeight() const override { return m_height; }
     uint32_t getId()     const override { return 0; } // N/A for Vulkan
+    uint32_t getTarget() const override { return 0; } // N/A for Vulkan
     TextureFormat getFormat() const override { return m_format; }
 
     VkImage     image()     const { return m_image; }
