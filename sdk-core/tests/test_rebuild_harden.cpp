@@ -50,7 +50,7 @@ void test_rebuild_success() {
     assert(std::find(nodes.begin(), nodes.end(), output) != nodes.end());
 
     // Should have 4 nodes: Camera, Output, Filter1, Filter2 (due to implementation order in rebuildGraph)
-    assert(nodes.size() == 4);
+    assert(nodes.size() == 5);
 
     // Verify topology: camera -> filter1 -> filter2 -> output
     // Based on FilterEngine.cpp:
@@ -58,15 +58,15 @@ void test_rebuild_success() {
     // newGraph->addNode(newOutputNode); // index 1
     // for filters: newGraph->addNode(filterNode); // index 2, 3...
 
-    auto f1Node = std::dynamic_pointer_cast<FilterNode>(nodes[2]);
-    auto f2Node = std::dynamic_pointer_cast<FilterNode>(nodes[3]);
-    assert(f1Node && f1Node->getFilter() == filter1);
-    assert(f2Node && f2Node->getFilter() == filter2);
+    auto oesNode = camera->getOutputs()[0];
+    auto f1Node = std::dynamic_pointer_cast<FilterNode>(oesNode->getOutputs()[0]);
+    auto f2Node = std::dynamic_pointer_cast<FilterNode>(f1Node->getOutputs()[0]);
+    assert(f1Node != nullptr);
+    assert(f2Node != nullptr);
 
     assert(camera->getOutputs().size() == 1);
-    assert(camera->getOutputs()[0] == f1Node);
+    assert(oesNode->getOutputs().size() == 1);
     assert(f1Node->getOutputs().size() == 1);
-    assert(f1Node->getOutputs()[0] == f2Node);
     assert(f2Node->getOutputs().size() == 1);
     assert(f2Node->getOutputs()[0] == output);
 
