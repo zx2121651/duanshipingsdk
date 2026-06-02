@@ -1,0 +1,149 @@
+name: Android Device Matrix CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      device_tier:
+        description: 'Device tier to test (lite | standard | full)'
+        required: false
+        default: 'standard'
+
+# ---------------------------------------------------------------------------
+# Secrets required (set in GitHub repo → Settings → Secrets):
+#   FIREBASE_SERVICE_ACCOUNT_JSON  — Firebase service account key (base64)
+#   FIREBASE_PROJECT_ID            — e.g. "my-sdk-test-project"
+# ---------------------------------------------------------------------------
+
+env:
+  JAVA_VERSION: '17'
+  GRADLE_OPTS: '-Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.daemon=false'
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────
+  # 1. Build APKs (debug + androidTest)
+  # ─────────────────────────────────────────────────────────────────────────
+  build:
+    name: Build APKs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Cache NDK
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/ndk
+          key: ndk-${{ runner.os }}-${{ hashFiles('android/build.gradle') }}
+
+      - name: Build debug APK + test APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew :sample-android:assembleDebug \
+                    :sample-android:assembleDebugAndroidTest \
+                    --no-daemon --stacktrace
+
+      - name: Upload APKs as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: apks
+          path: |
+            sample-android/build/outputs/apk/debug/*.apk
+            sample-android/build/outputs/apk/androidTest/debug/*.apk
+          retention-days: 3
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # 2. Firebase Test Lab — device matrix
+  # ─────────────────────────────────────────────────────────────────────────
+  firebase-test-lab:
+    name: Firebase Test Lab (${{ matrix.tier }})
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.inputs.device_tier != ''
+    strategy:
+      fail-fast: false
+      matrix:
+        tier: [ lite, standard ]   # 'full' only on manual dispatch
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download APKs
+        uses: actions/download-artifact@v4
+        with:
+          name: apks
+          path: apks/
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Run tests on Firebase Test Lab (${{ matrix.tier }})
+        run: |
+          APP_APK=$(find apks -name "*-debug.apk"     | head -1)
+          TEST_APK=$(find apks -name "*-debug-androidTest.apk" | head -1)
+
+          # Load device list for this tier
+          DEVICES=$(python3 scripts/ci/device_matrix.py --tier ${{ matrix.tier }} --format gcloud)
+
+          gcloud firebase test android run \
+            --project  "${{ secrets.FIREBASE_PROJECT_ID }}" \
+            --type     instrumentation \
+            --app      "$APP_APK" \
+            --test     "$TEST_APK" \
+            --test-runner-class "androidx.test.runner.AndroidJUnitRunner" \
+            $DEVICES \
+            --timeout  10m \
+            --results-bucket "gs://${{ secrets.FIREBASE_PROJECT_ID }}-test-results" \
+            --results-dir    "device-matrix-${{ github.run_id }}-${{ matrix.tier }}" \
+            --environment-variables "TEST_TIER=${{ matrix.tier }}" \
+            --no-performance-metrics \
+            --verbosity info
+
+      - name: Pull test results
+        if: always()
+        run: |
+          gsutil -m cp -r \
+            "gs://${{ secrets.FIREBASE_PROJECT_ID }}-test-results/device-matrix-${{ github.run_id }}-${{ matrix.tier }}/" \
+            test-results/ || true
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: firebase-results-${{ matrix.tier }}
+          path: test-results/
+          retention-days: 14
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # 3. Summary gate — fails the PR if any device tier failed
+  # ─────────────────────────────────────────────────────────────────────────
+  check-results:
+    name: Device Matrix Gate
+    needs: firebase-test-lab
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Evaluate results
+        run: |
+          if [ "${{ needs.firebase-test-lab.result }}" = "failure" ]; then
+            echo "::error::One or more device tiers FAILED. Check Firebase Test Lab results."
+            exit 1
+          fi
+          echo "All device tiers PASSED."

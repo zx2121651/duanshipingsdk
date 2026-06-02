@@ -1,0 +1,246 @@
+#include "../../include/timeline/VideoDecoder.h"
+
+#ifdef __APPLE__
+#import <AVFoundation/AVFoundation.h>
+#import <CoreVideo/CoreVideo.h>
+#define LOG_TAG "VideoDecoderIOS"
+#include "../../include/Log.h"
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <queue>
+#include <atomic>
+
+namespace sdk {
+namespace video {
+namespace timeline {
+
+class VideoDecoderIOS : public VideoDecoder {
+public:
+    VideoDecoderIOS() : m_assetReader(nullptr), m_trackOutput(nullptr), m_textureCache(nullptr), m_cvTexture(nullptr), m_width(0), m_height(0), m_running(false) {}
+
+    ~VideoDecoderIOS() override {
+        close();
+    }
+
+    Result open(const std::string& filePath) override {
+        NSString* path = [NSString stringWithUTF8String:filePath.c_str()];
+        NSURL* url = [NSURL fileURLWithPath:path];
+        AVURLAsset* asset = [AVURLAsset URLAssetWithURL:url options:nil];
+
+        NSError* error = nil;
+        m_assetReader = [[AVAssetReader alloc] initWithAsset:asset error:&error];
+        if (error) {
+            LOGE("Failed to create AVAssetReader for %s, error: %s", filePath.c_str(), [[error localizedDescription] UTF8String]);
+            return Result::error(-4001, "Failed to create AVAssetReader for " + filePath);
+        }
+
+        NSArray<AVAssetTrack*>* tracks = [asset tracksWithMediaType:AVMediaTypeVideo];
+        if (tracks.count == 0) {
+            LOGE("No video track found in %s", filePath.c_str());
+            return Result::error(-4003, "No video track found in " + filePath);
+        }
+        AVAssetTrack* videoTrack = tracks.firstObject;
+
+        CGSize size = videoTrack.naturalSize;
+        m_width = size.width;
+        m_height = size.height;
+
+        NSDictionary* outputSettings = @{
+            (id)kCVPixelBufferPixelFormatTypeKey: @(kCVPixelFormatType_32BGRA)
+        };
+
+        m_trackOutput = [[AVAssetReaderTrackOutput alloc] initWithTrack:videoTrack outputSettings:outputSettings];
+        m_trackOutput.alwaysCopiesSampleData = NO;
+
+        if ([m_assetReader canAddOutput:m_trackOutput]) {
+            [m_assetReader addOutput:m_trackOutput];
+        } else {
+            LOGE("Cannot add track output for %s", filePath.c_str());
+            return Result::error(-4004, "Cannot add track output for " + filePath);
+        }
+
+        EAGLContext* context = [EAGLContext currentContext];
+        if (!context) {
+            LOGE("No EAGLContext available for %s", filePath.c_str());
+            return Result::error(-4005, "No EAGLContext available");
+        }
+
+        CVReturn err = CVOpenGLESTextureCacheCreate(kCFAllocatorDefault, NULL, context, NULL, &m_textureCache);
+        if (err != kCVReturnSuccess) {
+            LOGE("Failed to create texture cache for %s, error: %d", filePath.c_str(), err);
+            return Result::error(-4006, "Failed to create texture cache");
+        }
+
+        [m_assetReader startReading];
+
+        m_running = true;
+        m_decodeThread = std::thread(&VideoDecoderIOS::decodeLoop, this);
+
+        return Result::ok();
+    }
+
+    void decodeLoop() {
+        while (m_running && [m_assetReader status] == AVAssetReaderStatusReading) {
+            {
+                std::unique_lock<std::mutex> lock(m_queueMutex);
+                m_queueCv.wait(lock, [this]() { return m_frameQueue.size() < 3 || !m_running; });
+            }
+            if (!m_running) break;
+
+            CMSampleBufferRef sampleBuffer = [m_trackOutput copyNextSampleBuffer];
+            if (sampleBuffer) {
+                CVPixelBufferRef pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
+                if (pixelBuffer) {
+                    CVPixelBufferRetain(pixelBuffer); // Retain to pass across thread
+
+                    std::shared_ptr<FrameBufferPacket> packet = std::make_shared<FrameBufferPacket>();
+                    packet->ptsNs = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer)) * 1000000000;
+                    packet->width = m_width;
+                    packet->height = m_height;
+                    packet->nativeBuffer = pixelBuffer;
+
+                    {
+                        std::lock_guard<std::mutex> lock(m_queueMutex);
+                        m_frameQueue.push(packet);
+                    }
+                }
+                CFRelease(sampleBuffer);
+            } else {
+                break; // EOF
+            }
+        }
+    }
+
+    void flushQueue() {
+        std::lock_guard<std::mutex> lock(m_queueMutex);
+        while (!m_frameQueue.empty()) {
+            CVPixelBufferRelease((CVPixelBufferRef)m_frameQueue.front()->nativeBuffer);
+            m_frameQueue.pop();
+        }
+        m_queueCv.notify_all();
+    }
+
+    Result seekExact(int64_t timeNs) override {
+        if (!m_assetReader) return Result::error(ErrorCode::ERR_DECODER_HW_FAILURE, "AssetReader not initialized");
+
+        // 模拟: iOS AVAssetReader 不能随意 Seek，只能重新实例化并指定 timeRange
+        // 因此如果需要精准回退，通常非常昂贵，触发软解降级
+        if (timeNs < m_lastSeekTimeNs) {
+            LOGW("Backward seek detected on iOS (last: %lld, target: %lld). HW decoder will fallback.", (long long)m_lastSeekTimeNs, (long long)timeNs);
+            return Result::error(ErrorCode::ERR_DECODER_SEEK_FAILED, "Hardware Decoder failed to seek backward accurately. Trigger Software Decoder fallback.");
+        }
+
+        flushQueue();
+        m_lastSeekTimeNs = timeNs;
+        return Result::ok();
+    }
+
+    ResultPayload<Texture> getFrameAt(int64_t timeNs) override {
+        std::shared_ptr<FrameBufferPacket> targetPacket = nullptr;
+
+        {
+            std::lock_guard<std::mutex> lock(m_queueMutex);
+            while (!m_frameQueue.empty() && m_frameQueue.front()->ptsNs < timeNs - 30000000) {
+                CVPixelBufferRelease((CVPixelBufferRef)m_frameQueue.front()->nativeBuffer);
+                m_frameQueue.pop();
+                m_queueCv.notify_one();
+            }
+
+            if (!m_frameQueue.empty()) {
+                targetPacket = m_frameQueue.front();
+            }
+        }
+
+        if (targetPacket && m_textureCache) {
+            CVPixelBufferRef pixelBuffer = (CVPixelBufferRef)targetPacket->nativeBuffer;
+            if (!pixelBuffer) {
+                LOGE("Invalid native buffer at %lld", (long long)timeNs);
+                return ResultPayload<Texture>::error(ErrorCode::ERR_DECODER_FRAME_DROP, "Invalid native buffer");
+            }
+
+            if (m_cvTexture) {
+                CFRelease(m_cvTexture);
+                m_cvTexture = nullptr;
+            }
+
+            CVReturn err = CVOpenGLESTextureCacheCreateTextureFromImage(
+                kCFAllocatorDefault,
+                m_textureCache,
+                pixelBuffer,
+                NULL,
+                GL_TEXTURE_2D,
+                GL_RGBA,
+                (GLsizei)m_width,
+                (GLsizei)m_height,
+                GL_BGRA_EXT,
+                GL_UNSIGNED_BYTE,
+                0,
+                &m_cvTexture
+            );
+
+            if (err == kCVReturnSuccess && m_cvTexture) {
+                GLuint textureId = CVOpenGLESTextureGetName(m_cvTexture);
+                return ResultPayload<Texture>::ok({textureId, (uint32_t)m_width, (uint32_t)m_height});
+            } else {
+                LOGE("Failed to create texture from CVPixelBuffer, error: %d", err);
+                return ResultPayload<Texture>::error(ErrorCode::ERR_DECODER_HW_FAILURE, "Failed to create texture from CVPixelBuffer");
+            }
+        }
+
+        LOGW("Frame not ready or dropped on iOS at %lld", (long long)timeNs);
+        return ResultPayload<Texture>::error(ErrorCode::ERR_DECODER_FRAME_DROP, "Frame not ready or dropped");
+    }
+
+    void close() override {
+        m_running = false;
+        m_queueCv.notify_all();
+        if (m_decodeThread.joinable()) {
+            m_decodeThread.join();
+        }
+
+        if (m_assetReader) {
+            [m_assetReader cancelReading];
+            m_assetReader = nil;
+        }
+        m_trackOutput = nil;
+
+        if (m_cvTexture) {
+            CFRelease(m_cvTexture);
+            m_cvTexture = nullptr;
+        }
+
+        if (m_textureCache) {
+            CFRelease(m_textureCache);
+            m_textureCache = nullptr;
+        }
+
+        flushQueue();
+    }
+
+private:
+    AVAssetReader* m_assetReader;
+    AVAssetReaderTrackOutput* m_trackOutput;
+    CVOpenGLESTextureCacheRef m_textureCache;
+    CVOpenGLESTextureRef m_cvTexture;
+    int32_t m_width;
+    int32_t m_height;
+
+    std::atomic<bool> m_running;
+    std::thread m_decodeThread;
+    std::mutex m_queueMutex;
+    std::condition_variable m_queueCv;
+    std::queue<std::shared_ptr<FrameBufferPacket>> m_frameQueue;
+    int64_t m_lastSeekTimeNs = 0;
+};
+
+// Platform Decoder Factory Implementation
+std::shared_ptr<VideoDecoder> createPlatformDecoder() {
+    return std::make_shared<VideoDecoderIOS>();
+}
+
+} // namespace timeline
+} // namespace video
+} // namespace sdk
+
+#endif // __APPLE__

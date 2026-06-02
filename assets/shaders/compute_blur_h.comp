@@ -1,0 +1,75 @@
+#version 310 es
+// compute_blur_h.comp — 水平方向可分离高斯模糊 (Pass 1/2)
+// 算法：1D 高斯卷积 + shared memory tile 预取，消除重复全局显存读取
+// 配套 compute_blur_v.comp 完成垂直方向后即可替代原 O(r²) 盒式模糊
+//
+// 性能对比 (r=15, 1080p):
+//   原 compute_blur.comp : (2r+1)² = 961 次 imageLoad / 像素   ≈ 7.8 GB/frame
+//   H+V 两 pass 合计     : 2*(2r+1) = 62 次 imageLoad / 像素   ≈ 0.5 GB/frame
+
+#define TILE_SIZE  64
+#define MAX_RADIUS 16
+
+layout(local_size_x = TILE_SIZE, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0, rgba8) uniform readonly  highp image2D inputImage;
+layout(binding = 1, rgba8) uniform writeonly highp image2D outputImage;
+
+// 预计算好的高斯权重 weights[0..u_radius]（由 CPU 端上传，归一化）
+uniform int   u_radius;
+uniform float u_weights[MAX_RADIUS + 1];
+
+// Shared memory tile：TILE_SIZE 个中心像素 + 两端各 MAX_RADIUS 个 apron 像素
+shared highp vec4 tile[TILE_SIZE + 2 * MAX_RADIUS];
+
+void main() {
+    ivec2 size        = imageSize(inputImage);
+    int   globalX     = int(gl_GlobalInvocationID.x);
+    int   globalY     = int(gl_GlobalInvocationID.y);
+    int   localX      = int(gl_LocalInvocationID.x);
+    int   groupStartX = int(gl_WorkGroupID.x) * TILE_SIZE;
+
+    if (globalY >= size.y) return;
+
+    // ----------------------------------------------------------------
+    // 1. 协作式载入：中心像素
+    // ----------------------------------------------------------------
+    int srcX = clamp(groupStartX + localX, 0, size.x - 1);
+    tile[localX + MAX_RADIUS] = imageLoad(inputImage, ivec2(srcX, globalY));
+
+    // ----------------------------------------------------------------
+    // 2. 协作式载入：左侧 apron（threads 0..MAX_RADIUS-1 负责）
+    // ----------------------------------------------------------------
+    if (localX < MAX_RADIUS) {
+        int apronX = clamp(groupStartX - MAX_RADIUS + localX, 0, size.x - 1);
+        tile[localX] = imageLoad(inputImage, ivec2(apronX, globalY));
+    }
+
+    // ----------------------------------------------------------------
+    // 3. 协作式载入：右侧 apron（threads TILE_SIZE-MAX_RADIUS..TILE_SIZE-1 负责）
+    // ----------------------------------------------------------------
+    if (localX >= TILE_SIZE - MAX_RADIUS) {
+        int apronX = clamp(groupStartX + localX + MAX_RADIUS, 0, size.x - 1);
+        tile[localX + 2 * MAX_RADIUS] = imageLoad(inputImage, ivec2(apronX, globalY));
+    }
+
+    // ----------------------------------------------------------------
+    // 4. 同步：等待工作组内所有线程完成 tile 填充
+    // ----------------------------------------------------------------
+    barrier();
+    memoryBarrierShared();
+
+    // 越界保护（全局索引可能超出图像宽度）
+    if (globalX >= size.x) return;
+
+    // ----------------------------------------------------------------
+    // 5. 高斯卷积：从 shared memory 读取，无全局显存访问
+    // ----------------------------------------------------------------
+    int   center = localX + MAX_RADIUS;
+    vec4  sum    = u_weights[0] * tile[center];
+    for (int i = 1; i <= u_radius; i++) {
+        sum += u_weights[i] * (tile[center - i] + tile[center + i]);
+    }
+
+    imageStore(outputImage, ivec2(globalX, globalY), sum);
+}

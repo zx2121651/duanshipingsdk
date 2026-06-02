@@ -1,0 +1,264 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop, 'release/**' ]
+  pull_request:
+    branches: [ main, develop ]
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: '17'
+  NDK_VERSION:  '25.1.8937393'
+  CMAKE_VERSION: '3.22.1'
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+# ── Jobs ────────────────────────────────────────────────────────────────────
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+jobs:
+
+  # ── 1. C++ Core Unit Tests (host) ────────────────────────────────────────
+  core-tests:
+    name: "Core C++ Tests (host)"
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install CMake + Ninja
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y cmake ninja-build
+
+      - name: Configure (host, no Android)
+        run: |
+          cmake -B build/host \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DUSE_MOCK_GL=ON \
+            -G Ninja
+        working-directory: ${{ github.workspace }}
+
+      - name: Build C++ tests
+        run: |
+          cmake --build build/host -j$(nproc)
+        working-directory: ${{ github.workspace }}
+
+      - name: Run C++ tests
+        run: |
+          ctest --test-dir build/host --output-on-failure
+        working-directory: ${{ github.workspace }}
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-test-results
+          path: build/host/Testing/
+
+  # ── 2. Android Unit Tests (JVM/Mockito) ──────────────────────────────────
+  android-unit-tests:
+    name: "Android Unit Tests"
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: gradle-
+
+      - name: Run Android unit tests
+        working-directory: android
+        run: |
+          export ANDROID_SDK_ROOT=$ANDROID_HOME
+          ./gradlew :android:test --continue
+
+      - name: Publish unit test results
+        if: always()
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: android/android/build/test-results/**/*.xml
+
+  # ── 3. Android Debug Build (assemble) ────────────────────────────────────
+  android-build:
+    name: "Android assemble (Debug)"
+    runs-on: ubuntu-22.04
+    needs: android-unit-tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Android SDK + NDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK ${{ env.NDK_VERSION }}
+        run: |
+          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager \
+            "ndk;${{ env.NDK_VERSION }}" \
+            "cmake;${{ env.CMAKE_VERSION }}"
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: gradle-
+
+      - name: Build SDK (Debug)
+        working-directory: android
+        run: ./gradlew :android:assembleDebug --stacktrace
+
+      - name: Build sample-android (Debug)
+        working-directory: android
+        run: ./gradlew :sample-android:assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: sample-debug-apk
+          path: android/samples/android/build/outputs/apk/debug/*.apk
+          retention-days: 14
+
+  # ── 4. Device Matrix (Firebase Test Lab) ─────────────────────────────────
+  device-matrix:
+    name: "Device Matrix Smoke Tests"
+    runs-on: ubuntu-22.04
+    needs: android-build
+    # Only run on push to main/release (not on every PR to save quota)
+    if: |
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/'))
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Android SDK + NDK
+        uses: android-actions/setup-android@v3
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: gradle-
+
+      - name: Build instrumented test APK
+        working-directory: android
+        run: ./gradlew :sample-android:assembleDebugAndroidTest
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+
+      - name: Run Firebase Test Lab — Device Matrix
+        uses: google-github-actions/run-gcloud@v2
+        with:
+          project_id: ${{ secrets.FIREBASE_PROJECT_ID }}
+          command: |
+            firebase test android run \
+              --project "${{ secrets.FIREBASE_PROJECT_ID }}" \
+              --type instrumentation \
+              --app    android/samples/android/build/outputs/apk/debug/sample-android-debug.apk \
+              --test   android/samples/android/build/outputs/apk/androidTest/debug/sample-android-debug-androidTest.apk \
+              --device model=redfin,version=30,locale=en,orientation=portrait \
+              --device model=oriole,version=31,locale=en,orientation=portrait \
+              --device model=panther,version=33,locale=en,orientation=portrait \
+              --device model=bluejay,version=32,locale=zh,orientation=portrait \
+              --timeout 5m \
+              --results-bucket "gs://${{ secrets.FIREBASE_PROJECT_ID }}-test-results" \
+              --results-dir "ci/${{ github.sha }}" \
+              --num-flaky-test-attempts 1
+
+      - name: Download test results
+        if: always()
+        run: |
+          gsutil -m cp -r \
+            gs://${{ secrets.FIREBASE_PROJECT_ID }}-test-results/ci/${{ github.sha }}/ \
+            firebase-results/
+
+      - name: Upload Firebase results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: firebase-device-matrix-results
+          path: firebase-results/
+
+  # ── 5. Performance Baseline (micro-benchmarks, optional) ─────────────────
+  perf-baseline:
+    name: "Core Performance Baseline"
+    runs-on: ubuntu-22.04
+    needs: core-tests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install CMake + Ninja
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y cmake ninja-build
+
+      - name: Configure host benchmark build
+        run: |
+          cmake -B build/perf \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DUSE_MOCK_GL=ON \
+            -G Ninja
+
+      - name: Build benchmark target
+        run: cmake --build build/perf --target test_compute_blur_perf -j$(nproc)
+
+      - name: Run compute blur benchmark
+        run: ctest --test-dir build/perf -R test_compute_blur_perf --output-on-failure
+        continue-on-error: false
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: build/perf/Testing/

@@ -1,0 +1,325 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		1A00000000000001 /* FilterEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000001 /* FilterEngine.swift */; };
+		1A00000000000002 /* FilterCameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000002 /* FilterCameraView.swift */; };
+		1A00000000000003 /* VideoExportConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000003 /* VideoExportConfig.swift */; };
+		1A00000000000004 /* VideoFilterManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000004 /* VideoFilterManager.swift */; };
+		1A00000000000005 /* VideoEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000005 /* VideoEncoder.swift */; };
+		1A00000000000006 /* IOSAssetProvider.mm in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000006 /* IOSAssetProvider.mm */; };
+		1A00000000000007 /* FilterEngineWrapper.mm in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000007 /* FilterEngineWrapper.mm */; };
+		1A00000000000008 /* GLStateManager.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B0000000000000B /* GLStateManager.cpp */; };
+		1A00000000000009 /* FilterEngine.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B0000000000000C /* FilterEngine.cpp */; };
+		1A0000000000000A /* Filters.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B0000000000000D /* Filters.cpp */; };
+		1A00000000000019 /* Filter.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B0000000000001C /* Filter.cpp */; };
+		1A00000000000100 /* PropOverlayFilter.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000100 /* PropOverlayFilter.cpp */; };
+		1A00000000000101 /* RenderDeviceFactory.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000101 /* RenderDeviceFactory.cpp */; };
+		1A00000000000102 /* AudioEffects.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000102 /* AudioEffects.cpp */; };
+		1A00000000000020 /* GLTexture.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000022 /* GLTexture.cpp */; };
+		1A00000000000021 /* GLRenderDevice.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000023 /* GLRenderDevice.cpp */; };
+		1A00000000000033 /* GLHardwareTexture.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000033 /* GLHardwareTexture.cpp */; };
+		1B00000000000033 /* GLHardwareTexture.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLHardwareTexture.cpp; path = ../sdk-core/core/src/rhi/GLHardwareTexture.cpp; sourceTree = SOURCE_ROOT; };
+		1A00000000000030 /* GLBuffer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000030 /* GLBuffer.cpp */; };
+		1A00000000000031 /* GLVertexArray.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000031 /* GLVertexArray.cpp */; };
+		1A00000000000032 /* GLShaderProgram.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000032 /* GLShaderProgram.cpp */; };
+		1A0000000000000B /* FrameBuffer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B0000000000000E /* FrameBuffer.cpp */; };
+		1A0000000000000C /* FrameBufferPool.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B0000000000000F /* FrameBufferPool.cpp */; };
+		1A0000000000000D /* GLContextManager.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000010 /* GLContextManager.cpp */; };
+		1A0000000000000E /* ShaderManager.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000011 /* ShaderManager.cpp */; };
+		1A0000000000000F /* ThreadCheck.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000012 /* ThreadCheck.cpp */; };
+		1A00000000000010 /* PipelineGraph.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000013 /* PipelineGraph.cpp */; };
+		1A00000000000011 /* AudioMixer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000014 /* AudioMixer.cpp */; };
+		1A00000000000012 /* Clip.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000015 /* Clip.cpp */; };
+		1A00000000000013 /* Compositor.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000016 /* Compositor.cpp */; };
+		1A00000000000014 /* DecoderPool.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000017 /* DecoderPool.cpp */; };
+		1A00000000000015 /* Timeline.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000018 /* Timeline.cpp */; };
+		1A00000000000016 /* Track.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000019 /* Track.cpp */; };
+		1A00000000000017 /* TimelineExporterIOS.mm in Sources */ = {isa = PBXBuildFile; fileRef = 1B0000000000001A /* TimelineExporterIOS.mm */; };
+		1A00000000000018 /* VideoDecoderIOS.mm in Sources */ = {isa = PBXBuildFile; fileRef = 1B0000000000001B /* VideoDecoderIOS.mm */; };
+				1A00000000000033 /* GLHardwareTexture.cpp in Sources */,
+				1B00000000000033 /* GLHardwareTexture.cpp */,
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		1B00000000000001 /* FilterEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterEngine.swift; sourceTree = "<group>"; };
+		1B00000000000002 /* FilterCameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterCameraView.swift; sourceTree = "<group>"; };
+		1B00000000000003 /* VideoExportConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoExportConfig.swift; sourceTree = "<group>"; };
+		1B00000000000004 /* VideoFilterManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFilterManager.swift; sourceTree = "<group>"; };
+		1B00000000000005 /* VideoEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoEncoder.swift; sourceTree = "<group>"; };
+		1B00000000000006 /* IOSAssetProvider.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = IOSAssetProvider.mm; sourceTree = "<group>"; };
+		1B00000000000007 /* FilterEngineWrapper.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = FilterEngineWrapper.mm; sourceTree = "<group>"; };
+		1B00000000000008 /* IOSAssetProvider.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = IOSAssetProvider.h; sourceTree = "<group>"; };
+		1B00000000000009 /* FilterEngineWrapper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = FilterEngineWrapper.h; sourceTree = "<group>"; };
+		1B0000000000000A /* VideoSDK.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = VideoSDK.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		1B0000000000000B /* GLStateManager.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLStateManager.cpp; path = ../sdk-core/core/src/GLStateManager.cpp; sourceTree = SOURCE_ROOT; };
+		1B0000000000000C /* FilterEngine.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = FilterEngine.cpp; path = ../sdk-core/core/src/FilterEngine.cpp; sourceTree = SOURCE_ROOT; };
+		1B0000000000000D /* Filters.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = Filters.cpp; path = ../sdk-core/core/src/Filters.cpp; sourceTree = SOURCE_ROOT; };
+		1B0000000000001C /* Filter.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = Filter.cpp; path = ../sdk-core/core/src/Filter.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000100 /* PropOverlayFilter.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = PropOverlayFilter.cpp; path = ../sdk-core/core/src/PropOverlayFilter.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000101 /* RenderDeviceFactory.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = RenderDeviceFactory.cpp; path = ../sdk-core/core/src/rhi/RenderDeviceFactory.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000102 /* AudioEffects.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = AudioEffects.cpp; path = ../sdk-core/core/src/timeline/AudioEffects.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000022 /* GLTexture.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLTexture.cpp; path = ../sdk-core/core/src/rhi/GLTexture.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000023 /* GLRenderDevice.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLRenderDevice.cpp; path = ../sdk-core/core/src/rhi/GLRenderDevice.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000033 /* GLHardwareTexture.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLHardwareTexture.cpp; path = ../sdk-core/core/src/rhi/GLHardwareTexture.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000030 /* GLBuffer.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLBuffer.cpp; path = ../sdk-core/core/src/rhi/GLBuffer.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000031 /* GLVertexArray.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLVertexArray.cpp; path = ../sdk-core/core/src/rhi/GLVertexArray.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000032 /* GLShaderProgram.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLShaderProgram.cpp; path = ../sdk-core/core/src/rhi/GLShaderProgram.cpp; sourceTree = SOURCE_ROOT; };
+		1B0000000000000E /* FrameBuffer.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = FrameBuffer.cpp; path = ../sdk-core/core/src/FrameBuffer.cpp; sourceTree = SOURCE_ROOT; };
+		1B0000000000000F /* FrameBufferPool.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = FrameBufferPool.cpp; path = ../sdk-core/core/src/FrameBufferPool.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000010 /* GLContextManager.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLContextManager.cpp; path = ../sdk-core/core/src/GLContextManager.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000011 /* ShaderManager.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = ShaderManager.cpp; path = ../sdk-core/core/src/ShaderManager.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000012 /* ThreadCheck.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = ThreadCheck.cpp; path = ../sdk-core/core/src/ThreadCheck.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000013 /* PipelineGraph.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = PipelineGraph.cpp; path = ../sdk-core/core/src/pipeline/PipelineGraph.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000014 /* AudioMixer.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = AudioMixer.cpp; path = ../sdk-core/core/src/timeline/AudioMixer.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000015 /* Clip.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = Clip.cpp; path = ../sdk-core/core/src/timeline/Clip.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000016 /* Compositor.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = Compositor.cpp; path = ../sdk-core/core/src/timeline/Compositor.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000017 /* DecoderPool.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = DecoderPool.cpp; path = ../sdk-core/core/src/timeline/DecoderPool.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000018 /* Timeline.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = Timeline.cpp; path = ../sdk-core/core/src/timeline/Timeline.cpp; sourceTree = SOURCE_ROOT; };
+		1B00000000000019 /* Track.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = Track.cpp; path = ../sdk-core/core/src/timeline/Track.cpp; sourceTree = SOURCE_ROOT; };
+		1B0000000000001A /* TimelineExporterIOS.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = TimelineExporterIOS.mm; path = ../sdk-core/core/src/timeline/TimelineExporterIOS.mm; sourceTree = SOURCE_ROOT; };
+		1B0000000000001B /* VideoDecoderIOS.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = VideoDecoderIOS.mm; path = ../sdk-core/core/src/timeline/VideoDecoderIOS.mm; sourceTree = SOURCE_ROOT; };
+				1B00000000000033 /* GLHardwareTexture.cpp */,
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		1C00000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		1D00000000000001 = {
+			isa = PBXGroup;
+			children = (
+				1D00000000000002 /* Classes */,
+			path = Classes;
+				1B0000000000000A /* VideoSDK.framework */,
+			);
+			sourceTree = "<group>";
+		};
+		1D00000000000002 /* Classes */ = {
+			path = Classes;
+			isa = PBXGroup;
+			children = (
+				1B00000000000001 /* FilterEngine.swift */,
+				1B00000000000002 /* FilterCameraView.swift */,
+				1B00000000000003 /* VideoExportConfig.swift */,
+				1B00000000000004 /* VideoFilterManager.swift */,
+				1B00000000000005 /* VideoEncoder.swift */,
+				1B00000000000006 /* IOSAssetProvider.mm */,
+				1B00000000000007 /* FilterEngineWrapper.mm */,
+				1B00000000000008 /* IOSAssetProvider.h */,
+				1B00000000000009 /* FilterEngineWrapper.h */,
+				1B0000000000000B /* GLStateManager.cpp */,
+				1B0000000000000C /* FilterEngine.cpp */,
+				1B0000000000000D /* Filters.cpp */,
+				1B0000000000001C /* Filter.cpp */,
+				1B00000000000100 /* PropOverlayFilter.cpp */,
+				1B00000000000101 /* RenderDeviceFactory.cpp */,
+				1B00000000000102 /* AudioEffects.cpp */,
+				1B00000000000022 /* GLTexture.cpp */,
+				1B00000000000023 /* GLRenderDevice.cpp */,
+		1B00000000000033 /* GLHardwareTexture.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = GLHardwareTexture.cpp; path = ../sdk-core/core/src/rhi/GLHardwareTexture.cpp; sourceTree = SOURCE_ROOT; };
+				1B0000000000000E /* FrameBuffer.cpp */,
+				1B0000000000000F /* FrameBufferPool.cpp */,
+				1B00000000000010 /* GLContextManager.cpp */,
+				1B00000000000011 /* ShaderManager.cpp */,
+				1B00000000000012 /* ThreadCheck.cpp */,
+				1B00000000000013 /* PipelineGraph.cpp */,
+				1B00000000000014 /* AudioMixer.cpp */,
+				1B00000000000015 /* Clip.cpp */,
+				1B00000000000016 /* Compositor.cpp */,
+				1B00000000000017 /* DecoderPool.cpp */,
+				1B00000000000018 /* Timeline.cpp */,
+				1B00000000000019 /* Track.cpp */,
+				1B0000000000001A /* TimelineExporterIOS.mm */,
+				1B0000000000001B /* VideoDecoderIOS.mm */,
+				1B00000000000033 /* GLHardwareTexture.cpp */,
+			);
+			path = Classes;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXHeadersBuildPhase section */
+		1E00000000000001 /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXHeadersBuildPhase section */
+
+/* Begin PBXNativeTarget section */
+		1F00000000000001 /* VideoSDK */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2000000000000001 /* Build configuration list for PBXNativeTarget "VideoSDK" */;
+			buildPhases = (
+				1E00000000000001 /* Headers */,
+				2100000000000001 /* Sources */,
+				1C00000000000001 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = VideoSDK;
+			productName = VideoSDK;
+			productReference = 1B0000000000000A /* VideoSDK.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		2200000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					1F00000000000001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = 2000000000000002 /* Build configuration list for PBXProject "VideoSDK" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 1D00000000000001;
+			productRefGroup = 1D00000000000001;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				1F00000000000001 /* VideoSDK */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		2100000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1A00000000000001 /* FilterEngine.swift in Sources */,
+				1A00000000000002 /* FilterCameraView.swift in Sources */,
+				1A00000000000003 /* VideoExportConfig.swift in Sources */,
+				1A00000000000004 /* VideoFilterManager.swift in Sources */,
+				1A00000000000005 /* VideoEncoder.swift in Sources */,
+				1A00000000000006 /* IOSAssetProvider.mm in Sources */,
+				1A00000000000007 /* FilterEngineWrapper.mm in Sources */,
+				1A00000000000008 /* GLStateManager.cpp in Sources */,
+				1A00000000000009 /* FilterEngine.cpp in Sources */,
+				1A0000000000000A /* Filters.cpp in Sources */,
+				1A00000000000019 /* Filter.cpp in Sources */,
+				1A00000000000100 /* PropOverlayFilter.cpp in Sources */,
+				1A00000000000101 /* RenderDeviceFactory.cpp in Sources */,
+				1A00000000000102 /* AudioEffects.cpp in Sources */,
+				1A00000000000020 /* GLTexture.cpp in Sources */,
+				1A00000000000021 /* GLRenderDevice.cpp in Sources */,
+		1A00000000000033 /* GLHardwareTexture.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B00000000000033 /* GLHardwareTexture.cpp */; };
+				1A00000000000030 /* GLBuffer.cpp in Sources */,
+				1A00000000000031 /* GLVertexArray.cpp in Sources */,
+				1A00000000000032 /* GLShaderProgram.cpp in Sources */,
+				1A0000000000000B /* FrameBuffer.cpp in Sources */,
+				1A0000000000000C /* FrameBufferPool.cpp in Sources */,
+				1A0000000000000D /* GLContextManager.cpp in Sources */,
+				1A0000000000000E /* ShaderManager.cpp in Sources */,
+				1A0000000000000F /* ThreadCheck.cpp in Sources */,
+				1A00000000000010 /* PipelineGraph.cpp in Sources */,
+				1A00000000000011 /* AudioMixer.cpp in Sources */,
+				1A00000000000012 /* Clip.cpp in Sources */,
+				1A00000000000013 /* Compositor.cpp in Sources */,
+				1A00000000000014 /* DecoderPool.cpp in Sources */,
+				1A00000000000015 /* Timeline.cpp in Sources */,
+				1A00000000000016 /* Track.cpp in Sources */,
+				1A00000000000017 /* TimelineExporterIOS.mm in Sources */,
+				1A00000000000018 /* VideoDecoderIOS.mm in Sources */,
+				1A00000000000033 /* GLHardwareTexture.cpp in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		2300000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++17";
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sdk.VideoSDK;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+                HEADER_SEARCH_PATHS = "$(SRCROOT)/../sdk-core/core/include";
+                GENERATE_INFOPLIST_FILE = YES;
+                SWIFT_OBJC_BRIDGING_HEADER = Classes/VideoSDK-Bridging-Header.h;
+                GCC_PREPROCESSOR_DEFINITIONS = (
+                    "$(inherited)",
+                    "GLES_SILENCE_DEPRECATION=1",
+                    "COREVIDEO_SILENCE_GL_DEPRECATION=1",
+                );
+			};
+			name = Debug;
+		};
+		2300000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++17";
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sdk.VideoSDK;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+                HEADER_SEARCH_PATHS = "$(SRCROOT)/../sdk-core/core/include";
+                GENERATE_INFOPLIST_FILE = YES;
+                SWIFT_OBJC_BRIDGING_HEADER = Classes/VideoSDK-Bridging-Header.h;
+                GCC_PREPROCESSOR_DEFINITIONS = (
+                    "$(inherited)",
+                    "GLES_SILENCE_DEPRECATION=1",
+                    "COREVIDEO_SILENCE_GL_DEPRECATION=1",
+                );
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		2000000000000001 /* Build configuration list for PBXNativeTarget "VideoSDK" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2300000000000001 /* Debug */,
+				2300000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		2000000000000002 /* Build configuration list for PBXProject "VideoSDK" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2300000000000001 /* Debug */,
+				2300000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 2200000000000001 /* Project object */;
+}

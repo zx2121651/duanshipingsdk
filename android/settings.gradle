@@ -1,0 +1,62 @@
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.8.0'
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = "ShortVideoSDK"
+
+/**
+ * Project Structure:
+ * - :android -> Android SDK Library (Outputs AAR)
+ * - :sample-android -> Android Sample Host under samples/android
+ */
+
+// SDK Library: The primary product of this repository
+include ':android'
+
+// Sample Host: Verification app that consumes the SDK library
+include ':sample-android'
+project(':sample-android').projectDir = new File(rootDir, 'samples/android')
+
+// Core Modules
+include ':core-ui'
+project(':core-ui').projectDir = new File(rootDir, 'core-android/ui')
+
+include ':core-model'
+project(':core-model').projectDir = new File(rootDir, 'core-android/model')
+
+// Feature Modules
+include ':feature-home'
+project(':feature-home').projectDir = new File(rootDir, 'features/home')
+
+include ':feature-capture'
+project(':feature-capture').projectDir = new File(rootDir, 'features/capture')
+
+include ':feature-effects'
+project(':feature-effects').projectDir = new File(rootDir, 'features/effects')
+
+include ':feature-diagnostics'
+project(':feature-diagnostics').projectDir = new File(rootDir, 'features/diagnostics')
+
+include ':feature-import'
+project(':feature-import').projectDir = new File(rootDir, 'features/import')
+
+include ':feature-editor'
+project(':feature-editor').projectDir = new File(rootDir, 'features/editor')
+
+include ':feature-export'
+project(':feature-export').projectDir = new File(rootDir, 'features/export')

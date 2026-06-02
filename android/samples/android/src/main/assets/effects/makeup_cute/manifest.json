@@ -1,0 +1,14 @@
+{
+  "id": "makeup_cute",
+  "name": "甜美妆",
+  "version": "1.0",
+  "type": "face_sticker",
+  "layers": [
+    { "type": "beauty", "eyeScale": 0.30, "faceSlim": 0.20 },
+    { "type": "makeup",
+      "lipColor":  [0.80, 0.20, 0.30, 0.70],
+      "blush":     [0.95, 0.55, 0.55, 0.40],
+      "highlight": 0.40,
+      "contour":   0.30 }
+  ]
+}

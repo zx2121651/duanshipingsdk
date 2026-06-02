@@ -1,0 +1,6 @@
+STUB_TFLITE_MODEL_v1
+Model: face_landmark_106pt (人脸关键点 106点)
+Status: placeholder — replace with real face_landmark.tflite
+Input:  [1, 192, 192, 3] float32 RGB (face crop)
+Output: [1, 212] float32 (106 landmarks × [x, y] normalized [0,1])
+See: https://developers.google.com/mediapipe/solutions/vision/face_landmarker

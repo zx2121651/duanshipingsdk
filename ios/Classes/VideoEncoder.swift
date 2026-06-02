@@ -1,0 +1,193 @@
+import Foundation
+import AVFoundation
+
+public enum VideoEncoderError: Error {
+    case initializationFailed
+    case recordingAlreadyStarted
+    case recordingNotStarted
+}
+
+public class VideoEncoder {
+    private var assetWriter: AVAssetWriter?
+    private var videoInput: AVAssetWriterInput?
+    private var audioInput: AVAssetWriterInput?
+    private var pixelBufferAdaptor: AVAssetWriterInputPixelBufferAdaptor?
+
+    private let config: VideoExportConfig
+
+    public private(set) var isRecording = false
+    private var isFirstFrame = true
+    private var startTime: CMTime = .zero
+    private var lastVideoPts: CMTime = .zero
+    private var lastAudioPts: CMTime = .zero
+    private var totalAudioSamplesEncoded: Int64 = 0
+    private let lock = NSRecursiveLock()
+
+    public init(config: VideoExportConfig) {
+        self.config = config
+    }
+
+    public func startRecording() throws {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let outputURL = config.outputURL
+        guard !isRecording else { throw VideoEncoderError.recordingAlreadyStarted }
+
+        // Remove existing file if necessary
+        if FileManager.default.fileExists(atPath: outputURL.path) {
+            try FileManager.default.removeItem(at: outputURL)
+        }
+
+        assetWriter = try AVAssetWriter(outputURL: outputURL, fileType: .mp4)
+
+        let videoSettings: [String: Any] = [
+            AVVideoCodecKey: AVVideoCodecType.h264,
+            AVVideoWidthKey: config.width,
+            AVVideoHeightKey: config.height,
+            AVVideoCompressionPropertiesKey: [
+                AVVideoAverageBitRateKey: config.videoBitrate,
+                AVVideoMaxKeyFrameIntervalKey: config.fps * config.iFrameInterval,
+                AVVideoExpectedSourceFrameRateKey: config.fps,
+                AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel
+            ]
+        ]
+
+        videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
+        videoInput?.expectsMediaDataInRealTime = true
+
+        let sourcePixelBufferAttributes: [String: Any] = [
+            kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32BGRA),
+            kCVPixelBufferWidthKey as String: config.width,
+            kCVPixelBufferHeightKey as String: config.height
+        ]
+
+        if let videoInput = videoInput {
+            pixelBufferAdaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: videoInput, sourcePixelBufferAttributes: sourcePixelBufferAttributes)
+            if assetWriter?.canAdd(videoInput) == true {
+                assetWriter?.add(videoInput)
+            }
+        }
+
+        // Basic Audio Settings (AAC)
+        var acl = AudioChannelLayout()
+        memset(&acl, 0, MemoryLayout<AudioChannelLayout>.size)
+        acl.mChannelLayoutTag = kAudioChannelLayoutTag_Stereo
+
+        let audioSettings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVNumberOfChannelsKey: 2,
+            AVSampleRateKey: config.audioSampleRate,
+            AVEncoderBitRateKey: config.audioBitrate
+        ]
+
+        audioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
+        audioInput?.expectsMediaDataInRealTime = true
+
+        if let audioInput = audioInput, assetWriter?.canAdd(audioInput) == true {
+            assetWriter?.add(audioInput)
+        }
+
+        assetWriter?.startWriting()
+        isRecording = true
+        isFirstFrame = true
+        lastVideoPts = .zero
+        lastAudioPts = .zero
+        totalAudioSamplesEncoded = 0
+    }
+
+    public func appendVideoPixelBuffer(_ pixelBuffer: CVPixelBuffer, timestamp: CMTime) {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard isRecording, let assetWriter = assetWriter else { return }
+        if assetWriter.status == .failed {
+            stopRecording(isFallback: true)
+            return
+        }
+        guard assetWriter.status == .writing || isFirstFrame else { return }
+
+        var safeTimestamp = timestamp
+        if isFirstFrame {
+            assetWriter.startSession(atSourceTime: safeTimestamp)
+            startTime = safeTimestamp
+            isFirstFrame = false
+        } else if safeTimestamp <= lastVideoPts {
+            // A/V Sync monotonic enforcement: ensure at least 0.1ms increment
+            safeTimestamp = CMTimeAdd(lastVideoPts, CMTime(value: 1, timescale: 10000))
+        }
+
+        lastVideoPts = safeTimestamp
+
+        guard let input = videoInput, input.isReadyForMoreMediaData, let adaptor = pixelBufferAdaptor else { return }
+        adaptor.append(pixelBuffer, withPresentationTime: safeTimestamp)
+    }
+
+    public func appendAudioSampleBuffer(_ sampleBuffer: CMSampleBuffer) {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard isRecording, let audioInput = audioInput, !isFirstFrame else { return }
+
+        // Audio drift prevention: Use cumulative sample count to calculate PTS
+        let audioPts = CMTimeAdd(startTime, CMTime(value: totalAudioSamplesEncoded, timescale: Int32(config.audioSampleRate)))
+
+        if audioPts <= lastAudioPts {
+            // Safety fallback to ensure monotonicity
+            lastAudioPts = CMTimeAdd(lastAudioPts, CMTime(value: 1, timescale: 10000))
+        } else {
+            lastAudioPts = audioPts
+        }
+
+        if audioInput.isReadyForMoreMediaData {
+            var sbuf: CMSampleBuffer?
+            var timing = CMSampleTimingInfo(duration: CMSampleBufferGetDuration(sampleBuffer), presentationTimeStamp: lastAudioPts, decodeTimeStamp: .invalid)
+            CMSampleBufferCreateCopyWithNewTiming(
+                allocator: kCFAllocatorDefault,
+                sampleBuffer: sampleBuffer,
+                sampleTimingEntryCount: 1,
+                sampleTimingArray: &timing,
+                sampleBufferOut: &sbuf
+            )
+
+            if let sbuf = sbuf {
+                audioInput.append(sbuf)
+                totalAudioSamplesEncoded += Int64(CMSampleBufferGetNumSamples(sampleBuffer))
+            }
+        }
+    }
+
+    public func stopRecording(isFallback: Bool = false, completion: ((URL?) -> Void)? = nil) {
+        lock.lock()
+        guard isRecording, let writer = assetWriter else {
+            lock.unlock()
+            completion?(nil)
+            return
+        }
+
+        isRecording = false
+        videoInput?.markAsFinished()
+        audioInput?.markAsFinished()
+        lock.unlock()
+
+        writer.finishWriting { [weak self] in
+            guard let self = self else { return }
+            DispatchQueue.main.async {
+                if writer.status == .completed && !isFallback {
+                    completion?(writer.outputURL)
+                } else {
+                    // Cleanup failed/fallback files
+                    try? FileManager.default.removeItem(at: self.config.outputURL)
+                    completion?(nil)
+                }
+
+                self.lock.lock()
+                self.pixelBufferAdaptor = nil
+                self.videoInput = nil
+                self.audioInput = nil
+                self.assetWriter = nil
+                self.lock.unlock()
+            }
+        }
+    }
+}

@@ -1,0 +1,147 @@
+// Module: android
+// Role: Android SDK library. This is the primary AAR artifact.
+plugins {
+    id 'com.android.library'
+    id 'org.jetbrains.kotlin.android'
+}
+
+def configuredFfmpegPrebuiltDir = project.findProperty("ffmpegPrebuiltDir")
+def defaultFfmpegPrebuiltDir = file("src/main/jniLibs/ffmpeg")
+def ffmpegPrebuiltDirPath = configuredFfmpegPrebuiltDir != null
+        ? file(configuredFfmpegPrebuiltDir.toString()).absolutePath.replace('\\', '/')
+        : (defaultFfmpegPrebuiltDir.exists() ? defaultFfmpegPrebuiltDir.absolutePath.replace('\\', '/') : null)
+
+android {
+    lint {
+        abortOnError false
+    }
+
+    namespace 'com.sdk.video'
+
+    sourceSets {
+        main {
+            // FFmpeg prebuilt .so files live under jniLibs/ffmpeg/<abi>/.
+            jniLibs.srcDirs = ['src/main/jniLibs/ffmpeg']
+            assets.srcDirs = ['src/main/assets', '../../assets']
+        }
+    }
+
+    defaultConfig {
+        targetSdk rootProject.ext.androidTargetSdk
+        versionCode rootProject.ext.androidVersionCode
+        versionName rootProject.ext.androidVersionName
+        consumerProguardFiles 'consumer-rules.pro'
+
+        externalNativeBuild {
+            cmake {
+                cppFlags "-std=c++17"
+                arguments "-DANDROID_STL=c++_shared",
+                          "-DANDROID_PLATFORM=android-${rootProject.ext.androidMinSdk}"
+                if (ffmpegPrebuiltDirPath != null) {
+                    arguments "-DFFMPEG_PREBUILT_DIR=${ffmpegPrebuiltDirPath}"
+                }
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
+            version "3.22.1"
+        }
+    }
+
+    buildFeatures {
+        viewBinding true
+    }
+
+    testOptions {
+        unitTests.returnDefaultValues = true
+        unitTests.all {
+            testLogging {
+                events "passed", "skipped", "failed", "standardOut", "standardError"
+                exceptionFormat "full"
+                showCauses true
+                showExceptions true
+                showStackTraces true
+            }
+        }
+    }
+}
+
+configurations {
+    ffmpegKitDownload
+}
+
+dependencies {
+    ffmpegKitDownload('com.arthenica:ffmpeg-kit-full:6.0.LTS@aar')
+
+    implementation "androidx.core:core-ktx:${versions.coreKtx}"
+    implementation "androidx.appcompat:appcompat:${versions.appcompat}"
+    implementation "com.google.android.material:material:${versions.material}"
+    implementation "androidx.constraintlayout:constraintlayout:${versions.constraintLayout}"
+
+    implementation "androidx.camera:camera-core:${versions.cameraX}"
+    implementation "androidx.camera:camera-camera2:${versions.cameraX}"
+    implementation "androidx.camera:camera-lifecycle:${versions.cameraX}"
+    implementation "androidx.camera:camera-view:${versions.cameraX}"
+
+    implementation "androidx.activity:activity-compose:${versions.activityCompose}"
+    implementation platform("androidx.compose:compose-bom:${versions.composeBom}")
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.ui:ui-graphics'
+    implementation 'androidx.compose.ui:ui-tooling-preview'
+    implementation 'androidx.compose.material3:material3'
+
+    implementation "androidx.work:work-runtime-ktx:${versions.workManager}"
+    implementation "androidx.lifecycle:lifecycle-viewmodel-ktx:${versions.lifecycle}"
+
+    testImplementation "junit:junit:${versions.junit}"
+    testImplementation "org.json:json:${versions.orgJson}"
+    testImplementation "org.mockito:mockito-core:${versions.mockitoCore}"
+    testImplementation "org.mockito:mockito-inline:${versions.mockitoInline}"
+    testImplementation "androidx.test:core:${versions.testCore}"
+    testImplementation "org.jetbrains.kotlinx:kotlinx-coroutines-test:${versions.coroutinesTest}"
+}
+
+tasks.register('downloadFFmpegSo') {
+    group = 'setup'
+    description = 'Download ffmpeg-kit-full AAR and extract .so files to jniLibs/ffmpeg/.'
+
+    doLast {
+        def outBase = file("src/main/jniLibs/ffmpeg")
+        outBase.mkdirs()
+
+        def aarFile = configurations.ffmpegKitDownload.resolve().find { it.name.endsWith('.aar') }
+        if (aarFile == null) {
+            throw new GradleException("Could not resolve ffmpeg-kit-full AAR from Maven Central")
+        }
+        println "Resolved: ${aarFile}"
+
+        def zipIn = new java.util.zip.ZipFile(aarFile)
+        zipIn.entries().each { entry ->
+            def m = entry.name =~ /^jni\/([^\/]+)\/(.+\.so)$/
+            if (m) {
+                def abi = m[0][1]
+                def name = m[0][2]
+                def abiDir = file("src/main/jniLibs/ffmpeg/${abi}")
+                abiDir.mkdirs()
+                def dest = new File(abiDir, name)
+                def is = zipIn.getInputStream(entry)
+                dest.withOutputStream { os -> os << is }
+                println "Extracted: ${abi}/${name}"
+            }
+        }
+        zipIn.close()
+
+        println "Done. FFmpeg .so files are in: ${outBase}"
+        println "Next: run sdk-core/scripts/download_ffmpeg_android.ps1 for headers, then build the SDK."
+    }
+}

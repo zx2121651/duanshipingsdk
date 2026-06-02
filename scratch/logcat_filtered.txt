@@ -1,0 +1,724 @@
+=== LOGS ===
+06-02 20:32:32.662 D/TrimMemoryHandler( 1667): ProcessRecord{31d5dc5 0:com.sdk.video.sample/u0a413} hasForegroundActivities, skip trim
+06-02 20:32:40.541 I/ActivityManager( 1667): Force stopping com.sdk.video.sample appid=10413 user=0: from pid 24552
+06-02 20:32:40.938 I/ActivityManager( 1667): Force stopping com.sdk.video.sample appid=10413 user=0: from pid 24571
+06-02 20:32:40.993 I/ActivityTaskManager( 1667): START u0 {act=android.intent.action.MAIN cat=[android.intent.category.LAUNCHER] flg=0x10000000 cmp=com.sdk.video.sample/.MainActivity mCallingUid=2000} from uid 2000
+06-02 20:32:40.999 I/OplusScreenSecurityMask( 1667): onStackAdded task = Task{d1df51a #1110 type=standard A=10413:com.sdk.video.sample U=0 visible=false visibleRequested=false mode=fullscreen translucent=true sz=0} record = null displayId = 0
+06-02 20:32:41.002 D/TaskFragmentExtImpl( 1667): add ActivityRecord{9367e3c u0 com.sdk.video.sample/.MainActivity} t1110} to mActivityRecordSum = Counter{ com.sdk.video.sample/.MainActivity(1) }
+06-02 20:32:41.005 D/ActivityTaskManager( 1667): getStartingWindowType: newTask=true, taskSwitch=true, processRunning=false, allowTaskSnapshot=true, activityCreated=false, snapshot=null, record:ActivityRecord{9367e3c u0 com.sdk.video.sample/.MainActivity} t1110}
+06-02 20:32:41.006 D/OplusZoomWindowRUSConfigManager( 1667): isSupportZoomModeWithPolicyLocked: target = com.sdk.video.sample/.MainActivity
+06-02 20:32:41.006 D/OplusZoomWindowRUSConfigManager( 1667): targetPkg = com.sdk.video.sample
+06-02 20:32:41.016 D/OplusFullScreenDisplayManager( 1667): adjustWindowParamsLw com.sdk.video.sample, no change cutoutMode: 0
+06-02 20:32:41.018 I/WindowManager( 1667): addWindow: New client android.os.BinderProxy@e174e27 : window=Window{2e658d4 u0 Splash Screen com.sdk.video.sample}
+06-02 20:32:41.021 D/CoreBackPreview( 1667): Window{2e658d4 u0 Splash Screen com.sdk.video.sample}: Setting back callback OnBackInvokedCallbackInfo{mCallback=android.window.IOnBackInvokedCallback$Stub$Proxy@3ee0d72, mPriority=0}
+06-02 20:32:41.025 I/ActivityManager( 1667): Start proc 20573:com.sdk.video.sample/u0a413 for next-top-activity {com.sdk.video.sample/com.sdk.video.sample.MainActivity}
+06-02 20:32:41.029 D/OplusFullScreenDisplayManager( 1667): adjustWindowParamsLw com.sdk.video.sample, no change cutoutMode: 0
+06-02 20:32:41.029 V/WindowManager( 1667): Relayout Window{2e658d4 u0 Splash Screen com.sdk.video.sample}: viewVisibility=0, oldvis=0, req=1080x2400
+06-02 20:32:41.029 I/WindowManager( 1667): Window{2e658d4 u0 Splash Screen com.sdk.video.sample} state from NO_SURFACE to DRAW_PENDING; reason: resetDrawState
+06-02 20:32:41.051 I/WindowManager( 1667): Window{2e658d4 u0 Splash Screen com.sdk.video.sample} state from DRAW_PENDING to COMMIT_DRAW_PENDING; reason: finishDrawingLocked
+06-02 20:32:41.051 D/WindowManager( 1667): finishDrawingLocked forceApplyNow=false,2,Window{2e658d4 u0 Splash Screen com.sdk.video.sample}
+06-02 20:32:41.051 I/WindowManager( 1667): Window{2e658d4 u0 Splash Screen com.sdk.video.sample} state from COMMIT_DRAW_PENDING to READY_TO_SHOW; reason: commitFinishDrawingLocked
+06-02 20:32:41.055 I/WindowManager( 1667): Window{2e658d4 u0 Splash Screen com.sdk.video.sample} state from READY_TO_SHOW to HAS_DRAWN; reason: performShowLocked
+06-02 20:32:41.061 I/WindowStateExtImpl( 1667): onSurfaceShowChange show = true mPackageName = com.sdk.video.sample parentPkgName = com.sdk.video.sample
+06-02 20:32:41.078 I/OplusAppSwitchManagerService( 1667): appswitch hasProcess ActivityRecord{9367e3c u0 com.sdk.video.sample/.MainActivity} t1110}
+06-02 20:32:41.079 I/OplusAppSwitchManagerService( 1667): appswitch hasProcess ActivityRecord{9367e3c u0 com.sdk.video.sample/.MainActivity} t1110}
+06-02 20:32:41.079 D/ActivityTaskManager( 1667): onWindowFocusChanged Task{d1df51a #1110 type=standard A=10413:com.sdk.video.sample U=0 visible=true visibleRequested=true mode=fullscreen translucent=false sz=1} would transfer to compact
+06-02 20:32:41.083 D/OplusKeepAliveManager( 1667): TOP_APP is ProcessRecord{ca0a5c3 20573:com.sdk.video.sample/u0a413} uid is 10413
+06-02 20:32:41.086 D/OplusAppSwitchListener( 1667): Detect com.sdk.video.sample switch to foreground
+06-02 20:32:41.086 D/OplusEapManager( 1667): mTargetEnterName :com.sdk.video.sample
+06-02 20:32:41.086 D/VRR [OPlusFrontAppManager]( 1667): OnAppSwitchObserver: onAppEnter , info.targetName = com.sdk.video.sample
+06-02 20:32:41.086 D/VRR [OPlusFrontAppManager]( 1667): packageName: com.sdk.video.sample
+06-02 20:32:41.086 D/VRR [OPlusRefreshRateService]( 1667): handleFrontAppChange pkgName: com.sdk.video.sample
+06-02 20:32:41.086 D/VRR [OPlusExternalRefreshRateManager]( 1667): setFrontPackageName pkgName: com.sdk.video.sample CurPkgName: null
+06-02 20:32:41.117 D/OplusBatteryServiceFeature( 1667): setSmartCoolDown: coolDown = 5, normalCoolDown = 5, pkgName = com.sdk.video.sample
+06-02 20:32:41.130 D/OplusAppListInterceptManager( 1667): shouldFilterTask::packageName = com.sdk.video.sample
+06-02 20:32:41.340 I/OplusAppSwitchManagerService( 1667):  handleAppVisible , r = ActivityRecord{9367e3c u0 com.sdk.video.sample/.MainActivity} t1110}
+06-02 20:32:41.589 I/Quality (20573): Odex status:io-error-no-oat filter:run-from-apk reason:unknown location:/data/app/~~wOklsdGb4xNjvXHlvDwM3w==/com.sdk.video.sample-BhWVnQhiZcXPLwpSE5S2IQ==/base.apk cost:421
+06-02 20:32:41.592 I/Quality (20573): ActivityThread: createClassLoader delay 425 /data/app/~~wOklsdGb4xNjvXHlvDwM3w==/com.sdk.video.sample-BhWVnQhiZcXPLwpSE5S2IQ==/base.apk 20573
+06-02 20:32:41.594 I/Quality (20573): ActivityThread: createOrUpdateClassLoaderLocked delay 428 com.sdk.video.sample 20573
+06-02 20:32:41.676 I/Quality (20573): ActivityThread: bindApplication delay 536 com.sdk.video.sample 20573
+06-02 20:32:41.677 I/ConfigurationController(20573): handleConfigurationChanged: true, config: {1.0 ?mcc?mnc [zh_CN] ldltr sw360dp w360dp h744dp 480dpi nrml long hdr port finger -keyb/h/h -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2400) mAppBounds=Rect(0, 120 - 1080, 2352) mMaxBounds=Rect(0, 0 - 1080, 2400) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mDisplayWindowingMode=fullscreen mActivityType=undefined mAlwaysOnTop=undefined mRotation=ROTATION_0} s.1116 fontWeightAdjustment=0mThemeChanged= 0, mThemeChangedFlags= 0, mFlipFont= 0, mAccessibleChanged= -1, mUxIconConfig= 3468921665126662176, mMaterialColor= 0, mUserId= 0, mFontUserId= 0, mFontVariationSettings= 226, mFoldingAngle = -1.0, mIconPackName= , mDarkModeBackgroundMaxL= 8.0, mDarkModeDialogBgMaxL= 27.0, mDarkModeForegroundMinL= 100.0, mOplusConfigType= 1, mOplusChangedConfigs= 0, OpSans= 0, mBurmeseFontFlag= 2, mFlag= 0, mPuttDisplayFlag= -1} 
+06-02 20:32:41.677 I/ConfigurationController(20573): , curconfig: {1.0 ?mcc?mnc [zh_CN] ldltr sw360dp w360dp h744dp 480dpi nrml long hdr port finger -keyb/h/h -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2400) mAppBounds=Rect(0, 120 - 1080, 2352) mMaxBounds=Rect(0, 0 - 1080, 2400) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mDisplayWindowingMode=fullscreen mActivityType=undefined mAlwaysOnTop=undefined mRotation=ROTATION_0} s.1116 fontWeightAdjustment=0mThemeChanged= 0, mThemeChangedFlags= 0, mFlipFont= 0, mAccessibleChanged= -1, mUxIconConfig= 3468921665126662176, mMaterialColor= 0, mUserId= 0, mFontUserId= 0, mFontVariationSettings= 226, mFoldingAngle = -1.0, mIconPackName= , mDarkModeBackgroundMaxL= 8.0, mDarkModeDialogBgMaxL= 27.0, mDarkModeForegroundMinL= 100.0, mOplusConfigType= 1, mOplusChangedConfigs= 0, OpSans= 0, mBurmeseFontFlag= 2, mFlag= 0, mPuttDisplayFlag= -1} 
+06-02 20:32:41.677 I/ConfigurationController(20573): android.app.ActivityThread.handleLaunchActivity:3999 android.app.servertransaction.LaunchActivityItem.execute:111 android.app.servertransaction.TransactionExecutor.executeCallbacks:135 android.app.servertransaction.TransactionExecutor.execute:95 android.app.ActivityThread$H.handleMessage:2470 android.os.Handler.dispatchMessage:106 android.os.Looper.loopOnce:240 android.os.Looper.loop:351 android.app.ActivityThread.main:8423 java.lang.reflect.Method.invoke:-2 
+06-02 20:32:41.796 D/OplusInputMethodUtil(20573): init sDebug to false, init sDebugIme to false, init sAlwaysOn to false
+06-02 20:32:41.796 D/OplusInputMethodUtil(20573): updateDebugToClass InputMethodManager.DEBUG = false
+06-02 20:32:41.796 D/OplusInputMethodUtil(20573): updateDebugToClass ImeFocusController.DEBUG = false
+06-02 20:32:41.796 D/OplusInputMethodUtil(20573): updateDebugToClass BaseInputConnection.DEBUG = false
+06-02 20:32:41.796 D/OplusInputMethodUtil(20573): updateDebugToClass ImeFocusController.sDebugIme = false
+06-02 20:32:41.810 D/OplusFullScreenDisplayManager( 1667): adjustWindowParamsLw com.sdk.video.sample, no change cutoutMode: 0
+06-02 20:32:41.813 I/WindowManager( 1667): addWindow: New client android.os.BinderProxy@c29efc4 : window=Window{a80fead u0 com.sdk.video.sample/com.sdk.video.sample.MainActivity}
+06-02 20:32:41.816 D/CoreBackPreview( 1667): Window{a80fead u0 com.sdk.video.sample/com.sdk.video.sample.MainActivity}: Setting back callback OnBackInvokedCallbackInfo{mCallback=android.window.IOnBackInvokedCallback$Stub$Proxy@f729d73, mPriority=0}
+06-02 20:32:41.819 I/Quality (20573): Skipped: false 1 cost 30.13846 refreshRate 16623263 bit true processName com.sdk.video.sample
+06-02 20:32:42.001 D/OplusFullScreenDisplayManager( 1667): adjustWindowParamsLw com.sdk.video.sample, no change cutoutMode: 0
+06-02 20:32:42.001 V/WindowManager( 1667): Relayout Window{a80fead u0 com.sdk.video.sample/com.sdk.video.sample.MainActivity}: viewVisibility=0, oldvis=4, req=1080x2400
+06-02 20:32:42.001 I/WindowManager( 1667): Window{a80fead u0 com.sdk.video.sample/com.sdk.video.sample.MainActivity} state from NO_SURFACE to DRAW_PENDING; reason: resetDrawState
+06-02 20:32:42.008 V/WindowManager( 1667): Changing focus from null to Window{a80fead u0 com.sdk.video.sample/com.sdk.video.sample.MainActivity},diplayid=0
+06-02 20:32:42.368 I/Quality (20573): ActivityThread: performLayout delay 349 com.sdk.video.sample 20573
+06-02 20:32:42.475 D/VRR [OPlusExternalRefreshRateManager]( 1667): isPkgTfcEnable: pkgName = com.sdk.video.sample, enable = false
+06-02 20:32:42.475 D/VRR [OPlusExternalRefreshRateManager]( 1667): getTfcMinFramerate: pkgName = com.sdk.video.sample, min framerate = 0
+06-02 20:32:42.476 I/Quality (20573): ActivityThread: doFrame delay 657 com.sdk.video.sample 20573
+06-02 20:32:42.476 I/WindowManager( 1667): Window{a80fead u0 com.sdk.video.sample/com.sdk.video.sample.MainActivity} state from DRAW_PENDING to COMMIT_DRAW_PENDING; reason: finishDrawingLocked
+06-02 20:32:42.476 D/WindowManager( 1667): finishDrawingLocked forceApplyNow=false,2,Window{a80fead u0 com.sdk.video.sample/com.sdk.video.sample.MainActivity}
+06-02 20:32:42.480 I/WindowManager( 1667): Window{a80fead u0 com.sdk.video.sample/com.sdk.video.sample.MainActivity} state from COMMIT_DRAW_PENDING to READY_TO_SHOW; reason: commitFinishDrawingLocked
+06-02 20:32:42.483 D/OplusStartingWindowManager( 1667): interceptRemoveStartingWindow: packageName=com.sdk.video.sample, isSnapshot=false, startingSurfaceRunnable=null
+06-02 20:32:42.486 I/WindowManager( 1667): Window{a80fead u0 com.sdk.video.sample/com.sdk.video.sample.MainActivity} state from READY_TO_SHOW to HAS_DRAWN; reason: performShowLocked
+06-02 20:32:42.489 I/Quality ( 1667): LaunchTime2.0: com.sdk.video.sample/.MainActivity 1 1472 com.android.shell 60 85 39886 0 239292416 0 0 Task-data:PID: 24613 (RenderThread);75 0 44 0 0 1 0 1 0 ;0 0 134 0 0 0 0 2 0 ;0 0 134 0 0 0 0 1 0 ;27 0 48 0 0 0 0 1 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;PID: 20573 (dk.video.sample);47 0 75 0 0 0 0 1 0 ;129 0 0 0 0 0 0 2 0 ;133 0 0 0 0 0 0 1 0 ;120 0 11 0 0 1 1 1 0 ;127 0 2 0 0 0 0 2 0 ;115 0 18 0 0 0 0 2 0 ;121 0 7 0 0 0 0 3 0 ;132 0 0 0 0 0 0 3 0 ;128 0 0 0 0 0 0 2 0 ;129 1 0 0 0 0 0 2 0 ;85 8 3 0 0 33 28 3 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;0 0 0 0 0 0 0 0 0 ;
+06-02 20:32:42.493 I/Quality (20573): Skipped: false 38 cost 647.7566 refreshRate 16625370 bit true processName com.sdk.video.sample
+06-02 20:32:42.581 I/Quality (20573): Skipped: false 5 cost 86.91467 refreshRate 16630902 bit true processName com.sdk.video.sample
+06-02 20:32:42.595 D/InputMethodManagerService( 1667): isSecurity: attribute.packageName = com.sdk.video.sample mCurMethodId = com.sohu.inputmethod.sogouoem/.SogouIME isSecurity = false ( enable = true needShow = false inBlackList = false isExist = true )
+06-02 20:32:42.610 D/OplusAppListInterceptManager( 1667): shouldFilterTask::packageName = com.sdk.video.sample
+06-02 20:32:42.630 D/OplusStatistics--(20573): newThread.ThreadFactory
+06-02 20:32:42.674 I/Quality (20573): Skipped: false 1 cost 30.321327 refreshRate 16628400 bit true processName com.sdk.video.sample
+06-02 20:32:42.848 V/WindowManager( 1667): Relayout Window{2e658d4 u0 Splash Screen com.sdk.video.sample}: viewVisibility=8, oldvis=0, req=1080x2400
+06-02 20:32:42.849 I/SurfaceAnimationRunner( 1667): startAnimation requiresEdgeExtension=false, animationLeash=Surface(name=Surface(name=2e658d4 Splash Screen com.sdk.video.sample)/@0x527578d - animation-leash of window_animation)/@0x27b6d42, runningAnim=com.android.server.wm.SurfaceAnimationRunner$RunningAnimation@ce3d153, mPreProcessingAnimations={}
+06-02 20:32:42.857 D/CoreBackPreview( 1667): Window{2e658d4 u0 Splash Screen com.sdk.video.sample EXITING}: Setting back callback null
+06-02 20:32:42.860 D/SurfaceAnimationRunner( 1667): onAnimationStart:Surface(name=Surface(name=2e658d4 Splash Screen com.sdk.video.sample)/@0x527578d - animation-leash of window_animation)/@0x27b6d42
+06-02 20:32:43.010 D/SurfaceAnimationRunner( 1667): onAnimationEnd:Surface(name=Surface(name=2e658d4 Splash Screen com.sdk.video.sample)/@0x527578d - animation-leash of window_animation)/@0x27b6d42
+06-02 20:32:43.010 I/WindowStateExtImpl( 1667): onSurfaceShowChange show = false mPackageName = com.sdk.video.sample parentPkgName = com.sdk.video.sample
+06-02 20:32:43.010 I/WindowManager( 1667): Window{2e658d4 u0 Splash Screen com.sdk.video.sample EXITING} state from HAS_DRAWN to NO_SURFACE; reason: destroySurface
+06-02 20:32:51.477 I/Quality (20573): Skipped: true 2 cost 36.751644 refreshRate 16666667 bit true processName com.sdk.video.sample
+06-02 20:32:51.541 D/OplusInputMethodManagerInternal(20573): get inputMethodManager extension: com.android.internal.view.IInputMethodManager$Stub$Proxy@7958321
+06-02 20:32:51.549 I/Quality (20573): Skipped: true 1 cost 8.533644 refreshRate 8350758 bit true processName com.sdk.video.sample
+06-02 20:32:51.628 D/OplusFullScreenDisplayManager( 1667): adjustWindowParamsLw com.sdk.video.sample, no change cutoutMode: 0
+06-02 20:32:51.628 V/WindowManager( 1667): Relayout Window{a80fead u0 com.sdk.video.sample/com.sdk.video.sample.MainActivity}: viewVisibility=0, oldvis=0, req=1080x2400
+06-02 20:32:51.696 I/Quality (20573): Skipped: false 16 cost 138.74606 refreshRate 8356585 bit true processName com.sdk.video.sample
+06-02 20:32:51.728 I/Quality (20573): Skipped: false 1 cost 28.979853 refreshRate 16666667 bit true processName com.sdk.video.sample
+06-02 20:32:52.332 I/Quality (20573): Skipped: false 2 cost 42.860283 refreshRate 16633573 bit true processName com.sdk.video.sample
+06-02 20:32:52.635 I/AppsFilter( 1667): interaction: PackageSetting{ddb2620 com.sdk.video.sample/10413} -> PackageSetting{e4169ac com.oplus.statistics.rom/10366} BLOCKED
+06-02 20:32:52.636 E/ActivityThread(20573): Failed to find provider info for com.oplus.statistics.provider
+06-02 20:32:52.637 E/OplusStatistics--(20573): IllegalArgumentException:java.lang.IllegalArgumentException: Unknown URL content://com.oplus.statistics.provider/track_event
+06-02 20:33:08.489 I/Quality (20573): Skipped: true 1 cost 24.39235 refreshRate 15997968 bit true processName com.sdk.video.sample
+06-02 20:33:08.523 D/Camera2CameraImpl(20573): {Camera@986c2b7[id=1]} Transitioning camera internal state: OPENED --> CLOSING
+06-02 20:33:08.523 D/CameraStateRegistry(20573): Recalculating open cameras:
+06-02 20:33:08.523 D/CameraStateRegistry(20573): Camera                                       State                 
+06-02 20:33:08.523 D/CameraStateRegistry(20573): -------------------------------------------------------------------
+06-02 20:33:08.523 D/CameraStateRegistry(20573): Camera@986c2b7[id=1]                         CLOSING               
+06-02 20:33:08.523 D/CameraStateRegistry(20573): Camera@68b14d5[id=0]                         UNKNOWN               
+06-02 20:33:08.523 D/CameraStateRegistry(20573): -------------------------------------------------------------------
+06-02 20:33:08.523 D/CameraStateRegistry(20573): Open count: 1 (Max allowed: 1)
+06-02 20:33:08.523 D/CameraStateMachine(20573): New public camera state CameraState{type=CLOSING, error=null} from CLOSING and null
+06-02 20:33:08.523 D/CameraStateMachine(20573): Publishing new public camera state CameraState{type=CLOSING, error=null}
+06-02 20:33:08.523 D/Camera2CameraImpl(20573): {Camera@986c2b7[id=1]} Resetting Capture Session
+06-02 20:33:08.524 D/Camera2CameraImpl(20573): {Camera@986c2b7[id=1]} Releasing session in state CLOSING
+06-02 20:33:08.525 D/CameraOrientationUtil(20573): getRelativeImageRotation: destRotationDegrees=0, sourceRotationDegrees=90, isOppositeFacing=true, result=90
+06-02 20:33:08.525 D/CameraOrientationUtil(20573): getRelativeImageRotation: destRotationDegrees=0, sourceRotationDegrees=90, isOppositeFacing=true, result=90
+06-02 20:33:08.537 D/DynamicRangeResolver(20573): Resolved dynamic range for use case androidx.camera.core.Preview-75aea6b5-e5d2-477c-8d90-6247b83e58bd to no compatible HDR dynamic ranges.
+06-02 20:33:08.537 D/DynamicRangeResolver(20573): DynamicRange@5bbf998{encoding=UNSPECIFIED, bitDepth=0}
+06-02 20:33:08.537 D/DynamicRangeResolver(20573): ->
+06-02 20:33:08.537 D/DynamicRangeResolver(20573): DynamicRange@c97a77b{encoding=SDR, bitDepth=8}
+06-02 20:33:08.540 D/CameraOrientationUtil(20573): getRelativeImageRotation: destRotationDegrees=0, sourceRotationDegrees=90, isOppositeFacing=true, result=90
+06-02 20:33:08.541 D/DeferrableSurface(20573): Surface created[total_surfaces=1, used_surfaces=0](androidx.camera.core.processing.SurfaceEdge$SettableSurface@47b41cc}
+06-02 20:33:08.541 D/DeferrableSurface(20573): Surface created[total_surfaces=2, used_surfaces=0](androidx.camera.core.SurfaceRequest$2@b00aeb8}
+06-02 20:33:08.542 D/DeferrableSurface(20573): New surface in use[total_surfaces=2, used_surfaces=1](androidx.camera.core.SurfaceRequest$2@b00aeb8}
+06-02 20:33:08.542 D/DeferrableSurface(20573): use count+1, useCount=1 androidx.camera.core.SurfaceRequest$2@b00aeb8
+06-02 20:33:08.542 D/CameraOrientationUtil(20573): getRelativeImageRotation: destRotationDegrees=0, sourceRotationDegrees=90, isOppositeFacing=true, result=90
+06-02 20:33:08.544 D/ImageCapture(20573): createPipeline(cameraId: 0, streamSpec: StreamSpec{resolution=3264x2448, dynamicRange=DynamicRange@c97a77b{encoding=SDR, bitDepth=8}, expectedFrameRateRange=[0, 0], implementationOptions=androidx.camera.camera2.impl.Camera2ImplConfig@7aff8cd})
+06-02 20:33:08.544 D/BufferQueueConsumer(20573): [](id:505d00000004,api:0,p:-1,c:20573) connect: controlledByApp=true
+06-02 20:33:08.545 D/DeferrableSurface(20573): Surface created[total_surfaces=3, used_surfaces=1](androidx.camera.core.impl.ImmediateSurface@f499582}
+06-02 20:33:08.546 D/Camera2CameraImpl(20573): {Camera@68b14d5[id=0]} Use case androidx.camera.core.ImageCapture-128bf6f0-c632-426c-a6af-372341743048265851858 ACTIVE
+06-02 20:33:08.546 D/UseCaseAttachState(20573): Active and attached use case: [] for camera: 0
+06-02 20:33:08.547 D/Camera2CameraImpl(20573): {Camera@68b14d5[id=0]} Use case androidx.camera.core.Preview-75aea6b5-e5d2-477c-8d90-6247b83e58bd190692957 ACTIVE
+06-02 20:33:08.547 D/UseCaseAttachState(20573): Active and attached use case: [] for camera: 0
+06-02 20:33:08.547 D/BufferQueueConsumer(20573): [ImageReader-2304x1728f21m4-20573-0](id:505d00000001,api:0,p:-1,c:20573) disconnect
+06-02 20:33:08.547 D/Camera2CameraImpl(20573): {Camera@68b14d5[id=0]} Use case androidx.camera.core.ImageCapture-128bf6f0-c632-426c-a6af-372341743048265851858 ACTIVE
+06-02 20:33:08.548 I/Quality (20573): Skipped: true 1 cost 27.083235 refreshRate 16666667 bit true processName com.sdk.video.sample
+06-02 20:33:08.548 D/UseCaseAttachState(20573): Active and attached use case: [] for camera: 0
+06-02 20:33:08.548 D/UseCaseAttachState(20573): Active and attached use case: [] for camera: 0
+06-02 20:33:08.548 D/MainActivity(20573): CameraX negotiated resolution: 1920x1080
+06-02 20:33:08.548 D/Camera2CameraImpl(20573): {Camera@68b14d5[id=0]} Use cases [androidx.camera.core.Preview-75aea6b5-e5d2-477c-8d90-6247b83e58bd190692957, androidx.camera.core.ImageCapture-128bf6f0-c632-426c-a6af-372341743048265851858] now ATTACHED
+06-02 20:33:08.549 D/UseCaseAttachState(20573): All use case: [androidx.camera.core.ImageCapture-128bf6f0-c632-426c-a6af-372341743048265851858, androidx.camera.core.Preview-75aea6b5-e5d2-477c-8d90-6247b83e58bd190692957] for camera: 0
+06-02 20:33:08.549 D/Camera2CameraImpl(20573): mMeteringRepeating is ATTACHED, SessionConfig Surfaces: 2, CaptureConfig Surfaces: 1
+06-02 20:33:08.549 D/UseCaseAttachState(20573): Active and attached use case: [androidx.camera.core.ImageCapture-128bf6f0-c632-426c-a6af-372341743048265851858, androidx.camera.core.Preview-75aea6b5-e5d2-477c-8d90-6247b83e58bd190692957] for camera: 0
+06-02 20:33:08.550 D/Camera2CameraImpl(20573): {Camera@68b14d5[id=0]} Resetting Capture Session
+06-02 20:33:08.550 D/Camera2CameraImpl(20573): {Camera@68b14d5[id=0]} Releasing session in state INITIALIZED
+06-02 20:33:08.551 D/Camera2CameraImpl(20573): {Camera@68b14d5[id=0]} Attempting to force open the camera.
+06-02 20:33:08.551 D/CameraStateRegistry(20573): tryOpenCamera(Camera@68b14d5[id=0]) [Available Cameras: 0, Already Open: false (Previous state: null)] --> FAIL
+06-02 20:33:08.551 D/Camera2CameraImpl(20573): {Camera@68b14d5[id=0]} No cameras available. Waiting for available camera before opening camera.
+06-02 20:33:08.551 D/Camera2CameraImpl(20573): {Camera@68b14d5[id=0]} Transitioning camera internal state: INITIALIZED --> PENDING_OPEN
+06-02 20:33:08.551 D/CameraStateRegistry(20573): Recalculating open cameras:
+06-02 20:33:08.551 D/CameraStateRegistry(20573): Camera                                       State                 
+06-02 20:33:08.551 D/CameraStateRegistry(20573): -------------------------------------------------------------------
+06-02 20:33:08.551 D/CameraStateRegistry(20573): Camera@986c2b7[id=1]                         CLOSING               
+06-02 20:33:08.551 D/CameraStateRegistry(20573): Camera@68b14d5[id=0]                         PENDING_OPEN          
+06-02 20:33:08.551 D/CameraStateRegistry(20573): -------------------------------------------------------------------
+06-02 20:33:08.551 D/CameraStateRegistry(20573): Open count: 1 (Max allowed: 1)
+06-02 20:33:08.551 D/CameraStateMachine(20573): New public camera state CameraState{type=OPENING, error=null} from PENDING_OPEN and null
+06-02 20:33:08.551 D/CameraStateMachine(20573): Publishing new public camera state CameraState{type=OPENING, error=null}
+06-02 20:33:08.552 D/Camera2CameraImpl(20573): {Camera@68b14d5[id=0]} Use case androidx.camera.core.Preview-75aea6b5-e5d2-477c-8d90-6247b83e58bd190692957 ACTIVE
+06-02 20:33:08.552 D/UseCaseAttachState(20573): Active and attached use case: [androidx.camera.core.ImageCapture-128bf6f0-c632-426c-a6af-372341743048265851858, androidx.camera.core.Preview-75aea6b5-e5d2-477c-8d90-6247b83e58bd190692957] for camera: 0
+06-02 20:33:08.553 D/Camera2CameraImpl(20573): {Camera@68b14d5[id=0]} Use case androidx.camera.core.ImageCapture-128bf6f0-c632-426c-a6af-372341743048265851858 ACTIVE
+06-02 20:33:08.553 D/UseCaseAttachState(20573): Active and attached use case: [androidx.camera.core.ImageCapture-128bf6f0-c632-426c-a6af-372341743048265851858, androidx.camera.core.Preview-75aea6b5-e5d2-477c-8d90-6247b83e58bd190692957] for camera: 0
+06-02 20:33:08.554 D/UseCaseAttachState(20573): Active and attached use case: [androidx.camera.core.ImageCapture-128bf6f0-c632-426c-a6af-372341743048265851858, androidx.camera.core.Preview-75aea6b5-e5d2-477c-8d90-6247b83e58bd190692957] for camera: 0
+06-02 20:33:08.571 I/CameraService( 1159): disconnect: Disconnected client for camera 1 for PID 20573
+06-02 20:33:08.573 D/Camera2CameraImpl(20573): {Camera@986c2b7[id=1]} CameraDevice.onClosed()
+06-02 20:33:08.574 D/Camera2CameraImpl(20573): {Camera@986c2b7[id=1]} Transitioning camera internal state: CLOSING --> INITIALIZED
+06-02 20:33:08.575 D/CameraStateRegistry(20573): Recalculating open cameras:
+06-02 20:33:08.575 D/CameraStateRegistry(20573): Camera                                       State                 
+06-02 20:33:08.575 D/CameraStateRegistry(20573): -------------------------------------------------------------------
+06-02 20:33:08.575 D/CameraStateRegistry(20573): Camera@986c2b7[id=1]                         CLOSED                
+06-02 20:33:08.575 D/CameraStateRegistry(20573): Camera@68b14d5[id=0]                         PENDING_OPEN          
+06-02 20:33:08.575 D/CameraStateRegistry(20573): -------------------------------------------------------------------
+06-02 20:33:08.575 D/CameraStateRegistry(20573): Open count: 0 (Max allowed: 1)
+06-02 20:33:08.575 I/OplusCameraStateBroadcast( 1667): notifyCameraState packageName:com.sdk.video.sample cameraState:3 frontcamera:1 cameraId:1
+06-02 20:33:08.576 D/CameraStateMachine(20573): New public camera state CameraState{type=CLOSED, error=null} from CLOSED and null
+06-02 20:33:08.576 D/CameraStateMachine(20573): Publishing new public camera state CameraState{type=CLOSED, error=null}
+06-02 20:33:08.576 D/Camera2CameraImpl(20573): {Camera@68b14d5[id=0]} Attempting to open the camera.
+06-02 20:33:08.576 D/CameraStateRegistry(20573): tryOpenCamera(Camera@68b14d5[id=0]) [Available Cameras: 1, Already Open: false (Previous state: PENDING_OPEN)] --> SUCCESS
+06-02 20:33:08.577 D/CameraStateRegistry(20573): Recalculating open cameras:
+06-02 20:33:08.577 D/CameraStateRegistry(20573): Camera                                       State                 
+06-02 20:33:08.577 D/CameraStateRegistry(20573): -------------------------------------------------------------------
+06-02 20:33:08.577 D/CameraStateRegistry(20573): Camera@986c2b7[id=1]                         CLOSED                
+06-02 20:33:08.577 D/CameraStateRegistry(20573): Camera@68b14d5[id=0]                         OPENING               
+06-02 20:33:08.577 D/CameraStateRegistry(20573): -------------------------------------------------------------------
+06-02 20:33:08.577 D/CameraStateRegistry(20573): Open count: 1 (Max allowed: 1)
+06-02 20:33:08.577 D/OplusCamera2StatisticsManager(20573): addPreviewInfo, eventMap: {halLevel=3, preview_time=25947, cameraId=1, pkgName=com.sdk.video.sample, apLevel=2}
+06-02 20:33:08.577 D/Camera2CameraImpl(20573): {Camera@68b14d5[id=0]} Opening camera.
+06-02 20:33:08.577 D/Camera2CameraImpl(20573): {Camera@68b14d5[id=0]} Transitioning camera internal state: PENDING_OPEN --> OPENING
+06-02 20:33:08.577 D/CameraStateMachine(20573): New public camera state CameraState{type=OPENING, error=null} from OPENING and null
+06-02 20:33:08.577 D/OplusCamera2StatisticsManager(20573): addInfo, eventMap: {halLevel=3, cameraId=1, disconnectTime=1780403588576, pkgName=com.sdk.video.sample, connentTime=1780403562629, apLevel=2, timeCost=25947}
+06-02 20:33:08.577 D/UseCaseAttachState(20573): Active and attached use case: [] for camera: 1
+06-02 20:33:08.577 D/UseCaseAttachState(20573): All use case: [androidx.camera.core.ImageCapture-128bf6f0-c632-426c-a6af-372341743048265851858, androidx.camera.core.Preview-75aea6b5-e5d2-477c-8d90-6247b83e58bd190692957] for camera: 0
+06-02 20:33:08.578 I/OplusCameraManagerGlobal(20573): setClientInfo, packageName: com.sdk.video.sample, uid: 10413, pid: 20573
+06-02 20:33:08.579 I/OplusCameraManagerGlobal(20573): setClientInfo, packageName: com.sdk.video.sample, uid: 10413, pid: 20573
+06-02 20:33:08.583 I/OplusCameraUtils(20573): current activityName: com.sdk.video.sample.MainActivity
+06-02 20:33:08.583 I/OplusCameraUtils(20573): getComponentName, componentName: com.sdk.video.sample/com.sdk.video.sample.MainActivity, packageName:com.sdk.video.sample, activityName:com.sdk.video.sample.MainActivity
+06-02 20:33:08.583 I/CameraService( 1159): CameraService::connect call (PID -1 "com.sdk.video.sample", camera ID 0) and Camera API version 2
+06-02 20:33:08.583 I/Camera2ClientBase( 1159): Camera 0: Opened. Client: com.sdk.video.sample (PID 20573, UID 10413)
+06-02 20:33:08.591 E/CameraManagerGlobal(20573): Camera 4 is not available. Ignore physical camera status change
+06-02 20:33:08.593 I/KEYFILE ( 1263): [INFO   ] CustomMetadata.cpp:228 updateCurCamName() m_curPkgName:com.sdk.video.sample
+06-02 20:33:08.594 I/metis_v2_SettingUtils(17585): switchObserver, onChange: false uri:content://settings/secure/flashlight_available flags:32769
+06-02 20:33:08.597 D/isp_tuning_custom_oplus( 1263): SetMappingInfo_Custom AppPackageName = "com.sdk.video.sample", AppMenuName = "common", FB = "0", supernightMode is "no_supernight", asd_value is "default"
+06-02 20:33:08.597 D/isp_tuning_custom_oplus( 1263): This app(com.sdk.video.sample) hadn't config in config file
+06-02 20:33:08.597 D/isp_tuning_custom_oplus( 1263): SetMappingInfo_Custom AppPackageName = "com.sdk.video.sample", AppMenuName = "common", FB = "0", supernightMode is "no_supernight", m_EApp_Custom "12" 
+06-02 20:33:08.605 D/OplusAppListInterceptManager( 1667): shouldFilterTask::packageName = com.sdk.video.sample
+06-02 20:33:08.609 D/Camera2CameraImpl(20573): {Camera@68b14d5[id=0]} CameraDevice.onOpened()
+06-02 20:33:08.609 I/OplusCameraStateBroadcast( 1667): notifyCameraState packageName:com.sdk.video.sample cameraState:0 frontcamera:0 cameraId:0
+06-02 20:33:08.610 D/Camera2CameraImpl(20573): {Camera@68b14d5[id=0]} Transitioning camera internal state: OPENING --> OPENED
+06-02 20:33:08.611 D/CameraStateRegistry(20573): Recalculating open cameras:
+06-02 20:33:08.611 D/CameraStateRegistry(20573): Camera                                       State                 
+06-02 20:33:08.611 D/CameraStateRegistry(20573): -------------------------------------------------------------------
+06-02 20:33:08.611 D/CameraStateRegistry(20573): Camera@986c2b7[id=1]                         CLOSED                
+06-02 20:33:08.611 D/CameraStateRegistry(20573): Camera@68b14d5[id=0]                         OPEN                  
+06-02 20:33:08.611 D/CameraStateRegistry(20573): -------------------------------------------------------------------
+06-02 20:33:08.611 D/CameraStateRegistry(20573): Open count: 1 (Max allowed: 1)
+06-02 20:33:08.611 D/CameraStateMachine(20573): New public camera state CameraState{type=OPEN, error=null} from OPEN and null
+06-02 20:33:08.611 D/CameraStateMachine(20573): Publishing new public camera state CameraState{type=OPEN, error=null}
+06-02 20:33:08.612 D/UseCaseAttachState(20573): All use case: [androidx.camera.core.ImageCapture-128bf6f0-c632-426c-a6af-372341743048265851858, androidx.camera.core.Preview-75aea6b5-e5d2-477c-8d90-6247b83e58bd190692957] for camera: 0
+06-02 20:33:08.614 D/OplusCamera2StatisticsManager(20573): addInfo, eventMap: {halLevel=3, cameraId=0, pkgName=com.sdk.video.sample, connentTime=1780403588613, apLevel=2}
+06-02 20:33:08.614 D/SyncCaptureSessionBase(20573): [androidx.camera.camera2.internal.SynchronizedCaptureSessionBaseImpl@a1a4fb] getSurface...done
+06-02 20:33:08.614 D/CaptureSession(20573): Opening capture session.
+06-02 20:33:08.625 D/DeferrableSurface(20573): use count+1, useCount=2 androidx.camera.core.SurfaceRequest$2@b00aeb8
+06-02 20:33:08.625 D/DeferrableSurface(20573): New surface in use[total_surfaces=3, used_surfaces=2](androidx.camera.core.impl.ImmediateSurface@f499582}
+06-02 20:33:08.625 D/DeferrableSurface(20573): use count+1, useCount=1 androidx.camera.core.impl.ImmediateSurface@f499582
+06-02 20:33:08.632 I/KEYFILE ( 1263): [INFO   ] CustomMetadata.cpp:365 getSessionParam() m_activityName:com.sdk.video.sample.MainActivity,m_callerPkgName:,m_bIsSdkCam:0
+06-02 20:33:08.674 I/mtkcam-OplusPipelineModelSession( 1263): activityName: com.sdk.video.sample.MainActivity, packageName: com.sdk.video.sample, openId: 0
+06-02 20:33:08.680 I/mtkcam-FeatureSettingPolicy-Oplus( 1263): [reEvaluateStreamConfiguration] mNeedCaptureNoPreviewTag:0,mPackageName:com.sdk.video.sample,mActivityName:com.sdk.video.sample.MainActivity,SysCam:0,mDisEnabledFSC:0
+06-02 20:33:08.681 I/mtkcam-SensorSettingPolicy4cell( 1263): [OPLUS][getThirdCamScenarioId] match setting:com.sdk.video.sample
+06-02 20:33:08.681 I/mtkcam-SensorSettingPolicy4cell( 1263): [OPLUS][getThirdCamScenarioId] match setting(input):ThirdPkgName com.sdk.video.sample, camId 0, hasVideoConsumer 0, thirdOpMode 0x0, asepct_Ration 750,maxYuvSize.w 160, maxYuvSize.h 96, maxImageSize.w 3264, maxImageSize.h 2448
+06-02 20:33:08.681 I/mtkcam-SensorSettingPolicy4cell( 1263): [OPLUS][getThirdCamScenarioId] match setting(result):[ThirdCamSensorSettingMap],com.sdk.video.sample[1/7] [8:0,-1,-1,570,-1,-1,-1,0]
+06-02 20:33:08.681 I/OplusP1HwSettingPolicy( 1263): [oplusConfigRrzoSize] 3rdAppCam:com.sdk.video.sample[0] thirdActivityName:com.sdk.video.sample.MainActivity
+06-02 20:33:08.681 I/OplusP1HwSettingPolicy( 1263): [oplusConfigRrzoSize]get key: com.sdk.video.sample or com.sdk.video.sample.MainActivity fail! No customization in the current scene
+06-02 20:33:08.706 D/CaptureSession(20573): Attempting to send capture request onConfigured
+06-02 20:33:08.706 D/CaptureSession(20573): Issuing request for session.
+06-02 20:33:08.706 D/Camera2CaptureRequestBuilder(20573): createCaptureRequest
+06-02 20:33:08.712 D/CaptureSession(20573): CameraCaptureSession.onConfigured() mState=OPENED
+06-02 20:33:08.713 D/CaptureSession(20573): CameraCaptureSession.onReady() OPENED
+06-02 20:33:08.717 I/OplusCameraStateBroadcast( 1667): notifyCameraState packageName:com.sdk.video.sample cameraState:1 frontcamera:0 cameraId:0
+06-02 20:33:08.719 I/OcamAsync( 1263): (24748)[OcamAsync] set packname:com.sdk.video.sample, mOplusCamera:0, m_operationMode:0, m_captureMode:0X0
+06-02 20:33:08.783 I/metis_v2_AppDiedObserver(17585): shortcutAppDiedCallback, fenceKey = app_died_shortcut
+06-02 20:33:08.783 E/RemoteGuardClient.DWB.ActivityMonitor(18198): onProcessDied com.oplus.romupdate pid = 14911 uid = 10384
+06-02 20:33:08.783 D/metis_v2_AppDiedObserver(17585): panta-sugg-ShortCut, packageName:com.oplus.romupdate pid:14911
+06-02 20:33:08.783 D/ContextAware_UMSService.SendUMSAppDiedMsg(17585): sendAppDiedMessage packageName = com.oplus.romupdate, pid = 14911
+06-02 20:33:08.783 D/ContextAware_UMSService.SendUMSAppDiedMsg(17585): preInitAsBindService
+06-02 20:33:08.784 I/RemoteGuardClient.DWB.ActivityMonitor(18198): game indulge not release monitor
+06-02 20:33:08.785 I/RemoteGuardClient.DWB.ActivityMonitor(18198): topActivities = [com.sdk.video.sample]
+06-02 20:33:08.794 D/isp_tuning_custom_oplus( 1263): SetMappingInfo_Custom AppPackageName = "com.sdk.video.sample", AppMenuName = "common", FB = "0", supernightMode is "no_supernight", asd_value is "default"
+06-02 20:33:08.794 D/isp_tuning_custom_oplus( 1263): This app(com.sdk.video.sample) hadn't config in config file
+06-02 20:33:08.794 D/isp_tuning_custom_oplus( 1263): SetMappingInfo_Custom AppPackageName = "com.sdk.video.sample", AppMenuName = "common", FB = "0", supernightMode is "no_supernight", m_EApp_Custom "12" 
+06-02 20:33:08.803 D/ContextAware_UMSService.SendUMSAppDiedMsg(17585): onServiceConnected
+06-02 20:33:08.804 D/ContextAware_UMSService.SendUMSAppDiedMsg(17585): sendMessageToUms msg = 4001, bundle = Bundle[{package=com.oplus.romupdate, pid=14911, code=1}]
+06-02 20:33:08.804 D/ContextAware_UMSService.SendUMSAppDiedMsg(17585): releaseResource mHandler = Handler (com.oplus.sdp.se.a$b) {e037e4}
+06-02 20:33:08.806 D/ContextAware_UMSService.SendUMSAppDiedMsg(17585): UMSHandler handleMessage 2
+06-02 20:33:08.806 D/ContextAware_UMSService.SendUMSAppDiedMsg(17585): deInitAsUnbindService
+06-02 20:33:09.061 I/FilterEngine(20573): Auto-rebuilding Camera pipeline...
+06-02 20:33:09.062 I/FilterEngine(20573): Pipeline rebuilt successfully with 3 nodes
+06-02 20:33:09.062 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:09.104 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:09.105 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:09.144 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:09.144 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:09.189 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:09.189 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:09.235 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:09.235 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:09.268 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:09.268 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:09.309 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:09.309 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:09.351 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:09.351 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:09.395 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:09.396 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:09.443 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:09.444 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:09.474 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:09.474 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:09.514 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:09.514 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:09.549 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:09.550 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:09.587 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:09.587 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:09.636 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:09.636 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:09.673 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:09.674 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:09.714 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:09.714 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:09.765 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:09.765 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:09.797 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:09.798 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:09.848 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:09.848 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:09.879 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:09.879 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:09.924 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:09.924 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:09.968 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:09.969 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:09.999 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:10.000 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:10.053 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:10.054 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:10.083 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:10.083 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:10.117 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:10.118 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:10.161 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:10.161 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:10.194 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:10.194 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:10.237 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:10.237 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:10.276 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:10.276 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:10.314 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:10.314 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:10.357 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:10.357 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:10.395 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:10.395 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:10.435 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:10.436 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:10.478 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:10.478 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:10.522 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:10.522 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:10.560 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:10.560 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:10.598 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:10.598 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:10.649 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:10.649 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:10.681 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:10.682 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:10.721 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:10.721 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:10.761 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:10.762 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:10.805 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:10.805 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:10.846 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:10.846 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:10.885 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:10.885 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:10.929 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:10.929 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:10.964 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:10.964 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:11.009 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:11.010 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:11.049 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:11.050 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:11.085 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:11.085 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:11.126 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:11.127 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:11.162 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:11.162 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:11.206 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:11.206 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:11.243 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:11.243 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:11.282 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:11.283 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:11.319 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:11.319 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:11.361 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:11.362 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:11.399 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:11.400 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:11.446 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:11.446 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:11.487 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:11.488 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:11.526 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:11.526 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:11.570 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:11.571 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:11.610 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:11.611 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:11.655 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:11.656 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:11.691 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:11.691 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:11.737 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:11.738 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:11.763 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:11.763 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:11.818 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:11.818 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:11.851 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:11.851 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:11.899 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:11.899 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:11.948 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:11.949 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:11.974 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:11.975 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:12.019 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:12.020 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:12.060 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:12.061 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:12.109 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:12.110 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:12.135 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:12.135 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:12.181 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:12.182 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:12.209 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:12.210 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:12.250 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:12.251 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:12.293 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:12.293 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:12.337 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:12.337 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:12.366 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:12.366 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:12.414 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:12.414 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:12.453 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:12.454 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:12.491 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:12.491 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:12.528 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:12.528 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:12.569 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:12.570 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:12.618 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:12.618 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:12.652 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:12.653 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:12.687 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:12.687 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:12.734 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:12.734 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:12.777 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:12.777 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:12.810 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:12.810 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:12.855 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:12.855 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:12.905 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:12.905 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:12.939 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:12.940 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:12.975 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:12.975 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:13.027 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:13.028 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:13.063 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:13.064 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:13.098 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:13.098 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:13.138 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:13.139 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:13.178 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:13.179 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:13.213 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:13.213 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:13.250 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:13.250 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:13.293 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:13.293 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:13.343 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:13.344 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:13.379 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:13.379 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:13.420 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:13.421 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:13.455 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:13.455 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:13.504 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:13.504 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:13.543 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:13.543 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:13.590 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:13.591 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:13.624 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:13.624 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:13.672 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:13.672 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:13.701 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:13.701 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:13.742 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:13.743 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:13.786 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:13.787 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:13.830 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:13.830 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:13.869 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:13.869 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:13.899 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:13.899 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:13.946 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:13.946 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:13.976 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:13.976 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:14.025 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:14.025 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:14.071 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:14.071 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:14.111 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:14.112 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:14.146 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:14.147 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:14.181 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:14.181 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:14.229 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:14.230 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:14.277 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:14.278 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:14.309 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:14.309 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:14.352 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:14.352 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:14.393 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:14.393 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:14.422 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:14.423 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:14.456 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:14.456 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:14.496 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:14.496 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:14.546 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:14.547 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:14.589 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:14.589 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:14.625 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:14.625 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:14.671 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:14.671 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:14.709 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:14.710 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:14.743 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:14.743 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:14.789 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:14.790 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:14.823 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:14.823 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:14.863 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:14.864 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:14.910 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:14.910 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:14.951 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:14.951 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:14.983 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:14.983 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:15.019 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:15.019 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:15.068 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:15.068 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:15.108 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:15.109 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:15.156 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:15.156 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:15.188 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:15.189 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:15.235 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:15.236 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:15.280 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:15.280 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:15.305 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:15.305 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:15.347 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:15.348 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:15.386 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:15.386 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:15.429 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:15.429 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:15.470 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:15.471 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:15.506 W/dk.video.sample(20573): [SurfaceTexture-1-20573-0] bindTextureImage: clearing GL error: 0x502
+06-02 20:33:15.507 D/FilterEngine(20573): Processing frame: input 1, size 1920x1080
+06-02 20:33:15.519 I/ActivityManager( 1667): Force stopping com.sdk.video.sample appid=10413 user=0: from pid 24843
+06-02 20:33:15.520 D/OplusUIFirst_FB( 1667): com.sdk.video.sample remove pid: 20573
+06-02 20:33:15.520 I/ActivityManager( 1667): Killing 20573:com.sdk.video.sample/u0a413 (adj 0): stop com.sdk.video.sample due to from pid 24843
+06-02 20:33:15.523 I/mtkpower_client( 1667): [Legacy][PowerHal_Wrap_notifyAppState] com.sdk.video.sample/com.sdk.video.sample pid=20573 state:3
+06-02 20:33:15.523 I/game_scn( 1667): collectForegroundAppList packName=com.sdk.video.sample, actName=com.sdk.video.sample, pid=20573, uid=10413, state:DEAD
+06-02 20:33:15.524 W/ActivityTaskManager( 1667): Force removing ActivityRecord{9367e3c u0 com.sdk.video.sample/.MainActivity} t1110 f}}: app died, no saved state
+06-02 20:33:15.531 I/OplusHansManager ( 1667): onUidGone(), 10413 com.sdk.video.sample exit SM
+06-02 20:33:15.534 I/metis_v2_AppDiedObserver(17585): shortcutAppDiedCallback, fenceKey = app_died_shortcut
+06-02 20:33:15.534 D/metis_v2_AppDiedObserver(17585): panta-sugg-ShortCut, packageName:com.sdk.video.sample pid:20573
+06-02 20:33:15.534 D/ContextAware_UMSService.SendUMSAppDiedMsg(17585): sendAppDiedMessage packageName = com.sdk.video.sample, pid = 20573
+06-02 20:33:15.534 D/ContextAware_UMSService.SendUMSAppDiedMsg(17585): preInitAsBindService
+06-02 20:33:15.534 E/RemoteGuardClient.DWB.ActivityMonitor(18198): onProcessDied com.sdk.video.sample pid = 20573 uid = 10413
+06-02 20:33:15.535 I/RemoteGuardClient.DWB.ActivityMonitor(18198): game indulge not release monitor
+06-02 20:33:15.537 V/WindowManager( 1667): Changing focus from Window{a80fead u0 com.sdk.video.sample/com.sdk.video.sample.MainActivity} to null,diplayid=0
+06-02 20:33:15.544 W/InputManager-JNI( 1667): Input channel object 'a80fead com.sdk.video.sample/com.sdk.video.sample.MainActivity (client)' was disposed without first being removed with the input manager!
+06-02 20:33:15.545 I/WindowManager( 1667): Window{a80fead u0 com.sdk.video.sample/com.sdk.video.sample.MainActivity} state from HAS_DRAWN to NO_SURFACE; reason: destroySurface
+06-02 20:33:15.548 I/OplusScreenSecurityMask( 1667): onStackRemoved task = Task{d1df51a #1110 type=standard A=10413:com.sdk.video.sample U=0 visible=false visibleRequested=false mode=fullscreen translucent=true sz=0} record = null displayId = 0
+06-02 20:33:15.548 D/OplusAlwaysAliveManager( 1667): removing: 1110, ComponentInfo{com.sdk.video.sample/com.sdk.video.sample.MainActivity}
+06-02 20:33:15.548 D/TaskFragmentExtImpl( 1667): remove ActivityRecord{9367e3c u0 com.sdk.video.sample/.MainActivity} t-1 f}} to mActivityRecordSum = Counter{ }
+06-02 20:33:15.549 I/OplusHansManager ( 1667): front pkg: com.android.launcher, uid: 10092, prev pkg: com.sdk.video.sample, prev uid: 10413
+06-02 20:33:15.549 I/Osense-DecisionMaker( 1667): notifySceneToAthenaPolicy: SCENE_LAUNCHER, bundle: Bundle[{prevPkgName=com.sdk.video.sample, curUid=10092, curPkgName=com.android.launcher, prevUid=10413}]
+06-02 20:33:15.550 I/OplusResourcePreloadManager( 1667): resume pkg: com.android.launcher, uid:10092, prev pkg: com.sdk.video.sample, prev uid: 10413
+06-02 20:33:15.553 I/PowerHalWrapper( 1667): amsBoostNotify pid:2644,activity:com.android.launcher.Launcher, package:com.android.launcher, mProcessCreatePackcom.sdk.video.sample 
+06-02 20:33:15.553 D/OplusAppSwitchListener( 1667): Detect com.sdk.video.sample switch to background
+06-02 20:33:15.553 D/OplusEapManager( 1667): mTargetExitName :com.sdk.video.sample
+06-02 20:33:15.553 V/DCSEX-AppSwitchManager( 1667): OnAppSwitchObserver: onAppExit, resuming = com.android.launcher, target = com.sdk.video.sample, is ResumingFirstStart =  false, is ResumingMultiApp =  false, extensionInfo =  Bundle[{taskId=2, uid=10092}]
+06-02 20:33:15.553 D/VRR [OPlusFrontAppManager]( 1667): OnAppSwitchObserver: onAppExit , info.targetName = com.sdk.video.sample
+06-02 20:33:15.553 D/DCSEX-AppLaunchEventRecorder( 1667): onAppSwitch from = com.sdk.video.sample to = com.android.launcher
+06-02 20:33:15.553 D/DCSEX-AppLaunchEventRecorder( 1667): recordExitApp = com.sdk.video.sample
+06-02 20:33:15.554 I/Athena  ( 2553): AthenaDynamicReceiver: pre_app:com.sdk.video.sample, next_app:com.android.launcher(10092|2644)
+06-02 20:33:15.555 D/VRR [OPlusExternalRefreshRateManager]( 1667): setFrontPackageName pkgName: com.android.launcher CurPkgName: com.sdk.video.sample
+06-02 20:33:15.556 I/mtkpower@impl(  917): [notifyAppState] pc:0, com.sdk.video.sample => com.android.launcher
+06-02 20:33:15.559 D/Layer   ( 1025): reparent to null sequence=14345, seq[10], name=com.sdk.video.sample/com.sdk.video.sample.MainActivity#14345
+06-02 20:33:15.559 D/Layer   ( 1025): reparent to null sequence=14344, seq[5], name=a80fead com.sdk.video.sample/com.sdk.video.sample.MainActivity#14344
+06-02 20:33:15.559 D/Layer   ( 1025): reparent to null sequence=14336, seq[2], name=ActivityRecord{9367e3c u0 com.sdk.video.sample/.MainActivity}#14336
+06-02 20:33:15.561 W/Battery (11262): ThermalControlUtils: mForegroundPkg=com.android.launcher
+06-02 20:33:15.563 D/VRR [OPlusRefreshRateService]( 1667):  setFrameRateTargetControl [ 0.0 , com.sdk.video.sample , false , com.oplus.battery ]
+06-02 20:33:15.563 D/VRR [OPlusExternalRefreshRateManager]( 1667):  [FRTC] FrameRate : 0 com.sdk.video.sample false com.oplus.battery 0 1000
+06-02 20:33:15.563 D/VRR [OPlusSurfaceFlingerController]( 1667):  add frtc FrameRate : 0 com.sdk.video.sample false com.oplus.battery
+06-02 20:33:15.563 I/VRR [FRTC]( 1025): setFrameRateTarget with [0, com.sdk.video.sample, 0, com.oplus.battery, 1, 0, 1000]
+06-02 20:33:15.563 W/VRR [FRTC]( 1025): invalid param { fps 0, proc_name com.sdk.video.sample, strict_mode 0, description com.oplus.battery, proc_id 0, rate_status 0, backend Surface, version 1, pid 0, uid 1000, enable at 2026-06-02 20:33:15, disable waiting } for current status.
+06-02 20:33:15.566 W/Battery (11262): ThermalControllHandler: tempLevel=7,userMode=2,gameUserMode=7,appType=-1,envTempType=0,appStates=[],appSwitchSafetyMode=false
+06-02 20:33:15.567 W/Battery (11262): ThermalControllHandler: tempGear=7,configItemName=common_config
+06-02 20:33:15.573 I/SurfaceFlinger( 1025): [SF client] REMOVE (0xb400007745a51e00) for (20573:com.sdk.video.sample)
+06-02 20:33:15.573 I/SurfaceFlinger( 1025): [SF client] REMOVE (0xb400007755449f00) for (20573:com.sdk.video.sample)
+06-02 20:33:15.574 I/Camera2ClientBase( 1159): Closed Camera 1. Client was: com.sdk.video.sample (PID 20573, UID 10413)
+06-02 20:33:15.576 I/BufferQueueDebug( 1025): [com.sdk.video.sample/com.sdk.video.sample.MainActivity#14345](this:0xb400007746b9d9e8,id:-1,api:0,p:-1,c:1025) onDestructor()
+06-02 20:33:15.576 I/BufferQueueDebug( 1025): [SurfaceView[com.sdk.video.sample/com.sdk.video.sample.MainActivity](BLAST)#14360](this:0xb40000775557b9e8,id:-1,api:0,p:-1,c:1025) onDestructor()
+06-02 20:33:15.582 W/Battery (11262): ThermalControllHandler: MSG_THERMAL_CONTROL_CATEGORY_CHANGED
+06-02 20:33:15.591 I/RemoteGuardClient.DWB.ActivityMonitor(18198): topActivities = []
+06-02 20:33:15.593 I/RemoteGuardClient.DWB.ActivityMonitor(18198): onForegroundActivitiesChanged 2644,10092,foreground true pkg= oppo.uid.launcher:10092
+06-02 20:33:15.600 I/RemoteGuardClient.DWB.ActivityMonitor(18198): game indulge not start
+06-02 20:33:15.601 I/RemoteGuardClient.DWB.ActivityMonitor(18198): topActivities = []
+06-02 20:33:15.602 D/CarrierSvcBindHelper( 2538): onHandleForceStop: [com.sdk.video.sample]
+06-02 20:33:15.611 D/OplusAppListInterceptManager( 1667): shouldFilterTask::packageName = com.sdk.video.sample
+06-02 20:33:15.615 D/OplusAppListInterceptManager( 1667): shouldFilterTask::packageName = com.sdk.video.sample
+06-02 20:33:15.647 D/AppRecommend_AppRecommendContentProvider(17585): insert uri.toString() = content://appRecommend_data_storage/subscription2x2-launcher/operation?__engine_rpk_package__=com.oppoopen.apptipcard [base|com.oplus.metis|2.0.20-aa39d14]
+06-02 20:33:15.648 D/AppRecommend_AppRecommendContentProvider(17585): insert textData = {"screenIndex":"0","appList":["com.sdk.video.sample","com.google.android.googlequicksearchbox","com.jingdong.app.mall","com.android.chrome"],"apiSourceList":[0,0,5,0],"showSpeechAssistCard":false}
+06-02 20:33:15.648 I/AppRecommend_AppCardEventManager(17585): notifyEventListener cardType:subscription2x2-launcher event:4 reqType:1
+06-02 20:33:15.648 D/AppRecommend_ClickAndExposeProcess(17585): notifyCardEvent event: 4
+06-02 20:33:15.648 I/AppRecommend_AppCardEventDataCounter(17585): updateExposeCounter com.sdk.video.sample=1 with commerce expose count 0
+06-02 20:33:15.648 I/AppRecommend_AppCardEventDataCounter(17585): updateExposeCounter com.google.android.googlequicksearchbox=2 with commerce expose count 0
+06-02 20:33:15.648 I/AppRecommend_AppCardEventDataCounter(17585): updateExposeCounter com.jingdong.app.mall=8 with commerce expose count 8
+06-02 20:33:15.648 I/AppRecommend_AppCardEventDataCounter(17585): updateExposeCounter com.android.chrome=12 with commerce expose count 0
+06-02 20:33:15.649 I/AppRecommend_AppCardEventDataCounter(17585): save click and expose success
+06-02 20:33:15.650 V/ActivityManager( 1667): Got obituary of 20573:com.sdk.video.sample
+06-02 20:33:15.656 I/OplusCameraStateBroadcast( 1667): notifyCameraState packageName:com.sdk.video.sample cameraState:2 frontcamera:0 cameraId:0
+06-02 20:33:15.669 W/ActivityManager( 1667): setHasOverlayUi called on unknown pid: 20573
+06-02 20:33:15.698 D/ContextAware_UMSService.SendUMSAppDiedMsg(17585): onServiceConnected
+06-02 20:33:15.698 D/ContextAware_UMSService.SendUMSAppDiedMsg(17585): sendMessageToUms msg = 4001, bundle = Bundle[{package=com.sdk.video.sample, pid=20573, code=1}]
+06-02 20:33:15.698 D/ContextAware_UMSService.SendUMSAppDiedMsg(17585): releaseResource mHandler = Handler (com.oplus.sdp.se.a$b) {7ba2b02}
+06-02 20:33:15.701 D/ContextAware_UMSService.SendUMSAppDiedMsg(17585): UMSHandler handleMessage 2
+06-02 20:33:15.701 D/ContextAware_UMSService.SendUMSAppDiedMsg(17585): deInitAsUnbindService
+06-02 20:33:15.709 D/SceneSDK.1.0.4-SNAPSHOT.17585.DeepThinkerAppSwitchAbility(17585): onAppSwitchEvent: AppSwitchEvent(timeStamp=0, eventType=2, targetName=com.sdk.video.sample, firstStart=false, multiApp=false, windowMode=0, resumingPackageName=com.android.launcher, resumingActivityName=com.android.launcher.Launcher, isResumingMultiApp=false, isResumingFirstStart=false)
+06-02 20:33:15.709 I/AppRecommend_AppRecommendAdapter(17585): receive app recommend from AppSwitchEvent(eventId=2, switchInfo=AppSwitchInfo(targetName=com.sdk.video.sample, firstStart=false, multiApp=false, windowMode=0, resumingPackageName=com.android.launcher, resumingActivityName=com.android.launcher.Launcher, isResumingFirstStart=false, isResumingMultiApp=false)) [base|com.oplus.metis|2.0.20-aa39d14]
+06-02 20:33:15.710 I/metis_v2_SettingUtils(17585): switchObserver, onChange: false uri:content://settings/secure/flashlight_available flags:32769
+06-02 20:33:15.714 I/Camera2ClientBase( 1159): Closed Camera 0. Client was: com.sdk.video.sample (PID 20573, UID 10413)
+06-02 20:33:15.723 D/SceneSDK.1.0.4-SNAPSHOT.17585.DeepThinkerAppSwitchAbility(17585): onAppSwitchEvent: AppSwitchEvent(timeStamp=0, eventType=1, targetName=com.android.launcher, firstStart=false, multiApp=false, windowMode=1, resumingPackageName=, resumingActivityName=, isResumingMultiApp=false, isResumingFirstStart=false)
+06-02 20:33:15.723 I/AppRecommend_AppRecommendAdapter(17585): receive app recommend from AppSwitchEvent(eventId=1, switchInfo=AppSwitchInfo(targetName=com.android.launcher, firstStart=false, multiApp=false, windowMode=1, resumingPackageName=, resumingActivityName=, isResumingFirstStart=false, isResumingMultiApp=false))
+06-02 20:33:15.730 I/OplusCameraStateBroadcast( 1667): notifyCameraState packageName:com.sdk.video.sample cameraState:3 frontcamera:0 cameraId:0
+06-02 20:33:15.733 I/DigitalAppUse_13.2.12.PackageUtil(19972): getHomeAppList : [com.android.launcher, com.android.settings]
+06-02 20:33:15.733 I/DigitalAppUse_13.2.12.PackageUtil(19972): defaultNotLimitAppList [com.coloros.gamespace, com.oplus.cosa, com.oppo.launcher, com.coloros.digitalwellbeing, com.coloros.familyguard, com.coloros.childrenspace, com.oneplus.brickmode, com.android.settings, com.coloros.alarmclock, com.android.contacts, com.android.mms, com.heytap.vip, com.oplus.vip, com.heytap.usercenter, com.oppo.usercenter, com.oplus.member, com.heytap.member, com.oneplus.member, com.oplus.account, com.oneplus.account, com.oppo.service.account]
+06-02 20:33:15.734 I/DigitalAppUse_13.2.12.PackageUtil(19972): systemWhiteList [Ljava.lang.String;@93c7733
+06-02 20:33:15.734 I/DigitalAppUse_13.2.12.PackageUtil(19972): homeAppList [com.android.launcher, com.android.settings]
+06-02 20:33:15.734 I/DigitalAppUse_13.2.12.PackageUtil(19972): getAllCannotLimitAppList : [com.coloros.gamespace, com.oplus.cosa, com.oppo.launcher, com.coloros.digitalwellbeing, com.coloros.familyguard, com.coloros.childrenspace, com.oneplus.brickmode, com.android.settings, com.coloros.alarmclock, com.android.contacts, com.android.mms, com.heytap.vip, com.oplus.vip, com.heytap.usercenter, com.oppo.usercenter, com.oplus.member, com.heytap.member, com.oneplus.member, com.oplus.account, com.oneplus.account, com.oppo.service.account, com.android.launcher]
+06-02 20:33:15.737 I/DigitalAppUse_13.2.12.PackageUtil(19972): getHomeAppList : [com.android.launcher, com.android.settings]
+06-02 20:33:15.737 I/DigitalAppUse_13.2.12.PackageUtil(19972): defaultNotLimitAppList [com.coloros.gamespace, com.oplus.cosa, com.oppo.launcher, com.coloros.digitalwellbeing, com.coloros.familyguard, com.coloros.childrenspace, com.oneplus.brickmode, com.android.settings, com.coloros.alarmclock, com.android.contacts, com.android.mms, com.heytap.vip, com.oplus.vip, com.heytap.usercenter, com.oppo.usercenter, com.oplus.member, com.heytap.member, com.oneplus.member, com.oplus.account, com.oneplus.account, com.oppo.service.account]
+06-02 20:33:15.737 I/DigitalAppUse_13.2.12.PackageUtil(19972): systemWhiteList [Ljava.lang.String;@f827af0
+06-02 20:33:15.737 I/DigitalAppUse_13.2.12.PackageUtil(19972): homeAppList [com.android.launcher, com.android.settings]
+06-02 20:33:15.737 I/DigitalAppUse_13.2.12.PackageUtil(19972): getAllCannotLimitAppList : [com.coloros.gamespace, com.oplus.cosa, com.oppo.launcher, com.coloros.digitalwellbeing, com.coloros.familyguard, com.coloros.childrenspace, com.oneplus.brickmode, com.android.settings, com.coloros.alarmclock, com.android.contacts, com.android.mms, com.heytap.vip, com.oplus.vip, com.heytap.usercenter, com.oppo.usercenter, com.oplus.member, com.heytap.member, com.oneplus.member, com.oplus.account, com.oneplus.account, com.oppo.service.account, com.android.launcher]
+06-02 20:33:15.738 I/RemoteGuardClient.DWB.PackageUtil(18198): getCanLimitAndDisabledAppList [com.google.android.keep, com.xunmeng.pinduoduo, com.iflytek.oshall.ahzwfw, com.tencent.mobileqq, com.xunlei.downloadprovider, com.coloros.filemanager, com.sf.activity, com.tencent.androidqqmail, com.heytap.cloud, com.heytap.market, com.aiwu.market, com.tmri.app.main, com.realmecomm.app, com.qb.qtranslator, com.heytap.reader, com.baidu.tieba, com.StarVictory.unofficial, com.coloros.phonemanager, com.google.android.apps.searchlite, com.google.android.apps.docs.editors.slides, com.tencent.lolm, com.coloros.shortcuts, com.google.android.apps.bard, com.google.android.apps.photos, com.android.documentsui, com.coloros.ocrscanner, vip.iboab.kzogtr, com.coloros.weather2, com.kaoshibaodian.app, com.discord, com.sankuai.meituan, com.coloros.onekeylockscreen, com.sina.weibo, com.google.android.apps.credentialmanager, com.oplus.play, com.google.android.googlequicksearchbox, com.cainiao.wireless, com.locklayertech.astral, com.coloros.note, com.lxy.qr.app, com.coloros.compass2, com.alicloud.databox, ai.x.grok, com.google.android.apps.labs.whisk, com.coloros.calendar, com.yiihuu.app, com.heytap.smarthome, com.xiaomi.smarthome, com.taobao.idlefish, com.aboutcg.app, org.citra.emu, com.finshell.wallet, com.heytap.quicksearchbox, com.tencent.edu, cmb.pb, org.chromium.webapk.a6d9f3497e0a06c97_v2, org.chromium.webapk.aeec1fb191c3f912f_v2, com.anthropic.claude, com.taptap.global, com.heytap.browser, com.jingdong.app.mall, com.xs.fm, com.baidu.BaiduMap, com.icbc, com.manmanbuy.bijia, com.excean.gspace, com.heytap.book, com.microsoft.emmx, com.sinovatech.unicom.ui, com.coloros.gallery3d, youqu.android.todesk, com.cto51.student, com.realme.linkcn, com.heytap.health, com.sitech.ac, com.google.android.apps.labs.language.tailwind, com.taobao.qianniu, com.autonavi.minimap, com.google.android.apps.docs.editors.docs, com.heytap.speechassist, bin.mt.plus, com.realme.storecn, com.oplus.videoeditor, com.android.vending, com.coloros.soundrecorder, com.oplus.camera, com.coloros.backuprestore, com.google.android.apps.nbu.files, com.heytap.music, com.coloros.assistantscreen, com.android.chrome, com.timanetworks.android.faw.vw.aftermarket.release, com.android.stk, com.heytap.yoli, tv.danmaku.bili, com.openai.chatgpt, com.google.android.apps.docs, com.sankuai.meituan.dispatch.homebrew, com.coloros.calculator, com.google.android.apps.subscriptions.red, com.sdk.video.sample, com.android.email, com.eg.android.AlipayGphone, com.job.android, com.nearme.instant.platform, com.redteamobile.roaming, org.dolphinemu.mmjr, com.jd.jrapp, com.alibaba.wireless, com.MobileTicket, com.replit.app, com.oppo.community, com.taobao.taobao, com.oppo.store, com.zhongduomei.rrmj.society, com.netease.edu.study, com.chinamworld.main, com.nearme.gamecenter, cn.wps.moffice_eng, com.lltskb.lltskb, cn.com.open.mooc, it.dbtecno.pizzaboygbapro, com.google.android.apps.docs.editors.sheets, com.anjuke.android.app, com.heytap.themestore, com.baidu.netdisk, com.google.android.apps.authenticator2, com.xiaolan.tv.chat, com.google.android.calendar]
+06-02 20:33:15.742 I/DigitalAppSDK_1.1.1.UsageLoadDataUtils(19972): transformSevenUsageData() beginTime = 1780329600000 , endTime = 1780403595738 , dateArray = 20260602 
+06-02 20:33:15.742 I/DigitalAppSDK_1.1.1.UsageLoadDataUtils(19972): transformSevenUsageData: 20260602, maybeStartTime = 1780329600000, beginTime=1780329600000, endTime=1780403595738
+06-02 20:33:15.742 I/DigitalAppSDK_1.1.1.UsageLoadDataUtils(19972): start queryUsageStats: maybeStartTime = 1780329600000, beginTime = 1780329600000, endTime = 1780403595738
+06-02 20:33:15.742 I/DigitalAppSDK_1.1.1.UsageTransformManager(19972): queryUsageStats buck:1 begin:20260602 00:00:00 to:20260602 20:33:15 1780329600000 1780403595738 1780329600000
+06-02 20:33:15.744 I/DigitalAppSDK_1.1.1.ExtraUsageUtils(19972): startTime date = 20260602 00:00:00, endTime date = 20260602 20:33:15 totalCounts = 681 usedCounts = 250 loading usage
+06-02 20:33:15.744 I/DigitalAppSDK_1.1.1.ExtraUsageUtils(19972): extraAppUsages [ExtraAppUsage(packageName=com.sdk.video.sample, timeStamp=1780402721462, foreground=1), ExtraAppUsage(packageName=com.sdk.video.sample, timeStamp=1780402759334, foreground=1), ExtraAppUsage(packageName=com.sdk.video.sample, timeStamp=1780402819673, foreground=1), ExtraAppUsage(packageName=com.sdk.video.sample, timeStamp=1780402859595, foreground=1), ExtraAppUsage(packageName=com.sdk.video.sample, timeStamp=1780402925652, foreground=1), ExtraAppUsage(packageName=com.sdk.video.sample, timeStamp=1780403045530, foreground=1), ExtraAppUsage(packageName=com.sdk.video.sample, timeStamp=1780403406516, foreground=2), ExtraAppUsage(packageName=com.sdk.video.sample, timeStamp=1780403423519, foreground=1), ExtraAppUsage(packageName=com.sdk.video.sample, timeStamp=1780403561080, foreground=1)]
+06-02 20:33:15.745 I/DigitalAppSDK_1.1.1.ExtraUsageUtils(19972): getAllUsageWithPackage:com.sdk.video.sample  getEventType:1  getTimeStamp:1780403561080 time:20260602 20:32:41
+06-02 20:33:15.745 I/DigitalAppSDK_1.1.1.ExtraUsageUtils(19972): getAllUsageWithPackage:com.sdk.video.sample  getEventType:23  getTimeStamp:1780403595524 time:20260602 20:33:15
+06-02 20:33:15.745 I/DigitalAppSDK_1.1.1.ExtraUsageUtils(19972): extraAppUsages afterHandle[ExtraAppUsage(packageName=com.sdk.video.sample, timeStamp=1780402721462, foreground=1), ExtraAppUsage(packageName=com.sdk.video.sample, timeStamp=1780402759334, foreground=1), ExtraAppUsage(packageName=com.sdk.video.sample, timeStamp=1780402819673, foreground=1), ExtraAppUsage(packageName=com.sdk.video.sample, timeStamp=1780402859595, foreground=1), ExtraAppUsage(packageName=com.sdk.video.sample, timeStamp=1780402925652, foreground=1), ExtraAppUsage(packageName=com.sdk.video.sample, timeStamp=1780403045530, foreground=1), ExtraAppUsage(packageName=com.sdk.video.sample, timeStamp=1780403406516, foreground=2), ExtraAppUsage(packageName=com.sdk.video.sample, timeStamp=1780403423519, foreground=1), ExtraAppUsage(packageName=com.sdk.video.sample, timeStamp=1780403561080, foreground=1), ExtraAppUsage(packageName=com.sdk.video.sample, timeStamp=1780403595524, foreground=2)]
+06-02 20:33:15.745 I/DigitalAppSDK_1.1.1.ExtraUsageUtils(19972): extraAppUsages afterAddLast[ExtraAppUsage(packageName=com.sdk.video.sample, timeStamp=1780402721462, foreground=1), ExtraAppUsage(packageName=com.sdk.video.sample, timeStamp=1780402759334, foreground=1), ExtraAppUsage(packageName=com.sdk.video.sample, timeStamp=1780402819673, foreground=1), ExtraAppUsage(packageName=com.sdk.video.sample, timeStamp=1780402859595, foreground=1), ExtraAppUsage(packageName=com.sdk.video.sample, timeStamp=1780402925652, foreground=1), ExtraAppUsage(packageName=com.sdk.video.sample, timeStamp=1780403045530, foreground=1), ExtraAppUsage(packageName=com.sdk.video.sample, timeStamp=1780403406516, foreground=2), ExtraAppUsage(packageName=com.sdk.video.sample, timeStamp=1780403423519, foreground=1), ExtraAppUsage(packageName=com.sdk.video.sample, timeStamp=1780403561080, foreground=1), ExtraAppUsage(packageName=com.sdk.video.sample, timeStamp=1780403595524, foreground=2), ExtraAppUsage(packageName=com.sdk.video.sample, timeStamp=1780403595738, foreground=2)]
+06-02 20:33:15.752 I/RemoteGuardClient.FamilyGuardDBUtil(18198): NewDigital isBound:false
+06-02 20:33:15.756 I/RemoteGuardClient.DWB.AppLimitController(18198): packageName:com.sdk.video.sampletimeUsed:395430 getTimeUsedNew:395430 isForground :true beforeRemove 0
+06-02 20:33:15.768 I/DigitalAppUse_13.2.12.WellBeingProvider(19972): update table time_stamp_with_remove
+06-02 20:33:16.410 D/SceneSDK.1.0.4-SNAPSHOT.17585.DeepThinkerAppSwitchAbility(17585): onAppSwitchEvent: AppSwitchEvent(timeStamp=0, eventType=2, targetName=com.sdk.video.sample, firstStart=false, multiApp=false, windowMode=0, resumingPackageName=com.android.launcher, resumingActivityName=com.android.launcher.Launcher, isResumingMultiApp=false, isResumingFirstStart=false)
+06-02 20:33:16.410 I/metis_v2_AppSwitchDataCollector(17585): AppExitEvent =  com.sdk.video.sample, NextAppName = com.android.launcher
+06-02 20:33:16.410 D/metis_v2_AppSwitchDataCollector(17585): Delete Top Application: com.sdk.video.sample
+06-02 20:33:16.410 W/metis_v2_OifaceBindUtils(17585): bindTask
+06-02 20:33:16.410 D/metis_v2_OifaceBindUtils(17585): bindTaskOnCPU by oplusoiface , interfaceName = com.oplus.oiface.IOIfaceService , tid = 18451
+06-02 20:33:16.410 D/metis_v2_OifaceBindUtils(17585): begin bindTask,tid=18451
+06-02 20:33:16.411 D/metis_v2_OifaceBindUtils(17585): end bindTask,result=true
+06-02 20:33:16.412 D/metis_v2_EntityMap(17585): className:Application
+06-02 20:33:16.416 E/metis_v2_JenaHandlerManager(17585): local thread match
+06-02 20:33:16.417 E/metis_v2_JenaHandlerManager(17585): local thread match
+06-02 20:33:16.418 D/metis_v2_JenaAdapter(17585): deleteObjectTypeProperty: object http://com.oplus.pantanal/metis/core-ontology#TopApplication has statement size:0
+06-02 20:33:16.419 D/metis_v2_JenaAdapter(17585): deleteObjectTypeProperty: delete object http://com.oplus.pantanal/metis/core-ontology#TopApplication
+06-02 20:33:16.419 D/metis_v2_JenaAdapter(17585): deleteIndividual fact:http://com.oplus.pantanal/metis/core-ontology#TopApplication
+06-02 20:33:16.419 D/metis_v2_JenaAdapter(17585): removeCache value:http://com.oplus.pantanal/metis/core-ontology#TopApplication
+06-02 20:33:16.419 D/metis_v2_JenaAdapter(17585): createIndividual id:TopApplication,className:Application
+06-02 20:33:16.420 D/metis_v2_ContextAwarePersistent(17585): operationAppEnterExitRecord add cache:AppEnterExitRecord(currentTime=1780403596420, packageName=com.sdk.video.sample, resumingPackageName=com.android.launcher, enterOrExit=2)
+06-02 20:33:16.421 D/metis_v2_JenaAdapter(17585): removeCache value:http://com.oplus.pantanal/metis/core-ontology#Application[_pkgName=com.android.vending_pid=-1]
+06-02 20:33:16.421 D/metis_v2_Utils(17585): getPrivacyPos pos not contains ,
+06-02 20:33:16.421 D/metis_v2_JenaAdapter(17585): putCache key:, value:http://com.oplus.pantanal/metis/core-ontology#Application[_pkgName=com.android.vending_pid=-1]
+06-02 20:33:16.426 D/metis_v2_Utils(17585): getPrivacyPos pos not contains ,
+06-02 20:33:16.426 D/metis_v2_JenaAdapter(17585): addDataTypeObject s:http://com.oplus.pantanal/metis/core-ontology#Application[_pkgName=com.android.vending_pid=-1], dataPropertyName:,o:1780403596420
+06-02 20:33:16.427 D/SceneSDK.1.0.4-SNAPSHOT.17585.DeepThinkerAppSwitchAbility(17585): onAppSwitchEvent: AppSwitchEvent(timeStamp=0, eventType=1, targetName=com.android.launcher, firstStart=false, multiApp=false, windowMode=1, resumingPackageName=, resumingActivityName=, isResumingMultiApp=false, isResumingFirstStart=false)
+06-02 20:33:16.427 I/metis_v2_AppSwitchDataCollector(17585): AppEnterEvent =  com.android.launcher, windowMode = 1,firstStart = false
+06-02 20:33:16.427 D/metis_v2_DataCallback(17585): notifyCallBack
+06-02 20:33:16.427 D/metis_v2_IntentAdapter(17585): panta-sugg-packageName :com.android.launcher
+06-02 20:33:16.427 D/metis_v2_Utils(17585): before freeHeapGC fressHeapTimeDistance:8632937 | freeMemory:4126941
+06-02 20:33:16.427 W/metis_v2_AppSwitchDataCollector(17585): fenceKey = com.oplus.metis:TOP_APPLICATION, getExits = [], getEnters = [] packageName = com.android.launcher
+06-02 20:33:16.427 I/metis_v2_AppSwitchDataCollector(17585):  set isNotifiedTVCast
+06-02 20:33:16.431 D/metis_v2_JenaAdapter(17585): removeCache value:http://com.oplus.pantanal/metis/core-ontology#TopApplication
+06-02 20:33:16.432 D/metis_v2_Utils(17585): getPrivacyPos pos not contains ,
+06-02 20:33:16.433 D/metis_v2_JenaAdapter(17585): putCache key:, value:http://com.oplus.pantanal/metis/core-ontology#TopApplication
+06-02 20:33:16.433 D/metis_v2_Utils(17585): getPrivacyPos pos not contains ,
+06-02 20:33:16.434 D/metis_v2_JenaAdapter(17585): addDataTypeObject s:http://com.oplus.pantanal/metis/core-ontology#TopApplication, dataPropertyName:,o:-1
+06-02 20:33:16.436 D/metis_v2_Utils(17585): getPrivacyPos pos not contains ,
+06-02 20:33:16.436 D/metis_v2_JenaAdapter(17585): addDataTypeObject s:http://com.oplus.pantanal/metis/core-ontology#TopApplication, dataPropertyName:,o:com.android.launcher
+06-02 20:33:16.438 D/metis_v2_Utils(17585): getPrivacyPos pos not contains ,
+06-02 20:33:16.438 D/metis_v2_JenaAdapter(17585): addDataTypeObject s:http://com.oplus.pantanal/metis/core-ontology#TopApplication, dataPropertyName:,o:1780403596428
+06-02 20:33:16.438 D/metis_v2_Utils(17585): getPrivacyPos pos not contains ,
+06-02 20:33:16.439 D/metis_v2_JenaAdapter(17585): addDataTypeObject s:http://com.oplus.pantanal/metis/core-ontology#TopApplication, dataPropertyName:,o:false
+06-02 20:33:16.443 D/metis_v2_Utils(17585): getPrivacyPos pos not contains ,
+06-02 20:33:16.443 D/metis_v2_JenaAdapter(17585): putCache key:, value:http://com.oplus.pantanal/metis/core-ontology#TopApplication
+06-02 20:33:16.444 D/metis_v2_FactClientImpl(17585): listSubjectByDataTypeProperty p_id:hasPkgName  String o:com.android.launcher
+06-02 20:33:16.444 I/metis_v2_AppSwitchDataCollector(17585): Skip call fire
+06-02 20:33:16.444 D/metis_v2_ContextAwarePersistent(17585): operationAppEnterExitRecord add cache:AppEnterExitRecord(currentTime=1780403596444, packageName=com.android.launcher, resumingPackageName=, enterOrExit=1)
+06-02 20:33:18.601 D/TrimMemoryHandler( 1667): ProcessRecord{ca0a5c3 0:com.sdk.video.sample/u0a413} hasForegroundActivities, skip trim
+06-02 20:33:20.585 D/AppSwitchObserverHelper(11262): packageName: com.android.launcher,com.sdk.video.sample
+06-02 20:33:25.604 D/DataCollector_DeepThinkerRegisterRetryUtil(17585): Retry to register deepthinker.
+06-02 20:33:25.607 D/DataCollector_DeepThinkerGeoFenceAdapter(17585): registerFenceToDeepThinker geoFences size = 6
+06-02 20:33:25.608 D/DataCollector_DeepThinkerGeoFenceAdapter(17585): registerFenceToDeepThinker geofenceRequest geoFences size = 6 mCallbackTime = 300000
+06-02 20:33:25.609 I/DeepThinkerSDK(17585): [APP] ClientConnection: getDeepThinkerBridge start
+06-02 20:33:25.609 I/DeepThinkerSDK(17585): [APP] ClientConnection: getDeepThinkerBridge end
+06-02 20:33:25.609 D/DataCollector_DeepThinkerWrapper(17585): getDeepThinkerBridge com.oplus.deepthinker.platform.server.IDeepThinkerBridge$Stub$Proxy@2d30430
+06-02 20:33:25.612 E/DataCollector_DeepThinkerGeoFenceAdapter(17585): register fence failed, code = 4
+06-02 20:33:25.645 D/metis_v2_SceneIdentifyDataCollector(17585): startAlarmTimer..
+Total printed lines: 722
