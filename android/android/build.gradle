@@ -11,6 +11,9 @@ def ffmpegPrebuiltDirPath = configuredFfmpegPrebuiltDir != null
         ? file(configuredFfmpegPrebuiltDir.toString()).absolutePath.replace('\\', '/')
         : (defaultFfmpegPrebuiltDir.exists() ? defaultFfmpegPrebuiltDir.absolutePath.replace('\\', '/') : null)
 
+// TFLite 预编译库路径 — 通过 downloadTfliteSo task 下载或手动放置 .so 文件
+def tflitePrebuiltDirPath = file("src/main/jniLibs/tflite").absolutePath.replace('\\', '/')
+
 android {
     lint {
         abortOnError false
@@ -20,8 +23,8 @@ android {
 
     sourceSets {
         main {
-            // FFmpeg prebuilt .so files live under jniLibs/ffmpeg/<abi>/.
-            jniLibs.srcDirs = ['src/main/jniLibs/ffmpeg']
+            // FFmpeg + TFLite prebuilt .so files live under jniLibs/<abi>/.
+            jniLibs.srcDirs = ['src/main/jniLibs/ffmpeg', 'src/main/jniLibs/tflite']
             assets.srcDirs = ['src/main/assets', '../../assets']
         }
     }
@@ -36,7 +39,8 @@ android {
             cmake {
                 cppFlags "-std=c++17"
                 arguments "-DANDROID_STL=c++_shared",
-                          "-DANDROID_PLATFORM=android-${rootProject.ext.androidMinSdk}"
+                          "-DANDROID_PLATFORM=android-${rootProject.ext.androidMinSdk}",
+                          "-DTFLITE_PREBUILT_DIR=${tflitePrebuiltDirPath}"
                 if (ffmpegPrebuiltDirPath != null) {
                     arguments "-DFFMPEG_PREBUILT_DIR=${ffmpegPrebuiltDirPath}"
                 }
@@ -99,6 +103,13 @@ dependencies {
     implementation 'androidx.compose.ui:ui-graphics'
     implementation 'androidx.compose.ui:ui-tooling-preview'
     implementation 'androidx.compose.material3:material3'
+
+    // MediaPipe Face Landmarker（官方 Tasks Vision API）
+    // guava/listenablefuture 与 AndroidX 冲突，用 exclude 排除传递依赖中的空壳包，
+    // 由 guava 本体提供实际实现。
+    implementation('com.google.mediapipe:tasks-vision:0.10.14') {
+        exclude group: 'com.google.guava', module: 'listenablefuture'
+    }
 
     implementation "androidx.work:work-runtime-ktx:${versions.workManager}"
     implementation "androidx.lifecycle:lifecycle-viewmodel-ktx:${versions.lifecycle}"

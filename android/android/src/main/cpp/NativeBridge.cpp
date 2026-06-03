@@ -85,6 +85,15 @@ struct EngineWrapper {
     bool faceMorphInPipeline  = false;
     bool bodyEffectInPipeline = false;
 
+    // ── MediaPipe landmark cache ─────────────────────────────────────
+    // nativeUpdateFaceLandmarks (MediaPipe 回调线程) 写入此缓存；
+    // processFrame (GL 线程) 每帧读取并喂给 FaceReshapeFilter/MakeupFilter。
+    // 使用 atomic flag 保证跨线程可见性：MediaPipe 线程写 cache，GL 线程读 cache。
+    ai::LandmarkFrameResult mpLandmarkCache;
+    bool mpLandmarkCacheValid = false;  // true = MediaPipe 路径已有数据
+    // 简单自旋保护（landmark 数据量小，锁竞争极低）
+    std::atomic<bool> mpLandmarkLock{false};
+
 #ifndef WIN32
     // Recording state
     ANativeWindow* recordingWindow = nullptr;
@@ -540,15 +549,35 @@ Java_com_sdk_video_RenderEngine_nativeProcessFrame(JNIEnv *env, jobject thiz, jl
 
     Texture inTex = {static_cast<uint32_t>(textureId), static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
 
-    // Feed latest face landmarks into AI filters before the render pass
-    if (wrapper->faceLandmark) {
-        auto lr = wrapper->faceLandmark->getLatestResult();
-        if (wrapper->faceReshape && wrapper->faceReshapeInPipeline)
-            wrapper->faceReshape->setLandmarkResult(lr);
-        if (wrapper->makeup && wrapper->makeupInPipeline)
-            wrapper->makeup->setLandmarkResult(lr);
-        if (wrapper->faceMorph && wrapper->faceMorphInPipeline && lr.faceCount > 0)
-            wrapper->faceMorph->updateLandmarks(lr.faces[0]);
+    // Feed latest face landmarks into AI filters before the render pass.
+    // 优先使用 MediaPipe 路径（nativeUpdateFaceLandmarks 写入的 cache）；
+    // 若 MediaPipe 还未就绪，回退到旧 TFLite faceLandmark 检测器。
+    {
+        ai::LandmarkFrameResult lr;
+        bool hasResult = false;
+
+        // 尝试读取 MediaPipe cache（简单 spinlock）
+        bool expected = false;
+        if (wrapper->mpLandmarkCacheValid &&
+            wrapper->mpLandmarkLock.compare_exchange_strong(expected, true,
+                std::memory_order_acquire, std::memory_order_relaxed)) {
+            lr = wrapper->mpLandmarkCache;
+            wrapper->mpLandmarkLock.store(false, std::memory_order_release);
+            hasResult = true;
+        } else if (wrapper->faceLandmark) {
+            // 旧 TFLite 路径兜底
+            lr = wrapper->faceLandmark->getLatestResult();
+            hasResult = true;
+        }
+
+        if (hasResult) {
+            if (wrapper->faceReshape && wrapper->faceReshapeInPipeline)
+                wrapper->faceReshape->setLandmarkResult(lr);
+            if (wrapper->makeup && wrapper->makeupInPipeline)
+                wrapper->makeup->setLandmarkResult(lr);
+            if (wrapper->faceMorph && wrapper->faceMorphInPipeline && lr.faceCount > 0)
+                wrapper->faceMorph->updateLandmarks(lr.faces[0]);
+        }
     }
 
     // Unified ResultPayload unpacking and error propagation
@@ -925,8 +954,13 @@ Java_com_sdk_video_RenderEngine_nativeSetFaceReshape(
     w->faceReshape->setChinV      (chinV);
     w->faceReshape->setMouthWidth (mouthWidth);
     if (!w->faceReshapeInPipeline && w->filterEngine) {
+        auto result = w->filterEngine->addFilterRaw(w->faceReshape);
+        if (!result.isOk()) {
+            __android_log_print(ANDROID_LOG_ERROR, "NativeBridge",
+                               "setFaceReshape: addFilterRaw failed: %s", result.getMessage().c_str());
+            return;
+        }
         w->faceReshapeInPipeline = true;
-        w->filterEngine->addFilterRaw(w->faceReshape);
     }
 }
 
@@ -1036,35 +1070,96 @@ Java_com_sdk_video_RenderEngine_nativeDeactivateAllEffects(
 // 磨皮美白（BeautyFilter — 无需 TFLite，立即可用）
 // ============================================================
 
-JNIEXPORT void JNICALL
+/**
+ * 预热 BeautyFilter：在引擎初始化时调用，提前编译 shader、创建 PBO/VBO，
+ * 避免用户点击美颜开关时才首次初始化导致管线卡顿。
+ * 返回 0 成功，-1 失败。
+ */
+JNIEXPORT jint JNICALL
+Java_com_sdk_video_RenderEngine_nativePreWarmBeauty(
+    JNIEnv*, jobject, jlong handle)
+{
+    EngineWrapper* w = reinterpret_cast<EngineWrapper*>(handle);
+    if (!w || !w->filterEngine) return -1;
+    if (w->beautyFilter) return 0; // already pre-warmed
+
+    w->beautyFilter = std::make_shared<BeautyFilter>();
+    // 必须注入 ShaderManager 依赖，否则 initialize() 中
+    // Filter::initialize() → m_shaderManager->getShaderSource("default.vert")
+    // 会因为没有 ShaderManager 而加载不到顶点着色器。
+    w->beautyFilter->setShaderManager(w->filterEngine->getShaderManager());
+    if (!w->beautyFilter->initialize().isOk()) {
+        __android_log_print(ANDROID_LOG_ERROR, "NativeBridge",
+                           "BeautyFilter pre-warm failed");
+        w->beautyFilter.reset();
+        return -1;
+    }
+    __android_log_print(ANDROID_LOG_INFO, "NativeBridge",
+                       "BeautyFilter pre-warmed (shaders compiled, PBOs allocated)");
+    return 0;
+}
+
+/**
+ * 开启美颜（磨皮 + 美白）。
+ * 优先使用预热好的 filter；若预热失败则现场创建（fallback）。
+ * 返回 0 成功，-1 失败。
+ */
+JNIEXPORT jint JNICALL
 Java_com_sdk_video_RenderEngine_nativeEnableBeauty(
     JNIEnv*, jobject, jlong handle, jfloat smooth, jfloat whiten)
 {
     EngineWrapper* w = reinterpret_cast<EngineWrapper*>(handle);
-    if (!w) return;
+    if (!w || !w->filterEngine) return -1;
+
+    // Fallback: 若预热失败，现场创建并初始化（需注入 FilterEngine 依赖）
     if (!w->beautyFilter) {
+        __android_log_print(ANDROID_LOG_WARN, "NativeBridge",
+                           "BeautyFilter not pre-warmed, creating on-demand");
         w->beautyFilter = std::make_shared<BeautyFilter>();
-        w->beautyFilter->initialize();
+        w->beautyFilter->setShaderManager(w->filterEngine->getShaderManager());
+        if (!w->beautyFilter->initialize().isOk()) {
+            __android_log_print(ANDROID_LOG_ERROR, "NativeBridge",
+                               "BeautyFilter on-demand init failed");
+            w->beautyFilter.reset();
+            return -1;
+        }
     }
+
     w->beautyFilter->setParameter("smoothStrength", std::any(smooth));
     w->beautyFilter->setParameter("whitenStrength", std::any(whiten));
-    if (!w->beautyEnabled && w->filterEngine) {
+    if (!w->beautyEnabled) {
+        auto result = w->filterEngine->addFilterRaw(w->beautyFilter);
+        if (!result.isOk()) {
+            __android_log_print(ANDROID_LOG_ERROR, "NativeBridge",
+                               "enableBeauty: addFilterRaw failed: %s", result.getMessage().c_str());
+            return -1;
+        }
         w->beautyEnabled = true;
-        w->filterEngine->addFilterRaw(w->beautyFilter);
     }
+    return 0;
 }
 
-JNIEXPORT void JNICALL
+/**
+ * 关闭美颜：强度归零，从管线中剔除 BeautyFilter。
+ * 返回 0 成功，-1 失败。
+ */
+JNIEXPORT jint JNICALL
 Java_com_sdk_video_RenderEngine_nativeDisableBeauty(
     JNIEnv*, jobject, jlong handle)
 {
     EngineWrapper* w = reinterpret_cast<EngineWrapper*>(handle);
-    if (!w || !w->beautyEnabled || !w->filterEngine) return;
+    if (!w || !w->beautyEnabled || !w->filterEngine) return 0;
     w->beautyEnabled = false;
-    // Rebuild pipeline: OES + active AI filters (beauty excluded)
+    // 归零强度参数，保留 filter 实例供后续复用
+    if (w->beautyFilter) {
+        w->beautyFilter->setParameter("smoothStrength", std::any(0.0f));
+        w->beautyFilter->setParameter("whitenStrength", std::any(0.0f));
+    }
+    // 重建管线：仅保留 OES + 非美颜的 AI 滤镜
     w->filterEngine->removeAllFilters();
     w->filterEngine->addFilterRaw(std::make_shared<OES2RGBFilter>());
     rebuildAiPipeline(w);
+    return 0;
 }
 
 // ============================================================
@@ -1393,6 +1488,129 @@ Java_com_sdk_video_RenderEngine_nativeRenderToRecordingSurface(
     Texture tex = { static_cast<uint32_t>(textureId), static_cast<uint32_t>(width), static_cast<uint32_t>(height) };
     wrapper->renderToRecordingSurface(tex, width, height, timestampNs);
 #endif
+}
+
+// ============================================================
+// MediaPipe 实时人脸关键点桥接
+// Kotlin FaceMeshAnalyzer → JNI → C++ EngineWrapper 暂存
+// 下一帧 processFrame 由 NativeBridge 读取并传给 FaceReshapeFilter
+// ============================================================
+
+JNIEXPORT void JNICALL
+Java_com_sdk_video_RenderEngine_nativeUpdateFaceLandmarks(
+    JNIEnv* env, jobject, jlong handle, jfloatArray j_landmarks)
+{
+    EngineWrapper* w = reinterpret_cast<EngineWrapper*>(handle);
+    if (!w) return;
+
+    // 确保 faceReshape 已创建（可能在用户拖滑杆前 MediaPipe 就开始回调）。
+    // 此函数在 MediaPipe worker 线程调用，faceReshape 创建/初始化需要在 GL 线程，
+    // 所以这里只写 cache，GL 线程的 processFrame 负责消费。
+    if (j_landmarks == nullptr) {
+        // 无人脸帧
+        bool expected = false;
+        while (!w->mpLandmarkLock.compare_exchange_weak(expected, true,
+            std::memory_order_acquire, std::memory_order_relaxed))
+            expected = false;
+        w->mpLandmarkCache.faceCount = 0;
+        w->mpLandmarkCacheValid = true;
+        w->mpLandmarkLock.store(false, std::memory_order_release);
+        return;
+    }
+
+    jfloat* raw = env->GetFloatArrayElements(j_landmarks, nullptr);
+    jsize len = env->GetArrayLength(j_landmarks);
+    const int mpCount = len / 3;
+
+    // ── MediaPipe 478 面网 → 内部 106 点 语义映射 ───────────────────
+    //
+    // 修正版本（对照 MediaPipe Face Landmarker 官方 mesh map）：
+    //
+    // 内部索引 → 语义           → MP 点索引
+    //   0  左脸颊外侧           → 234
+    //   1  左脸颊中侧           → 93   (瘦脸左侧控制点)
+    //   3  左内眼角             → 133
+    //   4  左眼中心             → 159
+    //   5  左眼外角             → 33   (chinV 左控制点)
+    //   6  左鼻翼               → 49   ← 修正：原来是 50(口腔内点)
+    //   7  左嘴角               → 61
+    //   8  下巴尖               → 152
+    //   11 右鼻翼               → 279  ← 修正：原来是 279 正确
+    //   12 右嘴角               → 291
+    //   13 右眼外角             → 362
+    //   14 右眼中心             → 386
+    //   15 右内眼角             → 263  (瘦脸右侧控制点)
+    //   16 右脸颊外侧           → 454
+    //   27 额顶                 → 10   ← 修正：10 是额头中央点
+    //   30 鼻尖                 → 1
+    //   31 左鼻翼(瘦鼻左)       → 64   ← 修正：原来是 100(左颧骨)
+    //   35 右鼻翼(瘦鼻右)       → 294  ← 修正：原来是 249(右颧骨)
+    //   39 左眼瞳孔             → 468  (MediaPipe iris 点，仅 full 模型有)
+    //   42 右眼瞳孔             → 473
+    //   48 左嘴角               → 61
+    //   54 右嘴角               → 291
+    //
+    // 瘦鼻：用 64(左鼻翼) 和 294(右鼻翼) 代替原来的颧骨点。
+    // 大眼：用 468/473 虹膜中心点（full 模型 478 点）代替眼眶点，效果更准确。
+    //       若 mpCount < 473，则回退到 159/386（眼中心）。
+    static const int kMpToInternal[106] = {
+        234,  93, 105, 133, 159,  33,  49,  61, 152,  17,  // 0-9
+          0, 279, 291, 362, 386, 263, 454, 336, 296,  10,  // 10-19
+        109,  67, 103,  68,  71,  21,  54,  10,   6, 195,  // 20-29
+          1, 64,  142, 126, 209, 294, 378, 376,  27, 468,  // 30-39  (31=鼻翼左,35=鼻翼右,39=虹膜左)
+        160, 158, 473, 387, 385, 362,  46,  53,  61,  40,  // 40-49  (42=虹膜右)
+         37, 267, 302, 291, 430,  56, 190, 173, 136, 150,  // 50-59
+        176, 148, 152, 377, 400, 379, 365, 397, 288, 361,  // 60-69
+        323, 454, 356, 389, 251, 284, 332, 297, 338,  10,  // 70-79
+        109,  67, 103,  54,  21, 162, 127, 234,  93, 132,  // 80-89
+         58, 172, 136, 150, 149, 176, 148, 152, 377, 378,  // 90-99
+        365, 397, 288, 361, 454, 323                        // 100-105
+    };
+
+    ai::LandmarkFrameResult lr;
+    lr.faceCount = 1;
+    lr.faces[0].detected = true;
+
+    for (int i = 0; i < 106; ++i) {
+        int mpIdx = kMpToInternal[i];
+        if (mpIdx >= 0 && mpIdx < mpCount) {
+            float x = raw[mpIdx * 3];
+            float y = raw[mpIdx * 3 + 1];
+            // MediaPipe y 轴：0=顶部，1=底部，与 UV 空间一致，无需翻转。
+            // 前置摄像头已在 imageProxyToBitmap 中 postRotate 处理，坐标系已正确。
+            lr.faces[0].landmarks[i].x     = x;
+            lr.faces[0].landmarks[i].y     = y;
+            lr.faces[0].landmarks[i].score = 1.0f;
+        } else {
+            // 超出范围（如 iris 点在 lite 模型中不存在），回退到眼中心
+            if (i == 39) {
+                // 左虹膜回退：用左眼中心 159
+                int fallback = 159;
+                lr.faces[0].landmarks[i].x = (fallback < mpCount) ? raw[fallback * 3]     : 0.5f;
+                lr.faces[0].landmarks[i].y = (fallback < mpCount) ? raw[fallback * 3 + 1] : 0.5f;
+            } else if (i == 42) {
+                // 右虹膜回退：用右眼中心 386
+                int fallback = 386;
+                lr.faces[0].landmarks[i].x = (fallback < mpCount) ? raw[fallback * 3]     : 0.5f;
+                lr.faces[0].landmarks[i].y = (fallback < mpCount) ? raw[fallback * 3 + 1] : 0.5f;
+            } else {
+                lr.faces[0].landmarks[i].x     = 0.5f;
+                lr.faces[0].landmarks[i].y     = 0.5f;
+            }
+            lr.faces[0].landmarks[i].score = 0.0f;
+        }
+    }
+
+    // 写入 MediaPipe cache（spinlock 保护）
+    bool expected = false;
+    while (!w->mpLandmarkLock.compare_exchange_weak(expected, true,
+        std::memory_order_acquire, std::memory_order_relaxed))
+        expected = false;
+    w->mpLandmarkCache = lr;
+    w->mpLandmarkCacheValid = true;
+    w->mpLandmarkLock.store(false, std::memory_order_release);
+
+    env->ReleaseFloatArrayElements(j_landmarks, raw, JNI_ABORT);
 }
 
 } // extern "C"

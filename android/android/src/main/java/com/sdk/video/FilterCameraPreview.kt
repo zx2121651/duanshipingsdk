@@ -13,6 +13,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 import android.opengl.GLES20
+import android.opengl.GLES30
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -61,8 +62,26 @@ fun FilterCameraPreview(
                             private var texCoordHandle = -1
                             private var samplerHandle = -1
 
+                            // GLSurfaceView 真实像素尺寸，onSurfaceChanged 时更新，
+                            // onDrawFrame 每帧用此恢复 viewport（native 管线会改 viewport）
+                            private var surfaceWidth = 0
+                            private var surfaceHeight = 0
+
+                            // 显示层顶点着色器：简单 pass-through。
+                            // Native OES2RGBFilter（src/Filters.cpp）已经在
+                            // oes_to_rgb.vert 中应用了 SurfaceTexture 的
+                            // transformMatrix（旋转/裁剪/镜像），输出到
+                            // outputTexId 是已矫正的 GL_TEXTURE_2D。
+                            // 显示层只需按原始纹理坐标采样即可，重复应用矩阵
+                            // 会导致二次旋转 + 画面裁剪/偏移。
                             private val vertexShaderCode =
-                                "attribute vec4 vPosition; attribute vec2 vTexCoord; varying vec2 texCoord; void main() { gl_Position = vPosition; texCoord = vTexCoord; }"
+                                "attribute vec4 vPosition;" +
+                                "attribute vec2 vTexCoord;" +
+                                "varying vec2 texCoord;" +
+                                "void main() {" +
+                                "  gl_Position = vPosition;" +
+                                "  texCoord = vTexCoord;" +
+                                "}"
                             private val fragmentShaderCode =
                                 "precision mediump float; varying vec2 texCoord; uniform sampler2D sTexture; void main() { gl_FragColor = texture2D(sTexture, texCoord); }"
 
@@ -117,7 +136,10 @@ fun FilterCameraPreview(
                                 texCoordHandle = GLES20.glGetAttribLocation(displayProgram, "vTexCoord")
                                 samplerHandle = GLES20.glGetUniformLocation(displayProgram, "sTexture")
 
-                                val squareCoords = floatArrayOf(-1.0f, 1.0f, -1.0f, -1.0f, 1.0f, -1.0f, 1.0f, 1.0f)
+                                // FBO rendering (native OES2RGBFilter → output 2D texture) has
+                                // Y inverted relative to the GLSurfaceView default framebuffer.
+                                // Negate vertex Y to correct the vertical orientation.
+                                val squareCoords = floatArrayOf(-1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 1.0f, -1.0f)
                                 val textureCoords = floatArrayOf(0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f)
 
                                 vertexBuffer = java.nio.ByteBuffer.allocateDirect(squareCoords.size * 4)
@@ -142,10 +164,34 @@ fun FilterCameraPreview(
                             }
 
                             override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
-                                gl?.glViewport(0, 0, width, height)
+                                surfaceWidth = width
+                                surfaceHeight = height
+                                GLES20.glViewport(0, 0, width, height)
                             }
 
                             override fun onDrawFrame(gl: GL10?) {
+                                // ── 强制重置 GL 状态到显示层所需的基线 ──────────────────
+                                // Native RHI/滤镜管线使用 GLStateManager 缓存 GL 状态，
+                                // 并且可能绑定非零 VAO/VBO。如果显示层在非零 VAO 状态下调用
+                                // glVertexAttribPointer(client-side FloatBuffer)，会触发
+                                // GL_INVALID_OPERATION，后续绘制全部失败 → 清黑 → 黑屏。
+                                //
+                                // 每一帧强制归零以下状态，确保显示层在全量已知状态下绘制。
+                                GLES30.glBindVertexArray(0)
+                                GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0)
+                                GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0)
+                                GLES20.glDisable(GLES20.GL_DEPTH_TEST)
+                                GLES20.glDisable(GLES20.GL_BLEND)
+                                GLES20.glDisable(GLES20.GL_CULL_FACE)
+                                GLES20.glDisable(GLES20.GL_SCISSOR_TEST)
+                                // 每帧恢复 GLSurfaceView 真实 viewport。
+                                // native 管线 FBO 渲染时会改成引擎尺寸，不恢复则
+                                // 显示层只画到引擎 viewport 区域 → 其余黑屏。
+                                if (surfaceWidth > 0 && surfaceHeight > 0) {
+                                    GLES20.glViewport(0, 0, surfaceWidth, surfaceHeight)
+                                }
+                                // ──────────────────────────────────────────────────────────
+
                                 GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
                                 GLES20.glClearColor(0.0f, 0.0f, 0.0f, 1.0f)
                                 GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
@@ -181,6 +227,16 @@ fun FilterCameraPreview(
 
                                     filterManager.markFrameRendered(texId)
                                 }
+
+                                // ── 绘制后将显示层修改过的 GL 状态归零 ────────────────────
+                                // 虽然 native processFrame() 每帧会 invalidate GLStateManager
+                                // 缓存，但主动将 program 和 texture 绑定归零可以减少状态泄漏
+                                // 风险，让下一次 native 帧处理从一个确定的干净状态开始。
+                                GLES20.glUseProgram(0)
+                                GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
+                                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0)
+                                // ──────────────────────────────────────────────────────────
+
                                 // Drain GL errors left by the display shader rendering.
                                 // All GL calls above bypass GLStateManager and may leave
                                 // GL_INVALID_OPERATION in the error queue, which would poison

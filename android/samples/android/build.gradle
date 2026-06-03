@@ -9,6 +9,13 @@ android {
     lint {
         abortOnError false
     }
+    // guava 内含 ListenableFuture，与 androidx concurrent-futures 引入的
+    // listenablefuture-1.0.jar 重复。合并到第一个即可。
+    packaging {
+        jniLibs {
+            pickFirsts += ['**/libtensorflowlite*.so']
+        }
+    }
 
     namespace 'com.sdk.video.sample'
 
@@ -66,4 +73,18 @@ dependencies {
     androidTestImplementation "androidx.test:rules:${versions.testRules}"
     androidTestImplementation "androidx.test.ext:junit:${versions.testExtJunit}"
     androidTestImplementation "androidx.test:core-ktx:${versions.testCore}"
+}
+
+// MediaPipe tasks-vision 传递依赖 guava，guava 内部包含 ListenableFuture。
+// AndroidX concurrent-futures 同时引入了独立的 listenablefuture:1.0 空壳包，
+// 两者都定义了 com.google.common.util.concurrent.ListenableFuture → duplicate class 报错。
+// 解决：强制将 listenablefuture 独立包替换为 guava 本体，消除重复。
+configurations.all {
+    resolutionStrategy.eachDependency { DependencyResolveDetails details ->
+        if (details.requested.group == 'com.google.guava' &&
+                details.requested.name == 'listenablefuture') {
+            details.useTarget 'com.google.guava:guava:27.0.1-android'
+            details.because 'Deduplicate ListenableFuture: guava already contains it'
+        }
+    }
 }

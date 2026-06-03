@@ -5,6 +5,9 @@ import com.sdk.video.InternalApi
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.ImageProxy
 import android.os.Bundle
 import android.os.Environment
 import android.util.Log
@@ -27,6 +30,7 @@ import com.sdk.video.sample.core.model.AppViewModel
 import com.sdk.video.sample.ui.HomeScaffold
 import com.sdk.video.timeline.TimelineManager
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
@@ -43,6 +47,7 @@ class MainActivity : ComponentActivity() {
     private val viewModel: AppViewModel by viewModels()
 
     private var filterManager: VideoFilterManager? = null
+    private var aiController: com.sdk.video.ai.AiFilterController? = null
     private var activeCameraResolution: Size? = null
     private var lastOutputFile: File? = null
     private var cameraSelector: CameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
@@ -115,6 +120,15 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // 分辨率/画质切换：重建 capture session + CameraX
+        lifecycleScope.launch {
+            viewModel.selectedResolution.drop(1).collect {
+                if (isCaptureSessionActive && allPermissionsGranted()) {
+                    restartCaptureSession()
+                }
+            }
+        }
+
         setContent { HomeScaffold(viewModel) }
     }
 
@@ -146,8 +160,11 @@ class MainActivity : ComponentActivity() {
         unbindCamera()
         filterManager?.release()
 
-        val defaultRes = activeCameraResolution ?: Size(1080, 1920)
-        val newManager = VideoFilterManager(this, defaultRes.width, defaultRes.height)
+        // 使用用户选择的画质预设决定引擎尺寸（竖屏：720x1280 / 1080x1920 等）
+        val preset = viewModel.selectedResolution.value
+        val engineRes = preset.toEngineSize()
+        Log.i(TAG, "Creating engine at resolution: ${engineRes.width}x${engineRes.height} (${preset.label})")
+        val newManager = VideoFilterManager(this, engineRes.width, engineRes.height)
 
         newManager.onSurfaceRecreated = { _ ->
             runOnUiThread { rebindCamera() }
@@ -155,6 +172,14 @@ class MainActivity : ComponentActivity() {
 
         filterManager = newManager
         viewModel.bindFilterManager(newManager)
+
+        // 初始化 AI 控制器并启用 Face Landmarks (MediaPipe 路径)
+        val aiCtrl = com.sdk.video.ai.AiFilterController(this, newManager.renderEngine)
+        aiCtrl.enableFaceLandmarks { loaded ->
+            Log.i(TAG, "enableFaceLandmarks ready: $loaded")
+        }
+        aiController = aiCtrl
+
         Log.i(TAG, "Capture session started — waiting for engine init from FilterCameraPreview")
     }
 
@@ -176,9 +201,22 @@ class MainActivity : ComponentActivity() {
             val cp: ProcessCameraProvider = cameraProviderFuture.get()
             cameraProvider = cp
 
+            // 枚举当前摄像头真实支持的预览输出尺寸（Camera2 API）
+            val useFront = cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA
+            lifecycleScope.launch {
+                val supported = com.sdk.video.capture.CameraResolutionHelper
+                    .getSupportedPreviewSizes(this@MainActivity, useFront)
+                viewModel.setSupportedCameraSizes(supported)
+                // 根据实际支持尺寸重新过滤可用预设
+                viewModel.refreshAvailableResolutionsFromCamera(supported)
+            }
+
+            // 根据用户选择的画质预设 + 设备实际支持尺寸构建 ResolutionSelector
+            val preset = viewModel.selectedResolution.value
+            val cameraTarget = viewModel.resolveActualCameraSize(preset)
             val resolutionSelector = ResolutionSelector.Builder()
                 .setResolutionStrategy(ResolutionStrategy(
-                    Size(1080, 1920),
+                    cameraTarget,
                     ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
                 ))
                 .setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY)
@@ -192,6 +230,27 @@ class MainActivity : ComponentActivity() {
             val photoMode = com.sdk.video.capture.PhotoCaptureMode(this@MainActivity, moviesDir)
             photoCaptureMode = photoMode
             val imageCapture = photoMode.buildUseCase()
+
+            val imageAnalysis = ImageAnalysis.Builder()
+                .setResolutionSelector(resolutionSelector)
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+                .build()
+
+            imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
+                val helper = aiController?.faceLandmarkerHelper
+                if (helper != null) {
+                    val bitmap = imageProxyToBitmap(imageProxy)
+                    if (bitmap != null) {
+                        // imageInfo.timestamp 是传感器硬件纳秒时间戳，严格单调递增
+                        // MediaPipe LIVE_STREAM 要求毫秒，除以 1_000_000 转换
+                        val timestampMs = imageProxy.imageInfo.timestamp / 1_000_000L
+                        helper.detectAsync(bitmap, timestampMs)
+                        // bitmap 由 detectAsync 内部 recycle，不需要在这里 recycle
+                    }
+                }
+                imageProxy.close()
+            }
 
             // SurfaceProvider 使用已存在的 manager —— 此时 engineState == RUNNING，
             // awaitInputSurface() 会立即返回，不会阻塞。
@@ -224,7 +283,7 @@ class MainActivity : ComponentActivity() {
             try {
                 cp.unbindAll()
                 val camera = cp.bindToLifecycle(
-                    this@MainActivity, cameraSelector, preview, imageCapture)
+                    this@MainActivity, cameraSelector, preview, imageCapture, imageAnalysis)
                 viewModel.bindCamera(camera)
                 Log.i(TAG, "CameraX bound to lifecycle — capture ready")
             } catch (exc: Exception) {
@@ -245,10 +304,24 @@ class MainActivity : ComponentActivity() {
         bindCameraToPreview()
     }
 
+    /** 画质切换时重建整个捕获会话（引擎 + CameraX） */
+    private fun restartCaptureSession() {
+        isCaptureSessionActive = false
+        unbindCamera()
+        aiController?.clearModelCache()
+        aiController = null
+        filterManager?.release()
+        filterManager = null
+        activeCameraResolution = null
+        startCaptureSession()
+    }
+
     /** 由 CaptureScreen DisposableEffect 离开时调用 */
     private fun endCaptureSession() {
         isCaptureSessionActive = false
         unbindCamera()
+        aiController?.clearModelCache()
+        aiController = null
         Log.i(TAG, "Capture session ended")
     }
 
@@ -258,11 +331,14 @@ class MainActivity : ComponentActivity() {
         val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val outputFile = File(moviesDir, "VideoSDK_$timeStamp.mp4")
         lastOutputFile = outputFile
+        // 根据当前画质预设动态计算码率
+        val activePreset = viewModel.selectedResolution.value
+        val bitrate = activePreset.bitrate
         return VideoExportConfig(
             width = safeSize.width,
             height = safeSize.height,
             fps = 30,
-            videoBitrate = 10_000_000,
+            videoBitrate = bitrate,
             audioBitrate = 128_000,
             iFrameInterval = 1,
             outputPath = outputFile.absolutePath
@@ -453,7 +529,7 @@ class MainActivity : ComponentActivity() {
             width = width,
             height = height,
             fps = 30,
-            videoBitrate = 10_000_000,
+            videoBitrate = viewModel.selectedResolution.value.bitrate,
             audioBitrate = 128_000,
             iFrameInterval = 1,
             outputPath = videoFile.absolutePath
@@ -508,6 +584,8 @@ class MainActivity : ComponentActivity() {
         cameraProvider?.unbindAll()
         countdownTimer?.cancel()
         progressJob?.cancel()
+        aiController?.clearModelCache()
+        aiController = null
         filterManager?.let { fm -> fm.release() }
         filterManager = null
         segmentRecorder = null
@@ -515,5 +593,41 @@ class MainActivity : ComponentActivity() {
         photoCaptureMode = null
         viewModel.bindFilterManager(null)
         viewModel.bindCamera(null)
+    }
+
+    private fun imageProxyToBitmap(image: ImageProxy): Bitmap? {
+        val planes = image.planes
+        val buffer = planes[0].buffer
+        val pixelStride = planes[0].pixelStride
+        val rowStride = planes[0].rowStride
+        val rowPadding = rowStride - pixelStride * image.width
+
+        val width = image.width
+        val height = image.height
+        val bitmap = if (rowPadding == 0) {
+            val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            bmp.copyPixelsFromBuffer(buffer)
+            bmp
+        } else {
+            val realWidth = rowStride / pixelStride
+            val bmp = Bitmap.createBitmap(realWidth, height, Bitmap.Config.ARGB_8888)
+            bmp.copyPixelsFromBuffer(buffer)
+            val cropped = Bitmap.createBitmap(bmp, 0, 0, width, height)
+            bmp.recycle()
+            cropped
+        }
+
+        val rotationDegrees = image.imageInfo.rotationDegrees
+        if (rotationDegrees != 0) {
+            val matrix = android.graphics.Matrix().apply {
+                postRotate(rotationDegrees.toFloat())
+            }
+            val rotatedBitmap = Bitmap.createBitmap(
+                bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true
+            )
+            bitmap.recycle()
+            return rotatedBitmap
+        }
+        return bitmap
     }
 }

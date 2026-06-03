@@ -36,7 +36,7 @@ public:
     BeautyFilter();
     ~BeautyFilter() override = default;
 
-    std::string getVertexShaderName()   const override { return "default.vert"; }
+    std::string getVertexShaderName()   const override { return "beauty.vert"; }
     std::string getFragmentShaderName() const override { return "beauty.frag"; }
 
     Result initialize() override;
@@ -53,6 +53,7 @@ public:
 protected:
     void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
     std::string getFragmentShaderSource() const override;
+    std::string getVertexShaderSource()   const override;
 
 private:
     GLuint m_locSmoothStrength = 0;

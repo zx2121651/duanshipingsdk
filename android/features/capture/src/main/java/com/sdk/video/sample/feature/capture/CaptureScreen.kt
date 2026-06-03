@@ -46,6 +46,9 @@ fun CaptureScreen(viewModel: AppViewModel) {
     val exposureIndex by viewModel.exposureIndex.collectAsState()
     val exposureRange by viewModel.exposureRange.collectAsState()
     val torchEnabled by viewModel.torchEnabled.collectAsState()
+    val hasTorch by viewModel.hasTorch.collectAsState()
+    val selectedResolution by viewModel.selectedResolution.collectAsState()
+    val availableResolutions by viewModel.availableResolutions.collectAsState()
 
     val totalDurationMs by viewModel.totalDurationMs.collectAsState()
     val maxDurationMs by viewModel.maxDurationMs.collectAsState()
@@ -58,6 +61,7 @@ fun CaptureScreen(viewModel: AppViewModel) {
     var showSpeedPanel by remember { mutableStateOf(false) }
     var showCountdownPanel by remember { mutableStateOf(false) }
     var showExposureSlider by remember { mutableStateOf(false) }
+    var showQualityPanel by remember { mutableStateOf(false) }
 
     // ── 捕获会话生命周期 ──────────────────────────────────────────────────
     // 只在此页面存在时才启动相机管线，离开时解绑。
@@ -152,22 +156,62 @@ fun CaptureScreen(viewModel: AppViewModel) {
                 showSpeedPanel = !showSpeedPanel
                 showCountdownPanel = false
                 showExposureSlider = false
+                showQualityPanel = false
             }
             CaptureToolButton(Icons.Filled.Timer, "倒计时") {
                 showCountdownPanel = !showCountdownPanel
                 showSpeedPanel = false
                 showExposureSlider = false
+                showQualityPanel = false
             }
             CaptureToolButton(Icons.Filled.Exposure, "曝光") {
                 showExposureSlider = !showExposureSlider
                 showSpeedPanel = false
                 showCountdownPanel = false
+                showQualityPanel = false
             }
-            CaptureToolButton(
-                icon = if (torchEnabled) Icons.Filled.FlashOn else Icons.Filled.FlashOff,
-                label = "补光"
-            ) {
-                viewModel.toggleTorch()
+            if (hasTorch) {
+                CaptureToolButton(
+                    icon = if (torchEnabled) Icons.Filled.FlashOn else Icons.Filled.FlashOff,
+                    label = "补光"
+                ) {
+                    viewModel.toggleTorch()
+                }
+            } else {
+                CaptureToolButton(
+                    icon = Icons.Filled.FlashOff,
+                    label = "无闪光灯",
+                    enabled = false
+                ) { /* no-op: 前置摄像头无硬件闪光灯 */ }
+            }
+            // 画质选择按钮
+            Box {
+                CaptureToolButton(
+                    icon = Icons.Filled.HighQuality,
+                    label = selectedResolution.label
+                ) {
+                    showQualityPanel = !showQualityPanel
+                }
+                DropdownMenu(
+                    expanded = showQualityPanel,
+                    onDismissRequest = { showQualityPanel = false }
+                ) {
+                    availableResolutions.forEach { preset ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    if (preset == selectedResolution) "✓ ${preset.label}"
+                                    else preset.label,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            },
+                            onClick = {
+                                viewModel.setResolutionPreset(preset)
+                                showQualityPanel = false
+                            }
+                        )
+                    }
+                }
             }
         }
 
@@ -343,6 +387,15 @@ fun CaptureScreen(viewModel: AppViewModel) {
                         ParameterSlider("美白", whiten, { viewModel.setWhitenStrength(it) })
                     }
 
+                    // 美型（人脸形变）：独立于磨皮/美白，始终可滑动。
+                    // 首次拖动会插入 FaceReshapeFilter 到管线，
+                    // 后续仅更新参数（已通过防抖优化）。
+                    Text(
+                        "美型 · 人脸形变",
+                        color = Color(0xFFAAAAAA),
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
                     ParameterSlider("大眼", eye, { viewModel.setReshape(eye = it) }, 0f..0.5f)
                     ParameterSlider("瘦脸", faceSlim, { viewModel.setReshape(slim = it) }, 0f..0.4f)
                     ParameterSlider("瘦鼻", noseSlim, { viewModel.setReshape(nose = it) }, 0f..0.4f)

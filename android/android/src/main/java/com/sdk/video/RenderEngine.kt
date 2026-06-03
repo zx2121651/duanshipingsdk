@@ -490,24 +490,42 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     // ----------------------------------------------------------------
 
     /**
-     * 启用磨皮美白效果（基于 YCbCr 皮肤检测 + 近似双边模糊，无需 TFLite）。
-     * 可在 init() 之后任意时刻调用；重复调用仅更新强度，不重建管线。
-     *
-     * @param smoothStrength 磨皮强度 [0.0, 1.0]，默认 0.6
-     * @param whitenStrength 美白强度 [0.0, 1.0]，默认 0.4
+     * 预热美颜滤镜：编译 shader、分配 PBO/VBO，避免点击美颜开关时首次初始化造成管线卡顿。
+     * 应在引擎初始化完成后立即调用。
+     * @return true 成功
      */
-    fun enableBeauty(smoothStrength: Float = 0.6f, whitenStrength: Float = 0.4f) {
+    fun preWarmBeauty(): Boolean {
         handleLock.read {
-            if (nativeHandle != 0L)
-                nativeEnableBeauty(nativeHandle, smoothStrength, whitenStrength)
+            if (nativeHandle == 0L) return false
+            val err = nativePreWarmBeauty(nativeHandle)
+            if (err != 0) {
+                android.util.Log.w("RenderEngine", "Beauty pre-warm failed: $err")
+                return false
+            }
+            return true
         }
+        return false
     }
 
-    /** 关闭磨皮美白并从渲染管线移除 */
-    fun disableBeauty() {
+    /**
+     * 启用磨皮美白效果（基于 YCbCr 皮肤检测 + 近似双边模糊，无需 TFLite）。
+     * 首次调用将预热的 BeautyFilter 加入管线（触发一次 rebuild），后续仅更新强度。
+     * @return 0 成功，非零失败
+     */
+    fun enableBeauty(smoothStrength: Float = 0.6f, whitenStrength: Float = 0.4f): Int {
         handleLock.read {
-            if (nativeHandle != 0L) nativeDisableBeauty(nativeHandle)
+            if (nativeHandle != 0L)
+                return nativeEnableBeauty(nativeHandle, smoothStrength, whitenStrength)
         }
+        return -1
+    }
+
+    /** 关闭磨皮美白（管线中剔除 BeautyFilter）。@return 0 成功 */
+    fun disableBeauty(): Int {
+        handleLock.read {
+            if (nativeHandle != 0L) return nativeDisableBeauty(nativeHandle)
+        }
+        return -1
     }
 
     // ----------------------------------------------------------------
@@ -700,14 +718,25 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     private external fun nativeGetDsrScale(handle: Long): Float
     private external fun nativeSetBackend(handle: Long, backendType: Int)
     private external fun nativeGetActiveBackend(handle: Long): Int
+    /** 从 MediaPipe 接收实时人脸关键点（478×3 = 1434 floats），null 表示无脸 */
+    fun updateFaceLandmarks(landmarks: FloatArray?) {
+        handleLock.read {
+            if (nativeHandle != 0L) {
+                nativeUpdateFaceLandmarks(nativeHandle, landmarks)
+            }
+        }
+    }
+
     private external fun nativeGetGLESVersion(handle: Long): Int
     private external fun nativeGetDeviceCapabilities(handle: Long): IntArray?
 
     // ── 抖音对标 native 方法 ──────────────────────────────────────────
-    private external fun nativeEnableBeauty(handle: Long, smooth: Float, whiten: Float)
-    private external fun nativeDisableBeauty(handle: Long)
+    private external fun nativePreWarmBeauty(handle: Long): Int
+    private external fun nativeEnableBeauty(handle: Long, smooth: Float, whiten: Float): Int
+    private external fun nativeDisableBeauty(handle: Long): Int
     private external fun nativeLoadFaceLandmarkModel(handle: Long, modelPath: String): Boolean
     private external fun nativeGetFaceLandmarks(handle: Long): FloatArray?
+    private external fun nativeUpdateFaceLandmarks(handle: Long, landmarks: FloatArray?)
     private external fun nativeSetFaceReshape(handle: Long,
         eyeScale: Float, faceSlim: Float, noseSlim: Float,
         foreheadUp: Float, chinV: Float, mouthWidth: Float)

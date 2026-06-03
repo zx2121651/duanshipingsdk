@@ -106,6 +106,14 @@ ResultPayload<Texture> FilterEngine::processFrame(const Texture& textureIn, int 
         return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_THREAD_VIOLATION, "GL Thread violation detected during processFrame");
     }
 
+    // Invalidate GLStateManager cache at the start of every frame.
+    // Kotlin display layer (FilterCameraPreview.onDrawFrame) runs on the same
+    // GL thread and uses raw GLES20.gl*() calls that change program, framebuffer,
+    // texture, and vertex-attrib state without going through GLStateManager.
+    // If the cache is stale, the native filter pipeline skips critical glBind*
+    // calls, corrupting output → display layer clears to black → black screen.
+    GLStateManager::getInstance().invalidateCache();
+
     auto start_time = std::chrono::high_resolution_clock::now();
 
     if (m_isGraphDirty) {

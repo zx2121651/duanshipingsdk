@@ -36,6 +36,7 @@ fun ParameterSlider(
     onValueChange: (Float) -> Unit,
     valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
     formatValue: (Float) -> String = { "%.2f".format(it) },
+    enabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.padding(vertical = 6.dp)) {
@@ -60,9 +61,10 @@ fun ParameterSlider(
             value = value,
             onValueChange = onValueChange,
             valueRange = valueRange,
+            enabled = enabled,
             colors = SliderDefaults.colors(
-                thumbColor = Color.White,
-                activeTrackColor = Color(0xFF00D7FF),
+                thumbColor = if (enabled) Color.White else Color(0xFF555555),
+                activeTrackColor = if (enabled) Color(0xFF00D7FF) else Color(0xFF333333),
                 inactiveTrackColor = Color(0xFF222226)
             ),
             modifier = Modifier.padding(horizontal = 16.dp)

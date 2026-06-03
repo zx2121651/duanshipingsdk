@@ -223,9 +223,27 @@ class VideoFilterManager(private val context: android.content.Context,
                     }
                 }
 
+                // 设置 SurfaceTexture 缓冲区尺寸为摄像头传感器方向（横屏）。
+                // CameraX/Camera2 按传感器原生方向输出，即宽>高（横屏）。
+                // 若不设置，Android 默认缓冲尺寸可能与 CameraX 协商不一致，
+                // 导致切换分辨率时 SurfaceTexture 仍以旧尺寸输出。
+                val cameraWidth = maxOf(width, height)
+                val cameraHeight = minOf(width, height)
+                st.setDefaultBufferSize(cameraWidth, cameraHeight)
+                Log.d("VideoFilterManager",
+                    "SurfaceTexture buffer set to ${cameraWidth}x${cameraHeight}")
+
                 inputSurface?.release()
                 inputSurface = Surface(st)
                 _engineState.value = FilterEngineState.RUNNING
+
+                // 预热美颜滤镜：提前编译 shader、分配 PBO/VBO，
+                // 避免用户点击美颜开关时才首次初始化造成管线卡顿。
+                if (!renderEngine.preWarmBeauty()) {
+                    Log.w("VideoFilterManager",
+                        "Beauty pre-warm failed — beauty will be unavailable")
+                }
+
                 if (isRecreating) {
                     onSurfaceRecreated?.invoke(inputSurface!!)
                 }
@@ -280,19 +298,27 @@ class VideoFilterManager(private val context: android.content.Context,
     // 全部通过 GL 线程调度，保证与底层 RenderEngine 单线程契约一致。
     // ──────────────────────────────────────────────────────────────────────
 
-    /** 开启美颜（磨皮 + 美白），无需模型即可使用。 */
+    /** 开启美颜（磨皮 + 美白）。预热已在 init 时完成，首次调用仅触发一次 pipeline rebuild。 */
     suspend fun enableBeauty(smoothStrength: Float = 0.6f,
                               whitenStrength: Float = 0.4f): Result<Unit> {
         return runOnGLThread {
-            renderEngine.enableBeauty(smoothStrength, whitenStrength)
+            val err = renderEngine.enableBeauty(smoothStrength, whitenStrength)
+            if (err != 0) {
+                Log.e("VideoFilterManager", "enableBeauty failed: native returned $err")
+                return@runOnGLThread Result.failure(Exception("Beauty enable failed (code $err)"))
+            }
             Result.success(Unit)
         }
     }
 
-    /** 关闭美颜，并重建管线（剔除 BeautyFilter）。 */
+    /** 关闭美颜，从管线中剔除 BeautyFilter。 */
     suspend fun disableBeauty(): Result<Unit> {
         return runOnGLThread {
-            renderEngine.disableBeauty()
+            val err = renderEngine.disableBeauty()
+            if (err != 0) {
+                Log.e("VideoFilterManager", "disableBeauty failed: native returned $err")
+                return@runOnGLThread Result.failure(Exception("Beauty disable failed (code $err)"))
+            }
             Result.success(Unit)
         }
     }

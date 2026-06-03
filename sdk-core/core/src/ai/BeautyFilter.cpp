@@ -27,6 +27,19 @@ namespace sdk {
 namespace video {
 
 // ---------------------------------------------------------------------------
+// 内联 vertex shader — 输出 v_texCoord 匹配 beauty.frag 的输入变量名
+// ---------------------------------------------------------------------------
+static const char* kBeautyVertSrc = R"(#version 300 es
+layout(location = 0) in vec4 position;
+layout(location = 1) in vec2 inputTextureCoordinate;
+out vec2 v_texCoord;
+void main() {
+    gl_Position = position;
+    v_texCoord = inputTextureCoordinate;
+}
+)";
+
+// ---------------------------------------------------------------------------
 // 内联 fragment shader（与 assets/shaders/beauty.frag 保持一致）
 // ---------------------------------------------------------------------------
 static const char* kBeautyFragSrc = R"(#version 300 es
@@ -44,12 +57,19 @@ vec3 rgbToYCbCr(vec3 rgb) {
     float cr =  0.500*rgb.r - 0.419*rgb.g - 0.081*rgb.b + 0.5;
     return vec3(y, cb, cr);
 }
+// 扩宽肤色范围，覆盖亚洲/欧美/深肤色 + 弱光/过曝场景
+// Y 从 0.1-0.95 扩到 0.05-0.98
+// Cb 从 77-127 扩到 70-140
+// Cr 从 133-173 扩到 125-180
 float skinMask(vec3 rgb) {
     vec3  ycbcr = rgbToYCbCr(rgb);
     float y  = ycbcr.x;
     float cb = ycbcr.y * 255.0;
     float cr = ycbcr.z * 255.0;
-    return step(0.1,y)*step(y,0.95)*step(77.0,cb)*step(cb,127.0)*step(133.0,cr)*step(cr,173.0);
+    float inY  = step(0.05,y) * step(y,0.98);
+    float inCb = step(70.0,cb) * step(cb,140.0);
+    float inCr = step(125.0,cr) * step(cr,180.0);
+    return inY * inCb * inCr;
 }
 vec3 bilateralSmooth(vec2 uv, vec3 center) {
     vec3 sum = vec3(0.0); float wSum = 0.0;
@@ -254,6 +274,7 @@ void BeautyFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) 
     outputFb->unbind();
 }
 
+std::string BeautyFilter::getVertexShaderSource()   const { return kBeautyVertSrc; }
 std::string BeautyFilter::getFragmentShaderSource() const { return kBeautyFragSrc; }
 
 } // namespace video

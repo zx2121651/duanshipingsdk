@@ -22,3 +22,7 @@ test_rebuild_harden
 test_timeline_node_harden
 test_exporter_logic
 libvideo_sdk_core.a
+scratch/
+.workbuddy/
+/*.task
+

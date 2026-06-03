@@ -61,33 +61,71 @@ class AiFilterController(
     @Volatile var segmentationState: AiModelState = AiModelState.IDLE
         private set
 
+    /**
+     * MediaPipe FaceLandmarker 实例，setup() 后可用。
+     * 在 CameraX ImageAnalysis.Analyzer 中调用 [FaceLandmarkerHelper.detectAsync]。
+     * 每帧结果通过 [RenderEngine.updateFaceLandmarks] 直接注入渲染管线。
+     */
+    var faceLandmarkerHelper: FaceLandmarkerHelper? = null
+        private set
+
     // ── Face Landmark ─────────────────────────────────────────────────────────
 
     /**
-     * Extracts and loads the face landmark model.
-     * On success, face-dependent features (reshape, makeup) become available.
-     * @param onResult  called on the coroutine dispatcher with `true` = loaded, `false` = stub/error
+     * 启用人脸关键点检测。
+     *
+     * 优先走 MediaPipe Tasks API（LIVE_STREAM 模式，GPU delegate）；
+     * 若 assets 中缺少 face_landmarker.task，则回退到旧的 TFLite 路径。
+     *
+     * 成功后 [faceLandmarkerHelper] 可用，在相机 Analyzer 中调用 detectAsync()。
+     *
+     * @param onResult  true = 检测器就绪，false = 加载失败或 stub
      */
     fun enableFaceLandmarks(onResult: ((Boolean) -> Unit)? = null) {
         faceLandmarkState = AiModelState.LOADING
-        scope.launch {
-            when (val r = assetManager.extractModel(ASSET_FACE_LANDMARK)) {
-                is ModelAssetManager.ModelLoadResult.Ready -> {
-                    applyDelegateHint()
-                    val ok = renderEngine.loadFaceLandmarkModel(r.path)
-                    faceLandmarkState = if (ok) AiModelState.READY else AiModelState.ERROR
-                    Log.i(TAG, "Face landmark model load=${ok}, path=${r.path}")
-                    onResult?.invoke(ok)
-                }
-                is ModelAssetManager.ModelLoadResult.Stub -> {
-                    faceLandmarkState = AiModelState.STUB
-                    Log.w(TAG, "Face landmark model is a stub. Replace ${r.assetName} with a real model.")
-                    onResult?.invoke(false)
-                }
-                is ModelAssetManager.ModelLoadResult.Error -> {
-                    faceLandmarkState = AiModelState.ERROR
-                    Log.e(TAG, "Face landmark load error: ${r.message}")
-                    onResult?.invoke(false)
+        scope.launch(Dispatchers.IO) {
+            val modelAvailable = try {
+                context.assets.open(FaceLandmarkerHelper.MODEL_ASSET_PATH).close()
+                true
+            } catch (_: Exception) { false }
+
+            if (modelAvailable) {
+                // ── MediaPipe 路径 ──────────────────────────────────────────────
+                // helper.setup() 是异步的（内部 bgExecutor），这里 READY 表示
+                // "helper 已创建并开始初始化"，detectAsync 在 setup 完成前会
+                // 被 helper 内部安全忽略（faceLandmarker == null 时直接 recycle bitmap）。
+                val helper = FaceLandmarkerHelper(
+                    context = context,
+                    onResult = { landmarks ->
+                        renderEngine.updateFaceLandmarks(landmarks)
+                    }
+                )
+                helper.setup()
+                faceLandmarkerHelper = helper
+                faceLandmarkState = AiModelState.READY
+                Log.i(TAG, "FaceLandmarker initializing via MediaPipe Tasks API")
+                onResult?.invoke(true)
+            } else {
+                // ── 旧 TFLite 兜底路径 ─────────────────────────────────────────
+                Log.w(TAG, "${FaceLandmarkerHelper.MODEL_ASSET_PATH} not found, falling back to TFLite stub")
+                when (val r = assetManager.extractModel(ASSET_FACE_LANDMARK)) {
+                    is ModelAssetManager.ModelLoadResult.Ready -> {
+                        applyDelegateHint()
+                        val ok = renderEngine.loadFaceLandmarkModel(r.path)
+                        faceLandmarkState = if (ok) AiModelState.READY else AiModelState.ERROR
+                        Log.i(TAG, "Face landmark model (TFLite) load=${ok}, path=${r.path}")
+                        onResult?.invoke(ok)
+                    }
+                    is ModelAssetManager.ModelLoadResult.Stub -> {
+                        faceLandmarkState = AiModelState.STUB
+                        Log.w(TAG, "Face landmark model is a stub. Drop face_landmarker.task into assets/models/.")
+                        onResult?.invoke(false)
+                    }
+                    is ModelAssetManager.ModelLoadResult.Error -> {
+                        faceLandmarkState = AiModelState.ERROR
+                        Log.e(TAG, "Face landmark load error: ${r.message}")
+                        onResult?.invoke(false)
+                    }
                 }
             }
         }
@@ -214,6 +252,8 @@ class AiFilterController(
 
     /** Clears extracted model files from private storage (e.g., on logout/uninstall). */
     fun clearModelCache() {
+        faceLandmarkerHelper?.close()
+        faceLandmarkerHelper = null
         assetManager.clearCache()
         faceLandmarkState  = AiModelState.IDLE
         hairModelState     = AiModelState.IDLE

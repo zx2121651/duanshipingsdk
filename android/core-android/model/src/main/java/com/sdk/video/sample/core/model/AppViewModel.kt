@@ -39,6 +39,10 @@ class AppViewModel : ViewModel() {
     private val _torchEnabled = MutableStateFlow(false)
     val torchEnabled: StateFlow<Boolean> = _torchEnabled.asStateFlow()
 
+    /** 当前相机是否支持手电筒（仅后置摄像头有硬件闪光灯） */
+    private val _hasTorch = MutableStateFlow(false)
+    val hasTorch: StateFlow<Boolean> = _hasTorch.asStateFlow()
+
     fun bindFilterManager(fm: VideoFilterManager?) {
         _filterManager.value = fm
     }
@@ -48,8 +52,10 @@ class AppViewModel : ViewModel() {
         if (camera != null) {
             val range = camera.cameraInfo.exposureState.exposureCompensationRange
             _exposureRange.value = IntRange(range.lower, range.upper)
+            _hasTorch.value = camera.cameraInfo.hasFlashUnit()
         } else {
             _exposureRange.value = IntRange(0, 0)
+            _hasTorch.value = false
         }
         // Reset states
         _zoomRatio.value = 1f
@@ -68,8 +74,13 @@ class AppViewModel : ViewModel() {
     }
 
     fun toggleTorch() {
+        val cam = _camera.value ?: return
+        if (!cam.cameraInfo.hasFlashUnit()) {
+            android.util.Log.w("AppViewModel", "toggleTorch: flash unit not available on this camera")
+            return
+        }
         val target = !_torchEnabled.value
-        _camera.value?.cameraControl?.enableTorch(target)
+        cam.cameraControl.enableTorch(target)
         _torchEnabled.value = target
     }
 
@@ -100,30 +111,44 @@ class AppViewModel : ViewModel() {
     val whitenStrength: StateFlow<Float> = _whitenStrength.asStateFlow()
 
     fun setBeautyEnabled(enabled: Boolean) {
-        _beautyEnabled.value = enabled
         val fm = _filterManager.value ?: return
+        _beautyEnabled.value = enabled
         viewModelScope.launch {
-            if (enabled) {
+            val result = if (enabled) {
                 fm.enableBeauty(_smoothStrength.value, _whitenStrength.value)
             } else {
                 fm.disableBeauty()
             }
+            if (result.isFailure) {
+                // 原生失败时回滚 UI 状态
+                _beautyEnabled.value = !enabled
+                android.util.Log.e("AppViewModel",
+                    "Beauty toggle failed: ${result.exceptionOrNull()?.message}")
+            }
         }
     }
 
+    // ── 美颜参数防抖 Job ────────────────────────────────────────────────
+    // 滑杆拖动会高频触发 GL 调用，用 coroutine Job 做防抖（delay 后合并参数），
+    // 避免 GL 队列塞满导致画面卡死。
+    private var beautyDebounceJob: kotlinx.coroutines.Job? = null
+
     fun setSmoothStrength(value: Float) {
         _smoothStrength.value = value
-        if (_beautyEnabled.value) {
-            val fm = _filterManager.value ?: return
-            viewModelScope.launch { fm.enableBeauty(value, _whitenStrength.value) }
-        }
+        if (_beautyEnabled.value) scheduleBeautyDebounce()
     }
 
     fun setWhitenStrength(value: Float) {
         _whitenStrength.value = value
-        if (_beautyEnabled.value) {
-            val fm = _filterManager.value ?: return
-            viewModelScope.launch { fm.enableBeauty(_smoothStrength.value, value) }
+        if (_beautyEnabled.value) scheduleBeautyDebounce()
+    }
+
+    private fun scheduleBeautyDebounce() {
+        beautyDebounceJob?.cancel()
+        beautyDebounceJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(80)  // 80ms 防抖窗口
+            val fm = _filterManager.value ?: return@launch
+            fm.enableBeauty(_smoothStrength.value, _whitenStrength.value)
         }
     }
 
@@ -137,6 +162,9 @@ class AppViewModel : ViewModel() {
     val noseSlim: StateFlow<Float> = _noseSlim.asStateFlow()
     val chinV: StateFlow<Float> = _chinV.asStateFlow()
 
+    // ── 人脸形变参数防抖 ────────────────────────────────────────────────
+    private var reshapeDebounceJob: kotlinx.coroutines.Job? = null
+
     fun setReshape(
         eye: Float = _eyeScale.value,
         slim: Float = _faceSlim.value,
@@ -148,8 +176,11 @@ class AppViewModel : ViewModel() {
         _noseSlim.value = nose
         _chinV.value = chin
 
-        val fm = _filterManager.value ?: return
-        viewModelScope.launch {
+        // 防抖：取消上次挂起的 Job，delay 80ms 后合并提交一次
+        reshapeDebounceJob?.cancel()
+        reshapeDebounceJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(80)
+            val fm = _filterManager.value ?: return@launch
             fm.setFaceReshape(
                 eyeScale = eye,
                 faceSlim = slim,
@@ -216,11 +247,102 @@ class AppViewModel : ViewModel() {
         _useFrontCamera.value = !_useFrontCamera.value
     }
 
+    // ── 拍摄分辨率 / 画质 ────────────────────────────────────────────────
+
+    /**
+     * 画质预设。存储两个尺寸：
+     * - cameraWidth/cameraHeight: CameraX 请求的目标（传感器原始方向，通常横屏）
+     * - engineWidth/engineHeight: 引擎 FBO 尺寸（用户方向，竖屏）
+     *
+     * Camera2/CameraX 按传感器方向（横屏）输出，OES2RGBFilter 旋转后引擎
+     * 以竖屏处理，所以两个方向尺寸互换。
+     */
+    enum class CaptureResolutionPreset(
+        val label: String,
+        val cameraWidth: Int,
+        val cameraHeight: Int,
+        val engineWidth: Int,
+        val engineHeight: Int,
+        val bitrate: Int
+    ) {
+        AUTO(   "自动",   1920, 1080, 1080, 1920, 10_000_000),
+        P720(   "720P",   1280,  720,  720, 1280,  5_000_000),
+        P1080(  "1080P",  1920, 1080, 1080, 1920, 10_000_000),
+        P2K(    "2K",     2560, 1440, 1440, 2560, 18_000_000),
+        P4K(    "4K",     3840, 2160, 2160, 3840, 35_000_000);
+
+        /** CameraX ResolutionSelector 使用的目标尺寸（传感器方向） */
+        fun toCameraSize(): android.util.Size = android.util.Size(cameraWidth, cameraHeight)
+        /** VideoFilterManager / 引擎 FBO 使用的尺寸（用户方向，竖屏） */
+        fun toEngineSize(): android.util.Size = android.util.Size(engineWidth, engineHeight)
+    }
+
+    private val _selectedResolution = MutableStateFlow(CaptureResolutionPreset.AUTO)
+    val selectedResolution: StateFlow<CaptureResolutionPreset> = _selectedResolution.asStateFlow()
+
+    /** 设备实际可用的分辨率列表（排除超出硬件能力的） */
+    private val _availableResolutions = MutableStateFlow(listOf(
+        CaptureResolutionPreset.AUTO,
+        CaptureResolutionPreset.P720,
+        CaptureResolutionPreset.P1080
+    ))
+    val availableResolutions: StateFlow<List<CaptureResolutionPreset>> = _availableResolutions.asStateFlow()
+
+    /** Camera2 枚举的真实摄像头预览支持尺寸（传感器方向） */
+    private val _supportedCameraSizes = MutableStateFlow<List<android.util.Size>>(emptyList())
+    val supportedCameraSizes: StateFlow<List<android.util.Size>> = _supportedCameraSizes.asStateFlow()
+
+    fun setSupportedCameraSizes(sizes: List<android.util.Size>) {
+        _supportedCameraSizes.value = sizes
+    }
+
+    fun setResolutionPreset(preset: CaptureResolutionPreset) {
+        if (_selectedResolution.value == preset) return
+        _selectedResolution.value = preset
+    }
+
+    /**
+     * 将预设映射到设备真实支持的最接近尺寸（传感器方向）。
+     * 若支持列表为空，则退回到预设的默认相机尺寸。
+     */
+    fun resolveActualCameraSize(preset: CaptureResolutionPreset): android.util.Size {
+        val sizes = _supportedCameraSizes.value
+        if (sizes.isEmpty()) return preset.toCameraSize()
+        return com.sdk.video.capture.CameraResolutionHelper.pickBestSize(sizes, preset.toCameraSize())
+            ?: preset.toCameraSize()
+    }
+
     private val _deviceCaps = MutableStateFlow<RenderEngine.DeviceCapabilities?>(null)
     val deviceCaps: StateFlow<RenderEngine.DeviceCapabilities?> = _deviceCaps.asStateFlow()
 
     fun refreshDeviceCaps() {
-        _deviceCaps.value = _filterManager.value?.getDeviceCapabilities()
+        val caps = _filterManager.value?.getDeviceCapabilities()
+        _deviceCaps.value = caps
+        // 初始默认列表（Camera2 枚举完成后再调用 refreshAvailableResolutionsFromCamera 精确过滤）
+        val canHighRes = caps != null && caps.glesVersion >= 31 && caps.fp16
+        _availableResolutions.value = buildList {
+            add(CaptureResolutionPreset.AUTO)
+            add(CaptureResolutionPreset.P720)
+            add(CaptureResolutionPreset.P1080)
+            if (canHighRes) {
+                add(CaptureResolutionPreset.P2K)
+                add(CaptureResolutionPreset.P4K)
+            }
+        }
+    }
+
+    /**
+     * 根据 Camera2 枚举的真实预览尺寸过滤可用预设。
+     * 只保留设备摄像头真正支持的预设（至少有一个接近的匹配尺寸）。
+     */
+    fun refreshAvailableResolutionsFromCamera(supportedSizes: List<android.util.Size>) {
+        if (supportedSizes.isEmpty()) return
+        _availableResolutions.value = CaptureResolutionPreset.entries.filter { preset ->
+            val mapped = com.sdk.video.capture.CameraResolutionHelper.pickBestSize(
+                supportedSizes, preset.toCameraSize()
+            )
+            mapped != null
+        }
     }
 
     // ── 高级拍摄/录制属性 ──

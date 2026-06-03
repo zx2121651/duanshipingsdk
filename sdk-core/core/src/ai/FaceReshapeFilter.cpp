@@ -22,8 +22,8 @@ namespace video {
 // ---------------------------------------------------------------------------
 static const char* kFaceReshapeVert = R"(#version 300 es
 precision highp float;
-in vec2 a_position;
-in vec2 a_texCoord;
+layout(location = 0) in vec2 a_position;
+layout(location = 1) in vec2 a_texCoord;
 uniform vec2  u_landmarks[106];
 uniform bool  u_hasFace;
 uniform float u_eyeScale;
@@ -158,11 +158,18 @@ void FaceReshapeFilter::buildMesh() {
                  static_cast<GLsizeiptr>(indices.size() * sizeof(uint32_t)),
                  indices.data(), GL_STATIC_DRAW);
 
+    // Use glGetAttribLocation to safely bind attributes, then fall back to
+    // hardcoded layout(location=0/1) for drivers that don't reorder.
+    GLint posLoc = glGetAttribLocation(m_programId, "a_position");
+    GLint texLoc = glGetAttribLocation(m_programId, "a_texCoord");
+    if (posLoc < 0) posLoc = 0;
+    if (texLoc < 0) texLoc = 1;
+
     constexpr int stride = 4 * sizeof(float);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(posLoc, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
+    glEnableVertexAttribArray(posLoc);
+    glVertexAttribPointer(texLoc, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
+    glEnableVertexAttribArray(texLoc);
     glBindVertexArray(0);
 }
 
