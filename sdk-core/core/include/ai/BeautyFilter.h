@@ -25,6 +25,7 @@
 #include "../Filter.h"
 #include "../pipeline/PipelineNode.h"
 #include "InferenceEngine.h"
+#include "FaceLandmarkDetector.h"
 #include <memory>
 
 
@@ -49,6 +50,8 @@ public:
     // Set inference engine
     void setInferenceEngine(std::shared_ptr<ai::InferenceEngine> engine) { m_inferenceEngine = engine; }
 
+    void setLandmarkResult(const ai::LandmarkFrameResult& r);
+
     void release() override;
 protected:
     void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
@@ -59,6 +62,15 @@ private:
     GLuint m_locSmoothStrength = 0;
     GLuint m_locWhitenStrength = 0;
     GLuint m_locTexelSize      = 0;
+    GLint  m_locFaceCenter     = -1;
+    GLint  m_locFaceRadius     = -1;
+    GLint  m_locHasFace        = -1;
+
+    bool  m_hasFace = false;
+    float m_faceCenterX = 0.5f;
+    float m_faceCenterY = 0.5f;
+    float m_faceRadiusX = 0.5f;
+    float m_faceRadiusY = 0.5f;
 
     void cacheUniformLocations();
 

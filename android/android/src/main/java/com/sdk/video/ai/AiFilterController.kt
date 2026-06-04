@@ -61,6 +61,9 @@ class AiFilterController(
     @Volatile var segmentationState: AiModelState = AiModelState.IDLE
         private set
 
+    /** 当前是否使用前置摄像头（影响 landmark 坐标镜像）。由外部 Activity 在切换相机时更新。 */
+    @Volatile var isFrontCamera: Boolean = true
+
     /**
      * MediaPipe FaceLandmarker 实例，setup() 后可用。
      * 在 CameraX ImageAnalysis.Analyzer 中调用 [FaceLandmarkerHelper.detectAsync]。
@@ -97,7 +100,7 @@ class AiFilterController(
                 val helper = FaceLandmarkerHelper(
                     context = context,
                     onResult = { landmarks ->
-                        renderEngine.updateFaceLandmarks(landmarks)
+                        renderEngine.updateFaceLandmarks(landmarks, isFrontCamera)
                     }
                 )
                 helper.setup()

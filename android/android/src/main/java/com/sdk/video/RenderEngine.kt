@@ -719,10 +719,10 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     private external fun nativeSetBackend(handle: Long, backendType: Int)
     private external fun nativeGetActiveBackend(handle: Long): Int
     /** 从 MediaPipe 接收实时人脸关键点（478×3 = 1434 floats），null 表示无脸 */
-    fun updateFaceLandmarks(landmarks: FloatArray?) {
+    fun updateFaceLandmarks(landmarks: FloatArray?, isFrontCamera: Boolean = false) {
         handleLock.read {
             if (nativeHandle != 0L) {
-                nativeUpdateFaceLandmarks(nativeHandle, landmarks)
+                nativeUpdateFaceLandmarks(nativeHandle, landmarks, isFrontCamera)
             }
         }
     }
@@ -736,7 +736,7 @@ class RenderEngine(private val width: Int, private val height: Int) : SurfaceTex
     private external fun nativeDisableBeauty(handle: Long): Int
     private external fun nativeLoadFaceLandmarkModel(handle: Long, modelPath: String): Boolean
     private external fun nativeGetFaceLandmarks(handle: Long): FloatArray?
-    private external fun nativeUpdateFaceLandmarks(handle: Long, landmarks: FloatArray?)
+    private external fun nativeUpdateFaceLandmarks(handle: Long, landmarks: FloatArray?, isFrontCamera: Boolean)
     private external fun nativeSetFaceReshape(handle: Long,
         eyeScale: Float, faceSlim: Float, noseSlim: Float,
         foreheadUp: Float, chinV: Float, mouthWidth: Float)

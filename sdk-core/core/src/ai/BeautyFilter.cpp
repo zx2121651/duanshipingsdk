@@ -49,6 +49,9 @@ uniform sampler2D inputImageTexture;
 uniform float     u_smoothStrength;
 uniform float     u_whitenStrength;
 uniform vec2      u_texelSize;
+uniform int       u_hasFace;
+uniform vec2      u_faceCenter;
+uniform vec2      u_faceRadius;
 out vec4 fragColor;
 
 vec3 rgbToYCbCr(vec3 rgb) {
@@ -57,10 +60,6 @@ vec3 rgbToYCbCr(vec3 rgb) {
     float cr =  0.500*rgb.r - 0.419*rgb.g - 0.081*rgb.b + 0.5;
     return vec3(y, cb, cr);
 }
-// 扩宽肤色范围，覆盖亚洲/欧美/深肤色 + 弱光/过曝场景
-// Y 从 0.1-0.95 扩到 0.05-0.98
-// Cb 从 77-127 扩到 70-140
-// Cr 从 133-173 扩到 125-180
 float skinMask(vec3 rgb) {
     vec3  ycbcr = rgbToYCbCr(rgb);
     float y  = ycbcr.x;
@@ -70,6 +69,12 @@ float skinMask(vec3 rgb) {
     float inCb = step(70.0,cb) * step(cb,140.0);
     float inCr = step(125.0,cr) * step(cr,180.0);
     return inY * inCb * inCr;
+}
+float faceMask(vec2 uv) {
+    if (u_hasFace == 0) return 1.0;
+    vec2 d = (uv - u_faceCenter) / u_faceRadius;
+    float dist = dot(d, d);
+    return smoothstep(1.0, 0.6, dist);
 }
 vec3 bilateralSmooth(vec2 uv, vec3 center) {
     vec3 sum = vec3(0.0); float wSum = 0.0;
@@ -93,7 +98,7 @@ vec3 whitenCurve(vec3 rgb, float s) {
 void main() {
     vec4 orig   = texture(inputImageTexture, v_texCoord);
     vec3 color  = orig.rgb;
-    float skin  = skinMask(color);
+    float skin  = skinMask(color) * faceMask(v_texCoord);
     vec3 smooth = bilateralSmooth(v_texCoord, color);
     vec3 result = mix(color, smooth, skin * u_smoothStrength);
     result      = mix(result, whitenCurve(result, u_whitenStrength), skin);
@@ -234,6 +239,30 @@ void BeautyFilter::cacheUniformLocations() {
     m_locSmoothStrength = glGetUniformLocation(m_programId, "u_smoothStrength");
     m_locWhitenStrength = glGetUniformLocation(m_programId, "u_whitenStrength");
     m_locTexelSize      = glGetUniformLocation(m_programId, "u_texelSize");
+    m_locFaceCenter     = glGetUniformLocation(m_programId, "u_faceCenter");
+    m_locFaceRadius     = glGetUniformLocation(m_programId, "u_faceRadius");
+    m_locHasFace        = glGetUniformLocation(m_programId, "u_hasFace");
+}
+
+void BeautyFilter::setLandmarkResult(const ai::LandmarkFrameResult& r) {
+    m_hasFace = (r.faceCount > 0 && r.faces[0].detected);
+    if (m_hasFace) {
+        float minX = 1.0f, maxX = 0.0f, minY = 1.0f, maxY = 0.0f;
+        for (int i = 0; i < ai::kFaceLandmarkCount; ++i) {
+            if (r.faces[0].landmarks[i].score < 0.5f) continue;
+            float x = r.faces[0].landmarks[i].x;
+            float y = r.faces[0].landmarks[i].y;
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+        }
+        m_faceCenterX = (minX + maxX) * 0.5f;
+        m_faceCenterY = (minY + maxY) * 0.5f;
+        // Expand radius by 30% to cover forehead/jaw edges
+        m_faceRadiusX = (maxX - minX) * 0.5f * 1.3f;
+        m_faceRadiusY = (maxY - minY) * 0.5f * 1.3f;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -262,6 +291,11 @@ void BeautyFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) 
     float tw = (inputTexture.width  > 0) ? 1.0f / static_cast<float>(inputTexture.width)  : 0.001f;
     float th = (inputTexture.height > 0) ? 1.0f / static_cast<float>(inputTexture.height) : 0.001f;
     glUniform2f(m_locTexelSize, tw, th);
+
+    // face region mask
+    if (m_locHasFace >= 0) glUniform1i(m_locHasFace, m_hasFace ? 1 : 0);
+    if (m_locFaceCenter >= 0) glUniform2f(m_locFaceCenter, m_faceCenterX, m_faceCenterY);
+    if (m_locFaceRadius >= 0) glUniform2f(m_locFaceRadius, m_faceRadiusX, m_faceRadiusY);
 
     // 全屏四边形
     if (m_renderDevice && m_quadVao) {

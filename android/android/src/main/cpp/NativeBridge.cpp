@@ -575,6 +575,8 @@ Java_com_sdk_video_RenderEngine_nativeProcessFrame(JNIEnv *env, jobject thiz, jl
                 wrapper->faceReshape->setLandmarkResult(lr);
             if (wrapper->makeup && wrapper->makeupInPipeline)
                 wrapper->makeup->setLandmarkResult(lr);
+            if (wrapper->beautyFilter && wrapper->beautyEnabled)
+                wrapper->beautyFilter->setLandmarkResult(lr);
             if (wrapper->faceMorph && wrapper->faceMorphInPipeline && lr.faceCount > 0)
                 wrapper->faceMorph->updateLandmarks(lr.faces[0]);
         }
@@ -1498,7 +1500,7 @@ Java_com_sdk_video_RenderEngine_nativeRenderToRecordingSurface(
 
 JNIEXPORT void JNICALL
 Java_com_sdk_video_RenderEngine_nativeUpdateFaceLandmarks(
-    JNIEnv* env, jobject, jlong handle, jfloatArray j_landmarks)
+    JNIEnv* env, jobject, jlong handle, jfloatArray j_landmarks, jboolean j_isFrontCamera)
 {
     EngineWrapper* w = reinterpret_cast<EngineWrapper*>(handle);
     if (!w) return;
@@ -1571,13 +1573,16 @@ Java_com_sdk_video_RenderEngine_nativeUpdateFaceLandmarks(
     lr.faceCount = 1;
     lr.faces[0].detected = true;
 
+    const bool isFront = (j_isFrontCamera == JNI_TRUE);
+
     for (int i = 0; i < 106; ++i) {
         int mpIdx = kMpToInternal[i];
         if (mpIdx >= 0 && mpIdx < mpCount) {
             float x = raw[mpIdx * 3];
             float y = raw[mpIdx * 3 + 1];
-            // MediaPipe y 轴：0=顶部，1=底部，与 UV 空间一致，无需翻转。
-            // 前置摄像头已在 imageProxyToBitmap 中 postRotate 处理，坐标系已正确。
+            // 前置摄像头：预览经 SurfaceTexture 镜像，但 ImageAnalysis bitmap 未镜像，
+            // 需要水平翻转 landmark x 坐标使其与渲染纹理对齐。
+            if (isFront) x = 1.0f - x;
             lr.faces[0].landmarks[i].x     = x;
             lr.faces[0].landmarks[i].y     = y;
             lr.faces[0].landmarks[i].score = 1.0f;

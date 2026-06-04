@@ -113,6 +113,7 @@ class MainActivity : ComponentActivity() {
                 if (viewModel.isRecording.value) return@collect
                 val target = if (useFront) CameraSelector.DEFAULT_FRONT_CAMERA
                              else           CameraSelector.DEFAULT_BACK_CAMERA
+                aiController?.isFrontCamera = useFront
                 if (target != cameraSelector) {
                     cameraSelector = target
                     if (isCaptureSessionActive && allPermissionsGranted()) rebindCamera()
@@ -175,6 +176,7 @@ class MainActivity : ComponentActivity() {
 
         // 初始化 AI 控制器并启用 Face Landmarks (MediaPipe 路径)
         val aiCtrl = com.sdk.video.ai.AiFilterController(this, newManager.renderEngine)
+        aiCtrl.isFrontCamera = (cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA)
         aiCtrl.enableFaceLandmarks { loaded ->
             Log.i(TAG, "enableFaceLandmarks ready: $loaded")
         }
