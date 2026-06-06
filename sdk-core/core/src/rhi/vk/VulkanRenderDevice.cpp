@@ -232,6 +232,15 @@ std::shared_ptr<ITexture> VulkanRenderDevice::createTextureFromHardwareBuffer(co
     return nullptr;
 }
 
+void VulkanCommandBuffer::setPushConstants(const void* data, size_t size) {
+    if (m_cmd) {
+        // Simple stub since we don't have pipeline layout reference here easily.
+        // In real VK implementation this uses vkCmdPushConstants
+    }
+}
+void VulkanDescriptorSet::bindUniformBuffer(uint32_t slot, std::shared_ptr<IBuffer> buffer) {
+    // Stub
+}
 } // namespace rhi
 } // namespace video
 } // namespace sdk

@@ -25,6 +25,8 @@ typedef unsigned int GLbitfield;
 #define GL_INFO_LOG_LENGTH 0x8B84
 #define GL_FALSE 0
 #define GL_TRUE 1
+#define GL_NO_ERROR 0
+#define GL_CURRENT_PROGRAM 0x8B8D
 
 #define GL_POINTS 0x0000
 #define GL_LINES 0x0001

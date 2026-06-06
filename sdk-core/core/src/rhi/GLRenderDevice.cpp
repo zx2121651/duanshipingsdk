@@ -1,3 +1,10 @@
+#ifdef __ANDROID__
+#include <android/log.h>
+#else
+#include <iostream>
+#define ANDROID_LOG_ERROR 6
+#define __android_log_print(prio, tag, fmt, ...) do { if (prio >= ANDROID_LOG_ERROR) std::cerr << tag << ": " << fmt << "\n"; } while(0)
+#endif
 
 #include "../../include/rhi/GLHardwareTexture.h"
 #if defined(__APPLE__)
@@ -881,6 +888,11 @@ void GLRenderDevice::waitIdle() {
     glFinish();
 }
 
+
+void GLCommandBuffer::setPushConstants(const void* data, size_t size) { }
+void GLShaderResourceSet::bindUniformBuffer(uint32_t slot, std::shared_ptr<IBuffer> buffer) {
+    m_bindings.push_back({slot, nullptr, buffer});
+}
 } // namespace rhi
 } // namespace video
 } // namespace sdk
