@@ -42,9 +42,6 @@ public:
 
     virtual void pipelineBarrier(BarrierType type) = 0;
 
-    // Set uniform push constants directly without creating a buffer
-    virtual void setPushConstants(const void* data, size_t size) = 0;
-
     // Kept for compute, bindResourceSet can be integrated
     virtual void bindResourceSet(uint32_t setIndex, std::shared_ptr<IShaderResourceSet> resourceSet) = 0;
     virtual void dispatchCompute(uint32_t numGroupsX, uint32_t numGroupsY, uint32_t numGroupsZ) = 0;

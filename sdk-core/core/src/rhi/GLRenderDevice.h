@@ -39,11 +39,10 @@ public:
 class GLShaderResourceSet : public IShaderResourceSet {
 public:
     void bindTexture(uint32_t slot, std::shared_ptr<ITexture> texture) override;
-    void bindUniformBuffer(uint32_t slot, std::shared_ptr<IBuffer> buffer) override;
     void apply() override;
 
 private:
-    struct Binding { uint32_t slot; std::shared_ptr<ITexture> texture; std::shared_ptr<IBuffer> buffer; };
+    struct Binding { uint32_t slot; std::shared_ptr<ITexture> texture; };
     std::vector<Binding> m_bindings;
 };
 
@@ -60,8 +59,6 @@ public:
 
     void setViewport(float x, float y, float width, float height) override;
     void setScissor(int32_t x, int32_t y, uint32_t width, uint32_t height) override;
-
-    void setPushConstants(const void* data, size_t size) override;
 
     void bindPipelineState(std::shared_ptr<IPipelineState> pso) override;
     void bindResourceSet(uint32_t setIndex, std::shared_ptr<IShaderResourceSet> resourceSet) override;

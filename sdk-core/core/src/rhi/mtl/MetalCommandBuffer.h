@@ -34,7 +34,6 @@ public:
 
     void setViewport(float x, float y, float width, float height) override;
     void setScissor(int32_t x, int32_t y, uint32_t width, uint32_t height) override;
-    void setPushConstants(const void* data, size_t size) override;
 
     void bindPipelineState(std::shared_ptr<IPipelineState> pso)          override;
     void bindResourceSet(uint32_t setIndex, std::shared_ptr<IShaderResourceSet> rs) override;

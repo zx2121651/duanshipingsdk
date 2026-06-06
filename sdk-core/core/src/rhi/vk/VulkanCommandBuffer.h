@@ -24,7 +24,6 @@ struct VulkanDescriptorSet : public IShaderResourceSet {
     VulkanDescriptorSet(VkDevice device, VkDescriptorPool pool, VkDescriptorSetLayout layout);
     ~VulkanDescriptorSet() override;
     void bindTexture(uint32_t slot, std::shared_ptr<ITexture> texture) override;
-    void bindUniformBuffer(uint32_t slot, std::shared_ptr<IBuffer> buffer) override;
     void apply() override {}
     VkDescriptorSet handle() const { return m_set; }
 
@@ -51,7 +50,6 @@ public:
 
     void setViewport(float x, float y, float width, float height) override;
     void setScissor(int32_t x, int32_t y, uint32_t width, uint32_t height) override;
-    void setPushConstants(const void* data, size_t size) override;
 
     void bindPipelineState(std::shared_ptr<IPipelineState> pso) override;
     void bindResourceSet(uint32_t setIndex, std::shared_ptr<IShaderResourceSet> rs) override;

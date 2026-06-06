@@ -167,13 +167,3 @@ RHICapabilities MetalRenderDevice::getCapabilities() const {
 } // namespace video
 } // namespace sdk
 #endif // HAS_METAL
-
-void MetalResourceSet::bindTexture(uint32_t slot, std::shared_ptr<ITexture> texture) {
-    m_bindings.push_back({slot, texture, nullptr});
-}
-void MetalResourceSet::bindUniformBuffer(uint32_t slot, std::shared_ptr<IBuffer> buffer) {
-    m_bindings.push_back({slot, nullptr, buffer});
-}
-void MetalResourceSet::apply() {
-    // MetalResourceSet apply is handled in command buffer
-}

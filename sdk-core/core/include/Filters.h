@@ -33,17 +33,17 @@ private:
 
 class BrightnessFilter : public Filter {
 public:
-    BrightnessFilter();
-    Result initialize() override;
-    std::string getFragmentShaderSource() const override;
+    std::string getVertexShaderName() const override { return "default.vert"; }
     std::string getFragmentShaderName() const override { return "brightness.frag"; }
+    BrightnessFilter();
+    ~BrightnessFilter() override = default;
+    Result initialize() override;
+    void onProgramRecompiled() override;
 protected:
     void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;
-    void onProgramRecompiled() override;
+    std::string getFragmentShaderSource() const override;
 private:
-    std::shared_ptr<rhi::IPipelineState> m_pipelineState;
-    std::shared_ptr<rhi::IBuffer> m_brightnessBuffer;
-    GLuint m_brightnessHandle; // Legacy fallback
+    GLuint m_brightnessHandle;
 };
 
 // ----------------------------------------------------------------------------

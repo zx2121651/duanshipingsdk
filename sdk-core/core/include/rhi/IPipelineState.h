@@ -77,9 +77,6 @@ public:
     // Bind a texture to a given texture unit slot (maps to glActiveTexture + glBindTexture)
     virtual void bindTexture(uint32_t slot, std::shared_ptr<ITexture> texture) = 0;
 
-    // Bind a Uniform Buffer to a given binding slot
-    virtual void bindUniformBuffer(uint32_t slot, std::shared_ptr<IBuffer> buffer) = 0;
-
     // Apply all bound resources to the current GL state
     virtual void apply() = 0;
 };

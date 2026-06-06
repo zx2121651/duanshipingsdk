@@ -127,13 +127,6 @@ void OES2RGBFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb)
     outputFb->unbind();
 }
 
-
-
-
-
-
-
-
 // --- BrightnessFilter ---
 
 BrightnessFilter::BrightnessFilter() {
@@ -143,101 +136,43 @@ BrightnessFilter::BrightnessFilter() {
 Result BrightnessFilter::initialize() {
     auto res = Filter::initialize();
     if (!res.isOk()) return res;
-
     m_brightnessHandle = glGetUniformLocation(m_programId, "brightness");
-
-    // RHI Architecture
-    if (m_renderDevice) {
-        m_brightnessBuffer = m_renderDevice->createBuffer(rhi::BufferType::UniformBuffer, rhi::BufferUsage::DynamicDraw, sizeof(float), nullptr);
-
-        rhi::PipelineStateDesc psoDesc;
-        psoDesc.shaderProgram = nullptr;
-        if (m_renderDevice->getCapabilities().backend != rhi::BackendType::GLES) {
-            m_pipelineState = m_renderDevice->createGraphicsPipeline(psoDesc);
-        }
-    }
-
     return Result::ok();
 }
 
 void BrightnessFilter::onProgramRecompiled() {
-    if (m_renderDevice && m_renderDevice->getCapabilities().backend != rhi::BackendType::GLES) {
-        rhi::PipelineStateDesc psoDesc;
-        psoDesc.shaderProgram = nullptr;
-        m_pipelineState = m_renderDevice->createGraphicsPipeline(psoDesc);
-    }
     m_brightnessHandle = glGetUniformLocation(m_programId, "brightness");
 }
-
 std::string BrightnessFilter::getFragmentShaderSource() const {
     return "";
 }
 
 void BrightnessFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {
-    if (!m_renderDevice || m_renderDevice->getCapabilities().backend == rhi::BackendType::GLES) {
-        outputFb->bind();
-        if (m_programId > 0) {
-            GLStateManager::getInstance().useProgram(m_programId);
-        }
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-        GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
-        GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, inputTexture.id);
+    outputFb->bind();
+    GLStateManager::getInstance().useProgram(m_programId);
 
-        float brightness = 0.0f;
-        if (m_parameters.count("brightness") && m_parameters.at("brightness").type() == typeid(float)) {
-            brightness = std::any_cast<float>(m_parameters.at("brightness"));
-        }
-        if (m_programId > 0 && m_brightnessHandle != (GLuint)-1) {
-            glUniform1f(m_brightnessHandle, brightness);
-        }
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
 
-        if (m_renderDevice && m_quadVao) {
-            auto cmdBuffer = m_renderDevice->createCommandBuffer();
-            if (cmdBuffer) {
-               cmdBuffer->bindVertexArray(m_quadVao.get());
-               cmdBuffer->draw(4);
-            }
-        }
-        GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, 0);
-        outputFb->unbind();
-        return;
-    }
-
-    // THE PURE RHI ARCHITECTURE PATH (Commercial Grade)
-    if (!m_pipelineState || !m_brightnessBuffer || !m_quadVao) return;
+    GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
+    GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, inputTexture.id);
+    auto cmdBuffer = m_renderDevice->createCommandBuffer();
+    glUniform1i(m_inputImageTextureHandle, 0);
 
     float brightness = 0.0f;
     if (m_parameters.count("brightness") && m_parameters.at("brightness").type() == typeid(float)) {
         brightness = std::any_cast<float>(m_parameters.at("brightness"));
     }
-
-    m_brightnessBuffer->updateData(&brightness, sizeof(float));
-
-    auto cmdBuffer = m_renderDevice->createCommandBuffer();
-    if (!cmdBuffer) return;
-
-    rhi::RenderPassDescriptor passDesc;
-    passDesc.colorAttachments[0].texture = std::make_shared<rhi::GLTexture>(outputFb->getTexture().id, outputFb->getTexture().width, outputFb->getTexture().height);
-    passDesc.colorAttachments[0].loadAction = rhi::LoadAction::Clear;
-    passDesc.colorAttachments[0].clearColor = {0.0f, 0.0f, 0.0f, 1.0f};
-
-    cmdBuffer->beginRenderPass(passDesc);
-    cmdBuffer->bindPipelineState(m_pipelineState);
-
-    auto resourceSet = m_renderDevice->createShaderResourceSet();
-    if (resourceSet) {
-        resourceSet->bindTexture(0, m_renderDevice->createTextureFromHardwareBuffer({(void*)(uintptr_t)inputTexture.id, (int)inputTexture.width, (int)inputTexture.height, 0}));
-        resourceSet->bindUniformBuffer(1, m_brightnessBuffer);
-        cmdBuffer->bindResourceSet(0, resourceSet);
-    }
+    glUniform1f(m_brightnessHandle, brightness);
 
     cmdBuffer->bindVertexArray(m_quadVao.get());
     cmdBuffer->draw(4);
 
-    cmdBuffer->endRenderPass();
-    m_renderDevice->submit(cmdBuffer.get());
+    GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, 0);
+
+    outputFb->unbind();
 }
+
 // --- GaussianBlurFilter ---
 
 // --- 高性能 Two-Pass 高斯模糊 (Gaussian Blur) ---
