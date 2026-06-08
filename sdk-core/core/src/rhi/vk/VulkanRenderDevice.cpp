@@ -229,6 +229,14 @@ RHICapabilities VulkanRenderDevice::getCapabilities() const {
 
 
 std::shared_ptr<ITexture> VulkanRenderDevice::createTextureFromHardwareBuffer(const HardwareBufferDesc& desc) {
+    (void)desc;
+    // Explicit external memory import is backend/platform specific and must not
+    // reinterpret GLES texture ids as Vulkan images.
+    return nullptr;
+}
+
+std::shared_ptr<ITexture> VulkanRenderDevice::wrapExternalTexture(const ExternalTextureDesc& desc) {
+    (void)desc;
     return nullptr;
 }
 

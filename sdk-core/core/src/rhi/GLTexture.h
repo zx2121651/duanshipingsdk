@@ -10,8 +10,8 @@ class GLRenderDevice; // forward declaration for friend
 
 class GLTexture : public ITexture {
 public:
-    GLTexture(uint32_t id, uint32_t width, uint32_t height, TextureFormat fmt = TextureFormat::RGBA8, uint32_t mipLevels = 1, uint32_t target = 0x0DE1 /* GL_TEXTURE_2D */)
-        : m_id(id), m_width(width), m_height(height), m_format(fmt), m_mipLevels(mipLevels), m_target(target), m_ownsHandle(false) {}
+    GLTexture(uint32_t id, uint32_t width, uint32_t height, TextureFormat fmt = TextureFormat::RGBA8, uint32_t mipLevels = 1, uint32_t target = 0x0DE1 /* GL_TEXTURE_2D */, bool ownsHandle = false)
+        : m_id(id), m_width(width), m_height(height), m_format(fmt), m_mipLevels(mipLevels), m_target(target), m_ownsHandle(ownsHandle) {}
 
     ~GLTexture() override;
 

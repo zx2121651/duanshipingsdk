@@ -7,6 +7,7 @@
  */
 
 #include "../../include/ai/FaceLandmarkDetector.h"
+#include "../../include/ai/LandmarkSmoother.h"
 
 #define LOG_TAG "FaceLandmarkDetector"
 #include "../../include/Log.h"
@@ -14,6 +15,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstring>
+#include <limits>
 
 #ifdef HAS_TFLITE
 #include "tensorflow/lite/interpreter.h"
@@ -32,6 +34,7 @@ namespace ai {
 // Impl (TFLite 推理持有者)
 // ---------------------------------------------------------------------------
 struct FaceLandmarkDetector::Impl {
+    LandmarkSmoother smoother;
 #ifdef HAS_TFLITE
     std::unique_ptr<tflite::FlatBufferModel> model;
     std::unique_ptr<tflite::Interpreter>     interpreter;
@@ -82,6 +85,19 @@ void FaceLandmarkDetector::release() {
     }
 #endif
     m_loaded = false;
+    if (m_impl) {
+        m_impl->ready = false;
+        m_impl->smoother.reset();
+    }
+    {
+        std::lock_guard<std::mutex> lk(m_resultMutex);
+        m_latestResult = LandmarkFrameResult{};
+    }
+    {
+        std::lock_guard<std::mutex> lk(m_frameMutex);
+        m_pendingFrame = PendingFrame{};
+    }
+    m_callback = nullptr;
 }
 
 // ---------------------------------------------------------------------------
@@ -165,6 +181,9 @@ bool FaceLandmarkDetector::buildInterpreterInternal() {
 #endif
 
 void FaceLandmarkDetector::startDetectThread() {
+    if (m_detectThread.joinable()) {
+        return;
+    }
     m_stopThread.store(false);
     m_detectThread = std::thread(&FaceLandmarkDetector::detectLoop, this);
 }
@@ -202,9 +221,17 @@ void FaceLandmarkDetector::detectLoop() {
 // 提交帧
 // ---------------------------------------------------------------------------
 void FaceLandmarkDetector::submitFrame(const uint8_t* rgba, int w, int h, int64_t ts) {
+    if (!rgba || w <= 0 || h <= 0) {
+        return;
+    }
+    const int64_t byteCount64 = static_cast<int64_t>(w) * static_cast<int64_t>(h) * 4;
+    if (byteCount64 <= 0 || byteCount64 > static_cast<int64_t>(std::numeric_limits<int>::max())) {
+        return;
+    }
+    const size_t byteCount = static_cast<size_t>(byteCount64);
     {
         std::lock_guard<std::mutex> lk(m_frameMutex);
-        m_pendingFrame.pixels.assign(rgba, rgba + w * h * 4);
+        m_pendingFrame.pixels.assign(rgba, rgba + byteCount);
         m_pendingFrame.width       = w;
         m_pendingFrame.height      = h;
         m_pendingFrame.timestampNs = ts;
@@ -216,8 +243,16 @@ void FaceLandmarkDetector::submitFrame(const uint8_t* rgba, int w, int h, int64_
 // 同步推理
 // ---------------------------------------------------------------------------
 LandmarkFrameResult FaceLandmarkDetector::runSync(const uint8_t* rgba, int w, int h) {
+    if (!rgba || w <= 0 || h <= 0) {
+        return LandmarkFrameResult{};
+    }
+    const int64_t byteCount64 = static_cast<int64_t>(w) * static_cast<int64_t>(h) * 4;
+    if (byteCount64 <= 0 || byteCount64 > static_cast<int64_t>(std::numeric_limits<int>::max())) {
+        return LandmarkFrameResult{};
+    }
+    const size_t byteCount = static_cast<size_t>(byteCount64);
     PendingFrame frame;
-    frame.pixels.assign(rgba, rgba + w * h * 4);
+    frame.pixels.assign(rgba, rgba + byteCount);
     frame.width  = w;
     frame.height = h;
     frame.timestampNs = 0;
@@ -245,6 +280,7 @@ LandmarkFrameResult FaceLandmarkDetector::runInferenceInternal(const PendingFram
                          frame.timestampNs);
     auto t1 = std::chrono::steady_clock::now();
     float ms = std::chrono::duration<float, std::milli>(t1 - t0).count();
+    res = m_impl->smoother.smooth(res);
     res.inferenceTimeMs = ms;
 
     // 滑动平均
@@ -388,8 +424,8 @@ void FaceLandmarkDetector::decodeLandmarks(const float* out, int outLen,
         for (int i = 0; i < kFaceLandmarkCount; ++i) {
             float x = out[i * 2 + 0];
             float y = out[i * 2 + 1];
-            face.landmarks[i].x     = x * (float)imgW;
-            face.landmarks[i].y     = y * (float)imgH;
+            face.landmarks[i].x     = std::max(0.0f, std::min(1.0f, x));
+            face.landmarks[i].y     = std::max(0.0f, std::min(1.0f, y));
             face.landmarks[i].score = 1.0f;
 
             minX = std::min(minX, x);
@@ -403,8 +439,8 @@ void FaceLandmarkDetector::decodeLandmarks(const float* out, int outLen,
             float x = out[i * 3 + 0];
             float y = out[i * 3 + 1];
             float s = out[i * 3 + 2];
-            face.landmarks[i].x     = x * (float)imgW;
-            face.landmarks[i].y     = y * (float)imgH;
+            face.landmarks[i].x     = std::max(0.0f, std::min(1.0f, x));
+            face.landmarks[i].y     = std::max(0.0f, std::min(1.0f, y));
 
             if (s >= 0.5f) {
                 face.landmarks[i].score = s;

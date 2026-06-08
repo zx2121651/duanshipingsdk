@@ -1,6 +1,7 @@
 android/build/
 build/
 build_*/
+sdk-core/build*/
 dist/
 release/
 .gradle/
@@ -25,4 +26,5 @@ libvideo_sdk_core.a
 scratch/
 .workbuddy/
 /*.task
-
+ai_test_*.txt
+ShortVideoSDK_RHI*.md

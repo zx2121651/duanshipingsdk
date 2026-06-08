@@ -119,7 +119,12 @@ std::shared_ptr<ITexture> MetalRenderDevice::createTextureFromHardwareBuffer(con
     // On iOS, nativeBuffer is a CVPixelBufferRef or IOSurface
     // Use CVMetalTextureCache for zero-copy binding (simplified stub here)
     std::cerr << "MetalRenderDevice::bindExternalHardwareBuffer — stub (use CVMetalTextureCache)" << std::endl;
-    (void)nativeBuffer;
+    (void)desc;
+    return nullptr;
+}
+
+std::shared_ptr<ITexture> MetalRenderDevice::wrapExternalTexture(const ExternalTextureDesc& desc) {
+    (void)desc;
     return nullptr;
 }
 

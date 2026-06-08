@@ -11,6 +11,7 @@
 #define LOG_TAG "FaceReshapeFilter"
 #include "../../include/Log.h"
 
+#include <algorithm>
 #include <vector>
 #include <cstring>
 
@@ -142,6 +143,42 @@ void FaceReshapeFilter::buildMesh() {
             indices.push_back(tr); indices.push_back(bl); indices.push_back(br);
         }
     }
+    m_indexCount = static_cast<uint32_t>(indices.size());
+
+    if (m_renderDevice) {
+        m_meshVertexBuffer = m_renderDevice->createBuffer(
+            rhi::BufferType::VertexBuffer,
+            rhi::BufferUsage::StaticDraw,
+            verts.size() * sizeof(float),
+            verts.data());
+        m_meshIndexBuffer = m_renderDevice->createBuffer(
+            rhi::BufferType::IndexBuffer,
+            rhi::BufferUsage::StaticDraw,
+            indices.size() * sizeof(uint32_t),
+            indices.data());
+        m_meshVao = m_renderDevice->createVertexArray();
+
+        if (m_meshVertexBuffer && m_meshIndexBuffer && m_meshVao) {
+            constexpr uint32_t stride = 4 * sizeof(float);
+            m_meshVao->addVertexBuffer(m_meshVertexBuffer, {
+                {0, rhi::VertexFormat::Float2, 0, stride},
+                {1, rhi::VertexFormat::Float2, 2 * sizeof(float), stride},
+            });
+            m_meshVao->setIndexBuffer(m_meshIndexBuffer);
+
+            rhi::PipelineStateDesc meshPipelineDesc{};
+            meshPipelineDesc.primitiveTopology = rhi::PrimitiveTopology::TriangleList;
+            m_meshPipeline = m_renderDevice->createGraphicsPipeline(meshPipelineDesc);
+            if (m_meshPipeline) {
+                return;
+            }
+        }
+
+        m_meshVertexBuffer.reset();
+        m_meshIndexBuffer.reset();
+        m_meshVao.reset();
+        m_meshPipeline.reset();
+    }
 
     glGenVertexArrays(1, &m_vao);
     glGenBuffers(1, &m_vbo);
@@ -189,12 +226,12 @@ void FaceReshapeFilter::cacheUniforms() {
 // ---------------------------------------------------------------------------
 void FaceReshapeFilter::setLandmarkResult(const ai::LandmarkFrameResult& r) {
     m_hasFace = (r.faceCount > 0 && r.faces[0].detected);
-    if (m_hasFace) m_faceResult = r.faces[0];
+    m_faceResult = m_hasFace ? r.faces[0] : ai::FaceResult{};
 }
 
 // ---------------------------------------------------------------------------
 void FaceReshapeFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {
-    outputFb->bind();
+    auto outputPass = beginOutputRenderPass(outputFb);
     GLStateManager::getInstance().useProgram(m_programId);
 
     // 纹理
@@ -215,22 +252,28 @@ void FaceReshapeFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outpu
     if (m_uLandmarks >= 0 && m_hasFace) {
         float pts[ai::kFaceLandmarkCount * 2];
         for (int i = 0; i < ai::kFaceLandmarkCount; ++i) {
-            pts[i * 2 + 0] = m_faceResult.landmarks[i].x;
-            pts[i * 2 + 1] = m_faceResult.landmarks[i].y;
+            pts[i * 2 + 0] = std::clamp(m_faceResult.landmarks[i].x, 0.0f, 1.0f);
+            pts[i * 2 + 1] = std::clamp(m_faceResult.landmarks[i].y, 0.0f, 1.0f);
         }
         glUniform2fv(m_uLandmarks, ai::kFaceLandmarkCount, pts);
     }
 
     // 绘制网格
-    if (m_vao) {
+    if (m_renderDevice && m_meshVao && m_meshPipeline && m_indexCount > 0) {
+        auto cmd = outputPass.commandBuffer ? outputPass.commandBuffer
+                                            : m_renderDevice->createCommandBuffer();
+        cmd->bindPipelineState(m_meshPipeline);
+        cmd->bindVertexArray(m_meshVao.get());
+        cmd->drawIndexed(m_indexCount, rhi::IndexType::UInt32);
+    } else if (m_vao) {
         glBindVertexArray(m_vao);
         glDrawElements(GL_TRIANGLES,
-                       kGridW * kGridH * 6,
+                       static_cast<GLsizei>(m_indexCount),
                        GL_UNSIGNED_INT, nullptr);
         glBindVertexArray(0);
     }
 
-    outputFb->unbind();
+    endOutputRenderPass(outputPass, outputFb);
 }
 
 std::string FaceReshapeFilter::getVertexShaderSource()   const { return kFaceReshapeVert; }

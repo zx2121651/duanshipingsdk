@@ -78,12 +78,21 @@ void VulkanCommandBuffer::begin() {
 }
 
 void VulkanCommandBuffer::end() {
+    if (!m_recording) {
+        return;
+    }
+    if (m_renderPassActive) {
+        endRenderPass();
+    }
     vkEndCommandBuffer(m_cmd);
     m_recording = false;
 }
 
 void VulkanCommandBuffer::beginRenderPass(const RenderPassDescriptor& desc) {
-    if (desc.colorAttachments.empty()) return;
+    if (!m_recording) {
+        begin();
+    }
+    if (desc.colorAttachments.empty() || !desc.colorAttachments[0].texture) return;
     auto* vkTex = dynamic_cast<VulkanTexture*>(desc.colorAttachments[0].texture.get());
     if (!vkTex) return;
 
@@ -119,10 +128,15 @@ void VulkanCommandBuffer::beginRenderPass(const RenderPassDescriptor& desc) {
     rpbi.pClearValues      = &clear;
 
     vkCmdBeginRenderPass(m_cmd, &rpbi, VK_SUBPASS_CONTENTS_INLINE);
+    m_renderPassActive = true;
 }
 
 void VulkanCommandBuffer::endRenderPass() {
+    if (!m_renderPassActive) {
+        return;
+    }
     vkCmdEndRenderPass(m_cmd);
+    m_renderPassActive = false;
 }
 
 void VulkanCommandBuffer::bindPipelineState(std::shared_ptr<IPipelineState> pso) {
@@ -183,6 +197,11 @@ void VulkanCommandBuffer::dispatchCompute(uint32_t nx, uint32_t ny, uint32_t nz)
 }
 
 void VulkanCommandBuffer::flush(VkQueue queue) {
+    if (!m_recording) {
+        return;
+    }
+    end();
+
     VkSubmitInfo si{};
     si.sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     si.commandBufferCount = 1;

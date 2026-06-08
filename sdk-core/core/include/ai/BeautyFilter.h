@@ -59,6 +59,21 @@ protected:
     std::string getVertexShaderSource()   const override;
 
 private:
+    struct UniformParams {
+        float smoothStrength = 0.6f;
+        float whitenStrength = 0.4f;
+        float texelWidth = 0.001f;
+        float texelHeight = 0.001f;
+        float hasFace = 0.0f;
+        float faceCenterX = 0.5f;
+        float faceCenterY = 0.5f;
+        float reserved0 = 0.0f;
+        float faceRadiusX = 0.5f;
+        float faceRadiusY = 0.5f;
+        float reserved1 = 0.0f;
+        float reserved2 = 0.0f;
+    };
+
     GLuint m_locSmoothStrength = 0;
     GLuint m_locWhitenStrength = 0;
     GLuint m_locTexelSize      = 0;
@@ -73,8 +88,11 @@ private:
     float m_faceRadiusY = 0.5f;
 
     void cacheUniformLocations();
+    UniformParams buildUniformParams(const Texture& inputTexture) const;
+    void uploadLegacyUniforms(const UniformParams& params) const;
 
     std::shared_ptr<ai::InferenceEngine> m_inferenceEngine;
+    std::shared_ptr<rhi::IBuffer> m_paramsBuffer;
 
     // Dual PBOs for async pixel readback
     GLuint m_pbos[2] = {0, 0};

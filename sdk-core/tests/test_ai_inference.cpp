@@ -10,9 +10,13 @@
 #include <memory>
 #include <vector>
 #include <cstring>
+#include <atomic>
+#include <chrono>
+#include <thread>
 
 #include "../core/include/ai/TfliteInferenceEngine.h"
 #include "../core/include/ai/FaceLandmarkDetector.h"
+#include "../core/include/ai/LandmarkSmoother.h"
 #include "../core/include/ai/BodyPoseDetector.h"
 #include "../core/include/ai/BeautyFilter.h"
 #include "../core/include/ai/SegmentationFilter.h"
@@ -261,11 +265,11 @@ static bool test_decode_landmarks_212() {
     if (!res.detected) { fail(k, "should be detected"); return false; }
 
     for (int i = 0; i < 106; ++i) {
-        float expectedX = (static_cast<float>(i) / 105.0f) * 1000.0f;
-        float expectedY = (1.0f - static_cast<float>(i) / 105.0f) * 1000.0f;
+        float expectedX = static_cast<float>(i) / 105.0f;
+        float expectedY = 1.0f - static_cast<float>(i) / 105.0f;
         if (std::abs(res.landmarks[i].x - expectedX) > 1e-4f ||
             std::abs(res.landmarks[i].y - expectedY) > 1e-4f) {
-            fail(k, "incorrect denormalization at point " + std::to_string(i)); return false;
+            fail(k, "incorrect normalized coordinate at point " + std::to_string(i)); return false;
         }
         if (res.landmarks[i].score != 1.0f) {
             fail(k, "default score should be 1.0 at point " + std::to_string(i)); return false;
@@ -301,7 +305,7 @@ static bool test_decode_landmarks_318_filtering() {
     if (res.landmarks[2].score != 0.5f) { fail(k, "pt2 should be 0.5"); return false; }
     if (res.landmarks[3].score != 1.0f) { fail(k, "pt3 should be 1.0"); return false; }
 
-    if (res.landmarks[1].x != 50.0f) { fail(k, "coord should still be preserved even if score=0"); return false; }
+    if (res.landmarks[1].x != 0.5f) { fail(k, "coord should still be preserved even if score=0"); return false; }
 
     pass(k);
     return true;
@@ -320,6 +324,121 @@ static bool test_decode_landmarks_invalid_len() {
 
     FaceLandmarkDetector::decodeLandmarks(nullptr, 212, 1280, 720, res);
     if (res.detected) { fail(k, "detected should be false for null output"); return false; }
+
+    pass(k);
+    return true;
+}
+
+static bool test_landmark_smoother_reduces_jitter() {
+    const std::string k = "LandmarkSmoother reduces low-velocity jitter";
+    SmootherConfig cfg;
+    cfg.minAlpha = 0.05f;
+    cfg.maxAlpha = 0.60f;
+    cfg.velThreshLow = 0.003f;
+    cfg.velThreshHigh = 0.05f;
+    LandmarkSmoother smoother(cfg);
+
+    LandmarkFrameResult first;
+    first.faceCount = 1;
+    first.faces[0].detected = true;
+    first.faces[0].faceScore = 1.0f;
+    for (int i = 0; i < kFaceLandmarkCount; ++i) {
+        first.faces[0].landmarks[i] = {0.5f, 0.5f, 1.0f};
+    }
+    auto out1 = smoother.smooth(first);
+    if (!out1.faces[0].detected) { fail(k, "first face should be detected"); return false; }
+
+    LandmarkFrameResult second = first;
+    second.faces[0].landmarks[0].x = 0.501f;
+    auto out2 = smoother.smooth(second);
+    float delta = out2.faces[0].landmarks[0].x - out1.faces[0].landmarks[0].x;
+    if (delta <= 0.0f || delta >= 0.001f) {
+        fail(k, "smoothed delta should be positive and smaller than raw jitter: " + std::to_string(delta));
+        return false;
+    }
+    if (std::abs(delta - 0.00005f) > 0.00002f) {
+        fail(k, "expected minAlpha smoothing near 0.00005, got " + std::to_string(delta));
+        return false;
+    }
+
+    pass(k);
+    return true;
+}
+
+static bool test_landmark_smoother_holds_short_face_loss() {
+    const std::string k = "LandmarkSmoother holds short face loss";
+    LandmarkSmoother smoother;
+
+    LandmarkFrameResult first;
+    first.faceCount = 1;
+    first.faces[0].detected = true;
+    first.faces[0].faceScore = 1.0f;
+    for (int i = 0; i < kFaceLandmarkCount; ++i) {
+        first.faces[0].landmarks[i] = {0.4f, 0.6f, 1.0f};
+    }
+    smoother.smooth(first);
+
+    LandmarkFrameResult lost;
+    lost.faceCount = 1;
+    lost.faces[0].detected = false;
+    auto held = smoother.smooth(lost);
+    if (!held.faces[0].detected) { fail(k, "short loss should still output detected face"); return false; }
+    if (std::abs(held.faces[0].landmarks[0].x - 0.4f) > 1e-6f ||
+        std::abs(held.faces[0].landmarks[0].y - 0.6f) > 1e-6f) {
+        fail(k, "held landmarks should preserve previous coordinates"); return false;
+    }
+    if (held.faces[0].faceScore >= 1.0f || held.faces[0].faceScore <= 0.1f) {
+        fail(k, "held faceScore should decay but stay usable"); return false;
+    }
+
+    pass(k);
+    return true;
+}
+
+static bool test_face_landmark_detector_invalid_frame_guard() {
+    const std::string k = "FaceLandmarkDetector invalid frame guard";
+    FaceLandmarkDetector det;
+
+    auto nullRes = det.runSync(nullptr, 64, 64);
+    if (nullRes.faceCount != 0) { fail(k, "null frame should return empty result"); return false; }
+
+    std::vector<uint8_t> onePixel(4, 128u);
+    auto badSize = det.runSync(onePixel.data(), 0, 1);
+    if (badSize.faceCount != 0) { fail(k, "invalid size should return empty result"); return false; }
+
+    std::atomic<int> callbackCount{0};
+    det.setResultCallback([&](const LandmarkFrameResult&) {
+        callbackCount.fetch_add(1);
+    });
+    det.submitFrame(nullptr, 64, 64, 1);
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    if (callbackCount.load() != 0) { fail(k, "invalid submit should not invoke callback"); return false; }
+
+    pass(k);
+    return true;
+}
+
+static bool test_face_landmark_detector_lifecycle_guard() {
+    const std::string k = "FaceLandmarkDetector lifecycle guard";
+    FaceLandmarkDetector det;
+    std::vector<uint8_t> frame(16 * 16 * 4, 128u);
+
+    if (!det.loadModel("/stub/face.tflite")) { fail(k, "first stub load should succeed"); return false; }
+    if (!det.loadModel("/stub/face.tflite")) { fail(k, "second stub load should be idempotent"); return false; }
+
+    auto result = det.runSync(frame.data(), 16, 16);
+    if (result.faceCount != 1 || !result.faces[0].detected) {
+        fail(k, "stub runSync should detect one face"); return false;
+    }
+
+    det.submitFrame(frame.data(), 16, 16, 42);
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    det.release();
+    det.release();
+
+    if (det.isLoaded()) { fail(k, "detector should not be loaded after release"); return false; }
+    auto latest = det.getLatestResult();
+    if (latest.faceCount != 0) { fail(k, "release should clear latest result"); return false; }
 
     pass(k);
     return true;
@@ -443,6 +562,10 @@ int main() {
     run(test_decode_landmarks_212());
     run(test_decode_landmarks_318_filtering());
     run(test_decode_landmarks_invalid_len());
+    run(test_landmark_smoother_reduces_jitter());
+    run(test_landmark_smoother_holds_short_face_loss());
+    run(test_face_landmark_detector_invalid_frame_guard());
+    run(test_face_landmark_detector_lifecycle_guard());
     run(test_segmentation_params());
     run(test_segmentation_default_params());
     run(test_segmentation_set_parameter_sync());

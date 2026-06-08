@@ -15,6 +15,51 @@
 namespace sdk {
 namespace video {
 
+namespace {
+
+rhi::RenderPassDescriptor makeColorRenderPassDescriptor(
+    const Texture& texture,
+    rhi::LoadAction loadAction = rhi::LoadAction::Clear,
+    rhi::Color clearColor = {0.0f, 0.0f, 0.0f, 1.0f}) {
+    rhi::RenderPassDescriptor desc;
+    rhi::RenderPassColorAttachment color;
+    color.texture = std::make_shared<rhi::GLTexture>(texture.id, texture.width, texture.height);
+    color.loadAction = loadAction;
+    color.storeAction = rhi::StoreAction::Store;
+    color.clearColor = clearColor;
+    desc.colorAttachments.push_back(color);
+    return desc;
+}
+
+std::shared_ptr<rhi::ITexture> wrapExistingTexture(
+    const std::shared_ptr<rhi::IRenderDevice>& device,
+    uint32_t textureId,
+    uint32_t width,
+    uint32_t height,
+    uint32_t target = GL_TEXTURE_2D) {
+    if (!device || textureId == 0 || width == 0 || height == 0) {
+        return nullptr;
+    }
+
+    rhi::ExternalTextureDesc desc;
+    desc.handle = textureId;
+    desc.width = width;
+    desc.height = height;
+    desc.format = rhi::TextureFormat::RGBA8;
+    desc.target = target;
+    desc.ownsHandle = false;
+    return device->wrapExternalTexture(desc);
+}
+
+std::shared_ptr<rhi::ITexture> wrapExistingTexture(
+    const std::shared_ptr<rhi::IRenderDevice>& device,
+    const Texture& texture,
+    uint32_t target = GL_TEXTURE_2D) {
+    return wrapExistingTexture(device, texture.id, texture.width, texture.height, target);
+}
+
+} // namespace
+
 
 
 // Common vertex coordinates
@@ -137,17 +182,13 @@ void OES2RGBFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb)
 
     auto cmdBuffer = m_renderDevice->createCommandBuffer();
     if (!cmdBuffer) return;
-    rhi::RenderPassDescriptor passDesc;
-    passDesc.colorAttachments[0].texture = std::make_shared<rhi::GLTexture>(outputFb->getTexture().id, outputFb->getTexture().width, outputFb->getTexture().height);
-    passDesc.colorAttachments[0].loadAction = rhi::LoadAction::Clear;
-    passDesc.colorAttachments[0].clearColor = {0.0f, 0.0f, 0.0f, 1.0f};
-
+    auto passDesc = makeColorRenderPassDescriptor(outputFb->getTexture());
     cmdBuffer->beginRenderPass(passDesc);
     cmdBuffer->bindPipelineState(m_pipelineState);
 
     auto resourceSet = m_renderDevice->createShaderResourceSet();
     if (resourceSet) {
-        resourceSet->bindTexture(0, m_renderDevice->createTextureFromHardwareBuffer({(void*)(uintptr_t)inputTexture.id, (int)inputTexture.width, (int)inputTexture.height, 0}));
+        resourceSet->bindTexture(0, wrapExistingTexture(m_renderDevice, inputTexture, GL_TEXTURE_EXTERNAL_OES));
         resourceSet->bindUniformBuffer(1, m_paramsBuffer);
         cmdBuffer->bindResourceSet(0, resourceSet);
     }
@@ -316,17 +357,13 @@ ResultPayload<Texture> GaussianBlurFilter::processFrame(const Texture& inputText
     auto cmdBuffer = m_renderDevice->createCommandBuffer();
     if (!cmdBuffer) { m_pool->release(intermediateFb); return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "No command buffer"); }
 
-    rhi::RenderPassDescriptor passDescH;
-    passDescH.colorAttachments[0].texture = std::make_shared<rhi::GLTexture>(intermediateFb->getTexture().id, intermediateFb->getTexture().width, intermediateFb->getTexture().height);
-    passDescH.colorAttachments[0].loadAction = rhi::LoadAction::Clear;
-    passDescH.colorAttachments[0].clearColor = {0.0f, 0.0f, 0.0f, 1.0f};
-
+    auto passDescH = makeColorRenderPassDescriptor(intermediateFb->getTexture());
     cmdBuffer->beginRenderPass(passDescH);
     cmdBuffer->bindPipelineState(m_pipelineState);
 
     auto resourceSetH = m_renderDevice->createShaderResourceSet();
     if (resourceSetH) {
-        resourceSetH->bindTexture(0, m_renderDevice->createTextureFromHardwareBuffer({(void*)(uintptr_t)inputTexture.id, (int)inputTexture.width, (int)inputTexture.height, 0}));
+        resourceSetH->bindTexture(0, wrapExistingTexture(m_renderDevice, inputTexture));
         resourceSetH->bindUniformBuffer(1, m_blurParamsBufferH);
         cmdBuffer->bindResourceSet(0, resourceSetH);
     }
@@ -340,11 +377,7 @@ ResultPayload<Texture> GaussianBlurFilter::processFrame(const Texture& inputText
     float paramsV[4] = { 0.0f, 1.0f / inputTexture.height, blurSize, 0.0f };
     m_blurParamsBufferV->updateData(paramsV, sizeof(paramsV));
 
-    rhi::RenderPassDescriptor passDescV;
-    passDescV.colorAttachments[0].texture = std::make_shared<rhi::GLTexture>(outputFb->getTexture().id, outputFb->getTexture().width, outputFb->getTexture().height);
-    passDescV.colorAttachments[0].loadAction = rhi::LoadAction::Clear;
-    passDescV.colorAttachments[0].clearColor = {0.0f, 0.0f, 0.0f, 1.0f};
-
+    auto passDescV = makeColorRenderPassDescriptor(outputFb->getTexture());
     cmdBuffer->beginRenderPass(passDescV);
     cmdBuffer->bindPipelineState(m_pipelineState);
 
@@ -479,19 +512,15 @@ void LookupFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) 
     auto cmdBuffer = m_renderDevice->createCommandBuffer();
     if (!cmdBuffer) return;
 
-    rhi::RenderPassDescriptor passDesc;
-    passDesc.colorAttachments[0].texture = std::make_shared<rhi::GLTexture>(outputFb->getTexture().id, outputFb->getTexture().width, outputFb->getTexture().height);
-    passDesc.colorAttachments[0].loadAction = rhi::LoadAction::Clear;
-    passDesc.colorAttachments[0].clearColor = {0.0f, 0.0f, 0.0f, 1.0f};
-
+    auto passDesc = makeColorRenderPassDescriptor(outputFb->getTexture());
     cmdBuffer->beginRenderPass(passDesc);
     cmdBuffer->bindPipelineState(m_pipelineState);
 
     auto resourceSet = m_renderDevice->createShaderResourceSet();
     if (resourceSet) {
-        resourceSet->bindTexture(0, m_renderDevice->createTextureFromHardwareBuffer({(void*)(uintptr_t)inputTexture.id, (int)inputTexture.width, (int)inputTexture.height, 0}));
+        resourceSet->bindTexture(0, wrapExistingTexture(m_renderDevice, inputTexture));
         if (m_lookupTextureId) {
-            resourceSet->bindTexture(1, m_renderDevice->createTextureFromHardwareBuffer({(void*)(uintptr_t)m_lookupTextureId, 512, 512, 0}));
+            resourceSet->bindTexture(1, wrapExistingTexture(m_renderDevice, m_lookupTextureId, 512, 512));
         }
         resourceSet->bindUniformBuffer(2, m_intensityBuffer);
         cmdBuffer->bindResourceSet(0, resourceSet);
@@ -582,17 +611,13 @@ void BilateralFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputF
     auto cmdBuffer = m_renderDevice->createCommandBuffer();
     if (!cmdBuffer) return;
 
-    rhi::RenderPassDescriptor passDesc;
-    passDesc.colorAttachments[0].texture = std::make_shared<rhi::GLTexture>(outputFb->getTexture().id, outputFb->getTexture().width, outputFb->getTexture().height);
-    passDesc.colorAttachments[0].loadAction = rhi::LoadAction::Clear;
-    passDesc.colorAttachments[0].clearColor = {0.0f, 0.0f, 0.0f, 1.0f};
-
+    auto passDesc = makeColorRenderPassDescriptor(outputFb->getTexture());
     cmdBuffer->beginRenderPass(passDesc);
     cmdBuffer->bindPipelineState(m_pipelineState);
 
     auto resourceSet = m_renderDevice->createShaderResourceSet();
     if (resourceSet) {
-        resourceSet->bindTexture(0, m_renderDevice->createTextureFromHardwareBuffer({(void*)(uintptr_t)inputTexture.id, (int)inputTexture.width, (int)inputTexture.height, 0}));
+        resourceSet->bindTexture(0, wrapExistingTexture(m_renderDevice, inputTexture));
         resourceSet->bindUniformBuffer(1, m_paramsBuffer);
         cmdBuffer->bindResourceSet(0, resourceSet);
     }
@@ -705,20 +730,16 @@ void CinematicLookupFilter::onDraw(const Texture& inputTexture, FrameBufferPtr o
     auto cmdBuffer = m_renderDevice->createCommandBuffer();
     if (!cmdBuffer) return;
 
-    rhi::RenderPassDescriptor passDesc;
-    passDesc.colorAttachments[0].texture = std::make_shared<rhi::GLTexture>(outputFb->getTexture().id, outputFb->getTexture().width, outputFb->getTexture().height);
-    passDesc.colorAttachments[0].loadAction = rhi::LoadAction::Clear;
-    passDesc.colorAttachments[0].clearColor = {0.0f, 0.0f, 0.0f, 1.0f};
-
+    auto passDesc = makeColorRenderPassDescriptor(outputFb->getTexture());
     cmdBuffer->beginRenderPass(passDesc);
     cmdBuffer->bindPipelineState(m_pipelineState);
 
     auto resourceSet = m_renderDevice->createShaderResourceSet();
     if (resourceSet) {
-        resourceSet->bindTexture(0, m_renderDevice->createTextureFromHardwareBuffer({(void*)(uintptr_t)inputTexture.id, (int)inputTexture.width, (int)inputTexture.height, 0}));
+        resourceSet->bindTexture(0, wrapExistingTexture(m_renderDevice, inputTexture));
 
         if (m_lookupTextureId != 0) {
-            resourceSet->bindTexture(1, m_renderDevice->createTextureFromHardwareBuffer({(void*)(uintptr_t)m_lookupTextureId, 512, 512, 0}));
+            resourceSet->bindTexture(1, wrapExistingTexture(m_renderDevice, m_lookupTextureId, 512, 512));
         }
         resourceSet->bindUniformBuffer(2, m_intensityBuffer);
         cmdBuffer->bindResourceSet(0, resourceSet);
@@ -750,60 +771,25 @@ void NightVisionFilter::onProgramRecompiled() {
 }
 
 void NightVisionFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {
-    // Phase 1 Transition: We wrap the legacy Texture into an RHI ITexture
-    // to pass into our new ICommandBuffer abstraction, proving out the pattern.
+    auto outputPass = beginOutputRenderPass(outputFb);
+    GLStateManager::getInstance().useProgram(m_programId);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
+    GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, inputTexture.id);
+    glUniform1i(m_inputImageTextureHandle, 0);
 
-    if (m_device) {
-        auto cmd = m_device->createCommandBuffer();
-
-        // Wrap for command buffer usage
-        rhi::GLTexture wrappedInput(inputTexture.id, inputTexture.width, inputTexture.height);
-
-        // 1. Begin Pass (Legacy FrameBuffer already bounds outputFb before this method in processFrame,
-        // so this is a semantic pass-through right now, to be expanded later).
-        rhi::RenderPassDescriptor desc;
-        cmd->beginRenderPass(desc);
-
-        // 2. Bind Pipeline state (Legacy GL requires explicit GLStateManager program use)
-        GLStateManager::getInstance().useProgram(m_programId);
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-
-        // 3. Bind Textures via Command Buffer
-        // stub bind texture
-        glUniform1i(m_inputImageTextureHandle, 0); // Still relying on legacy uniform bind
-
-        // 4. Draw Call
-        static const GLfloat squareVertices[] = {
-            -1.0f, -1.0f,  1.0f, -1.0f,
-            -1.0f,  1.0f,  1.0f,  1.0f,
-        };
-        static const GLfloat textureVertices[] = {
-            0.0f, 0.0f,  1.0f, 0.0f,
-            0.0f, 1.0f,  1.0f, 1.0f,
-        };
-
-        cmd->bindVertexArray(m_quadVao.get());
-        cmd->draw(4); // Abstracts glDrawArrays(GL_TRIANGLE_STRIP, 0, 4)
-
-        // 5. End Pass
-        cmd->endRenderPass();
-        m_device->submit(cmd.get());
-
-    } else {
-        // Fallback: m_device not injected, use m_renderDevice (always set by FilterEngine)
-        outputFb->bind();
-        GLStateManager::getInstance().useProgram(m_programId);
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-        GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
-        GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, inputTexture.id);
-        glUniform1i(m_inputImageTextureHandle, 0);
-        auto cmdBuffer = m_renderDevice->createCommandBuffer();
+    auto cmdBuffer = outputPass.commandBuffer;
+    if (!cmdBuffer && m_renderDevice) {
+        cmdBuffer = m_renderDevice->createCommandBuffer();
+    }
+    if (cmdBuffer && m_quadVao) {
         cmdBuffer->bindVertexArray(m_quadVao.get());
         cmdBuffer->draw(4);
-        outputFb->unbind();
     }
+
+    GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, 0);
+    endOutputRenderPass(outputPass, outputFb);
 }
 
 std::string NightVisionFilter::getFragmentShaderSource() const {

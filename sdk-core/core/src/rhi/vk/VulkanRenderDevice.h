@@ -53,6 +53,7 @@ public:
     void submit(ICommandBuffer* cmdBuffer) override;
     void waitIdle() override;
     std::shared_ptr<ITexture> createTextureFromHardwareBuffer(const HardwareBufferDesc& desc) override;
+    std::shared_ptr<ITexture> wrapExternalTexture(const ExternalTextureDesc& desc) override;
     RHICapabilities getCapabilities() const override;
 
     // Vulkan-specific

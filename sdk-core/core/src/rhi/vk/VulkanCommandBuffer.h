@@ -75,6 +75,7 @@ private:
     VkCommandBuffer                       m_cmd   = VK_NULL_HANDLE;
     VkFence                               m_fence = VK_NULL_HANDLE;
     bool                                  m_recording = false;
+    bool                                  m_renderPassActive = false;
     std::shared_ptr<VulkanPipelineState>  m_currentPSO;
     std::shared_ptr<VulkanDescriptorSet>  m_currentRS;
     // Framebuffers created per-renderpass are deferred-destroyed after flush

@@ -261,6 +261,16 @@ endif()
 
 enable_testing()
 
+find_program(NODE_EXECUTABLE node)
+if(NODE_EXECUTABLE)
+    add_test(
+        NAME test_text_encoding
+        COMMAND ${NODE_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/check_text_encoding.js ${CMAKE_SOURCE_DIR}/..
+    )
+else()
+    message(STATUS "Node.js not found; skipping test_text_encoding")
+endif()
+
 # Phase-1 Verification: Core Unit Tests
 # Basic API logic test (no GL windowing dependencies)
 add_executable(test_filter_graph tests/test_filter_graph.cpp tests/mocks/MockCompositor.cpp)

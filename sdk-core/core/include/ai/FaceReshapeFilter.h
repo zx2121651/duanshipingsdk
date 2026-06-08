@@ -69,9 +69,14 @@ private:
     // 位移网格 VBO
     static constexpr int kGridW = 128;
     static constexpr int kGridH = 128;
+    uint32_t m_indexCount = 0;
     GLuint m_vbo      = 0;
     GLuint m_ebo      = 0;
     GLuint m_vao      = 0;
+    std::shared_ptr<rhi::IBuffer> m_meshVertexBuffer;
+    std::shared_ptr<rhi::IBuffer> m_meshIndexBuffer;
+    std::shared_ptr<rhi::IVertexArray> m_meshVao;
+    std::shared_ptr<rhi::IPipelineState> m_meshPipeline;
 
     // Uniform 位置
     GLint  m_uTexture       = -1;

@@ -57,6 +57,15 @@ struct HardwareBufferDesc {
     int format; // OS-specific format hint
 };
 
+struct ExternalTextureDesc {
+    uint64_t handle = 0; // Backend-specific existing texture/image handle.
+    uint32_t width = 0;
+    uint32_t height = 0;
+    TextureFormat format = TextureFormat::RGBA8;
+    uint32_t target = 0; // GLES: GL_TEXTURE_2D / GL_TEXTURE_EXTERNAL_OES. Other backends use 0 until explicit import support exists.
+    bool ownsHandle = false;
+};
+
 class IRenderDevice {
 public:
     virtual ~IRenderDevice() = default;
@@ -110,6 +119,7 @@ public:
 
     // External bindings
     [[nodiscard]] virtual std::shared_ptr<ITexture> createTextureFromHardwareBuffer(const HardwareBufferDesc& desc) = 0;
+    [[nodiscard]] virtual std::shared_ptr<ITexture> wrapExternalTexture(const ExternalTextureDesc& desc) = 0;
 
     /**
      * @brief Query backend capability snapshot.

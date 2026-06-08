@@ -413,6 +413,134 @@ static void tc_r26_rasterizer_desc_new_fields() {
 }
 
 // -----------------------------------------------------------------------
+// TC-R27: Indexed mesh draw path works through RHI command buffer
+// -----------------------------------------------------------------------
+static void tc_r27_indexed_mesh_draw_smoke() {
+    auto dev = std::make_shared<GLRenderDevice>();
+
+    const float vertices[] = {
+        -1.0f, -1.0f, 0.0f, 0.0f,
+         1.0f, -1.0f, 1.0f, 0.0f,
+        -1.0f,  1.0f, 0.0f, 1.0f,
+         1.0f,  1.0f, 1.0f, 1.0f,
+    };
+    const uint32_t indices[] = {0, 1, 2, 2, 1, 3};
+
+    auto vertexBuffer = dev->createBuffer(
+        BufferType::VertexBuffer, BufferUsage::StaticDraw,
+        sizeof(vertices), vertices);
+    auto indexBuffer = dev->createBuffer(
+        BufferType::IndexBuffer, BufferUsage::StaticDraw,
+        sizeof(indices), indices);
+    auto vao = dev->createVertexArray();
+
+    ASSERT_TRUE(vertexBuffer != nullptr, "TC-R27: vertex buffer created");
+    ASSERT_TRUE(indexBuffer != nullptr, "TC-R27: index buffer created");
+    ASSERT_TRUE(vao != nullptr, "TC-R27: vertex array created");
+
+    vao->addVertexBuffer(vertexBuffer, {
+        {0, VertexFormat::Float2, 0, 4 * sizeof(float)},
+        {1, VertexFormat::Float2, 2 * sizeof(float), 4 * sizeof(float)},
+    });
+    vao->setIndexBuffer(indexBuffer);
+
+    PipelineStateDesc desc;
+    desc.primitiveTopology = PrimitiveTopology::TriangleList;
+    auto pipeline = dev->createGraphicsPipeline(desc);
+    auto cmd = dev->createCommandBuffer();
+
+    ASSERT_TRUE(pipeline != nullptr, "TC-R27: triangle-list pipeline created");
+    ASSERT_TRUE(cmd != nullptr, "TC-R27: command buffer created");
+
+    cmd->bindPipelineState(pipeline);
+    cmd->bindVertexArray(vao.get());
+    cmd->drawIndexed(6, IndexType::UInt32);
+    ASSERT_TRUE(true, "TC-R27: drawIndexed(UInt32) completed without crash");
+}
+
+// -----------------------------------------------------------------------
+// TC-R28: Empty render pass descriptors are safe no-ops at the RHI boundary
+// -----------------------------------------------------------------------
+static void tc_r28_empty_render_pass_noop() {
+    auto dev = std::make_shared<GLRenderDevice>();
+    auto cmd = dev->createCommandBuffer();
+    ASSERT_TRUE(cmd != nullptr, "TC-R28: command buffer created");
+
+    RenderPassDescriptor desc;
+    cmd->beginRenderPass(desc);
+    cmd->endRenderPass();
+    dev->submit(cmd.get());
+    dev->submit(nullptr);
+
+    ASSERT_TRUE(true, "TC-R28: empty render pass and null submit completed without crash");
+}
+
+// -----------------------------------------------------------------------
+// TC-R29: Existing GL texture handles are wrapped explicitly, not as hardware buffers
+// -----------------------------------------------------------------------
+static void tc_r29_external_texture_wrap_contract() {
+    auto dev = std::make_shared<GLRenderDevice>();
+
+    ExternalTextureDesc invalid;
+    ASSERT_TRUE(dev->wrapExternalTexture(invalid) == nullptr,
+                "TC-R29: invalid external texture desc returns nullptr");
+
+    ExternalTextureDesc desc;
+    desc.handle = 123;
+    desc.width = 640;
+    desc.height = 480;
+    desc.format = TextureFormat::RGBA8;
+    desc.target = 0x0DE1; // GL_TEXTURE_2D
+    desc.ownsHandle = false;
+
+    auto tex = dev->wrapExternalTexture(desc);
+    ASSERT_TRUE(tex != nullptr, "TC-R29: external texture wrapper created");
+    ASSERT_EQ(tex->getId(), 123u, "TC-R29: wrapped texture id is preserved");
+    ASSERT_EQ(tex->getWidth(), 640u, "TC-R29: wrapped texture width is preserved");
+    ASSERT_EQ(tex->getHeight(), 480u, "TC-R29: wrapped texture height is preserved");
+    ASSERT_EQ(tex->getTarget(), 0x0DE1u, "TC-R29: wrapped texture target is preserved");
+
+    desc.handle = 456;
+    desc.target = 0x8D65; // GL_TEXTURE_EXTERNAL_OES
+    auto oesTex = dev->wrapExternalTexture(desc);
+    ASSERT_TRUE(oesTex != nullptr, "TC-R29: OES external texture wrapper created");
+    ASSERT_EQ(oesTex->getTarget(), 0x8D65u, "TC-R29: OES texture target is preserved");
+}
+
+// -----------------------------------------------------------------------
+// TC-R30: Shader resource sets upsert slots and tolerate null unbinds
+// -----------------------------------------------------------------------
+static void tc_r30_shader_resource_set_contract() {
+    auto dev = std::make_shared<GLRenderDevice>();
+    auto rs = dev->createShaderResourceSet();
+    ASSERT_TRUE(rs != nullptr, "TC-R30: shader resource set created");
+
+    ExternalTextureDesc texDesc;
+    texDesc.handle = 321;
+    texDesc.width = 16;
+    texDesc.height = 16;
+    texDesc.target = 0x0DE1;
+    auto texA = dev->wrapExternalTexture(texDesc);
+
+    texDesc.handle = 322;
+    auto texB = dev->wrapExternalTexture(texDesc);
+
+    auto ubo = dev->createBuffer(BufferType::UniformBuffer, BufferUsage::DynamicDraw, 16, nullptr);
+    auto ssbo = dev->createBuffer(BufferType::StorageBuffer, BufferUsage::DynamicDraw, 16, nullptr);
+
+    rs->bindTexture(0, texA);
+    rs->bindTexture(0, texB);
+    rs->bindTexture(1, nullptr);
+    rs->bindUniformBuffer(2, ubo);
+    rs->bindUniformBuffer(2, nullptr);
+    rs->bindStorageBuffer(3, ssbo);
+    rs->bindImageTexture(4, texB, TextureAccess::ReadWrite, TextureFormat::RGBA8);
+    rs->apply();
+
+    ASSERT_TRUE(true, "TC-R30: resource set bind/update/unbind/apply completed without crash");
+}
+
+// -----------------------------------------------------------------------
 int main() {
     std::cout << "========= test_rhi_backend =========\n";
 
@@ -443,6 +571,10 @@ int main() {
     tc_r24_index_type_enum();
     tc_r25_primitive_topology_enum();
     tc_r26_rasterizer_desc_new_fields();
+    tc_r27_indexed_mesh_draw_smoke();
+    tc_r28_empty_render_pass_noop();
+    tc_r29_external_texture_wrap_contract();
+    tc_r30_shader_resource_set_contract();
 
     std::cout << "\n=== Results: " << g_passed << " passed, "
               << g_failed << " failed ===\n";

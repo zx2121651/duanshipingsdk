@@ -26,7 +26,10 @@ void MetalCommandBuffer::end() {
 
 // ---------------------------------------------------------------------------
 void MetalCommandBuffer::beginRenderPass(const RenderPassDescriptor& desc) {
-    if (desc.colorAttachments.empty()) return;
+    if (!m_cmdBuf) {
+        begin();
+    }
+    if (desc.colorAttachments.empty() || !desc.colorAttachments[0].texture) return;
     auto* tex = dynamic_cast<MetalTexture*>(desc.colorAttachments[0].texture.get());
     if (!tex) return;
 
@@ -160,6 +163,9 @@ void MetalCommandBuffer::pipelineBarrier(BarrierType /*type*/) {
 }
 
 void MetalCommandBuffer::dispatchCompute(uint32_t nx, uint32_t ny, uint32_t nz) {
+    if (!m_cmdBuf) {
+        begin();
+    }
     if (!m_computeEnc) {
         m_computeEnc = [m_cmdBuf computeCommandEncoder];
     }
@@ -169,10 +175,14 @@ void MetalCommandBuffer::dispatchCompute(uint32_t nx, uint32_t ny, uint32_t nz) 
 }
 
 void MetalCommandBuffer::commit() {
+    if (!m_cmdBuf) {
+        return;
+    }
     if (m_renderEnc)  { [m_renderEnc  endEncoding]; m_renderEnc  = nil; }
     if (m_computeEnc) { [m_computeEnc endEncoding]; m_computeEnc = nil; }
     [m_cmdBuf commit];
     [m_cmdBuf waitUntilCompleted];
+    m_cmdBuf = nil;
 }
 
 void MetalCommandBuffer::drawInstanced(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance) {

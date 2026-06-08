@@ -6,6 +6,8 @@
 #define LOG_TAG "MakeupFilter"
 #include "../../include/Log.h"
 
+#include <algorithm>
+
 namespace sdk {
 namespace video {
 
@@ -47,7 +49,7 @@ void MakeupFilter::cacheUniforms() {
 
 void MakeupFilter::setLandmarkResult(const ai::LandmarkFrameResult& r) {
     m_hasFace = (r.faceCount > 0 && r.faces[0].detected);
-    if (m_hasFace) m_faceResult = r.faces[0];
+    m_faceResult = m_hasFace ? r.faces[0] : ai::FaceResult{};
 }
 
 void MakeupFilter::setLipColor  (float r,float g,float b,float i){ m_lip      ={r,g,b,i}; }
@@ -58,7 +60,7 @@ void MakeupFilter::setContour   (float i)                         { m_contour.in
 void MakeupFilter::setEyebrow   (float r,float g,float b,float i){ m_eyebrow  ={r,g,b,i}; }
 
 void MakeupFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {
-    outputFb->bind();
+    auto outputPass = beginOutputRenderPass(outputFb);
     GLStateManager::getInstance().useProgram(m_programId);
 
     GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
@@ -69,8 +71,8 @@ void MakeupFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) 
     if (m_uLandmarks >= 0 && m_hasFace) {
         float pts[ai::kFaceLandmarkCount * 2];
         for (int i = 0; i < ai::kFaceLandmarkCount; ++i) {
-            pts[i*2+0] = m_faceResult.landmarks[i].x;
-            pts[i*2+1] = m_faceResult.landmarks[i].y;
+            pts[i*2+0] = std::clamp(m_faceResult.landmarks[i].x, 0.0f, 1.0f);
+            pts[i*2+1] = std::clamp(m_faceResult.landmarks[i].y, 0.0f, 1.0f);
         }
         glUniform2fv(m_uLandmarks, ai::kFaceLandmarkCount, pts);
     }
@@ -86,8 +88,15 @@ void MakeupFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) 
     if (m_uEyebrowColor  >= 0) glUniform3f(m_uEyebrowColor,  m_eyebrow.r,   m_eyebrow.g,   m_eyebrow.b);
     if (m_uEyebrowIntens >= 0) glUniform1f(m_uEyebrowIntens, m_eyebrow.intensity);
 
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    outputFb->unbind();
+    if (m_renderDevice && m_quadVao) {
+        auto cmd = outputPass.commandBuffer ? outputPass.commandBuffer
+                                            : m_renderDevice->createCommandBuffer();
+        cmd->bindVertexArray(m_quadVao.get());
+        cmd->draw(4);
+    } else {
+        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    }
+    endOutputRenderPass(outputPass, outputFb);
 }
 
 static const char* kMakeupFrag = R"(#version 300 es

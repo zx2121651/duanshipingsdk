@@ -1,6 +1,7 @@
 #include <array>
 #include "../include/Filter.h"
 #include "../include/Log.h"
+#include "rhi/GLTexture.h"
 #include <iostream>
 #include <cstdlib>
 
@@ -57,6 +58,49 @@ ResultPayload<Texture> Filter::processFrame(const Texture& inputTexture, FrameBu
 
     onDraw(inputTexture, outputFb);
     return ResultPayload<Texture>::ok(outputFb->getTexture());
+}
+
+Filter::OutputRenderPass Filter::beginOutputRenderPass(FrameBufferPtr outputFb) {
+    OutputRenderPass pass;
+    if (!outputFb) {
+        return pass;
+    }
+
+    const Texture outputTexture = outputFb->getTexture();
+    if (m_renderDevice && outputTexture.id != 0) {
+        pass.commandBuffer = m_renderDevice->createCommandBuffer();
+        if (pass.commandBuffer) {
+            rhi::RenderPassDescriptor desc;
+            rhi::RenderPassColorAttachment color;
+            color.texture = std::make_shared<rhi::GLTexture>(
+                outputTexture.id,
+                outputTexture.width,
+                outputTexture.height);
+            color.loadAction = rhi::LoadAction::Load;
+            color.storeAction = rhi::StoreAction::Store;
+            desc.colorAttachments.push_back(color);
+            pass.commandBuffer->beginRenderPass(desc);
+            pass.usingRhi = true;
+            return pass;
+        }
+    }
+
+    outputFb->bind();
+    return pass;
+}
+
+void Filter::endOutputRenderPass(const OutputRenderPass& pass, FrameBufferPtr outputFb) {
+    if (pass.usingRhi && pass.commandBuffer) {
+        pass.commandBuffer->endRenderPass();
+        if (m_renderDevice) {
+            m_renderDevice->submit(pass.commandBuffer.get());
+        }
+        return;
+    }
+
+    if (outputFb) {
+        outputFb->unbind();
+    }
 }
 
 void Filter::setParameter(const std::string& key, const std::any& value) {

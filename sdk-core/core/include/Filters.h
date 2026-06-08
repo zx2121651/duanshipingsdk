@@ -189,7 +189,10 @@ public:
     void onProgramRecompiled() override;
 
     // Phase 1 RHI Transition method
-    void setRenderDevice(std::shared_ptr<rhi::IRenderDevice> device) { m_device = device; }
+    void setRenderDevice(std::shared_ptr<rhi::IRenderDevice> device) {
+        Filter::setRenderDevice(device);
+        m_device = device;
+    }
 
 protected:
     void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) override;

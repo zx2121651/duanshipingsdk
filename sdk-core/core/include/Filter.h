@@ -2,6 +2,7 @@
 #include "GLTypes.h"
 #include "ShaderManager.h"
 #include "FrameBuffer.h"
+#include "rhi/ICommandBuffer.h"
 #include "rhi/IRenderDevice.h"
 #include "rhi/IVertexArray.h"
 #include <string>
@@ -33,11 +34,19 @@ public:
     virtual void setParameterMat4(const std::string& key, const float* matrix);
 
 protected:
+    struct OutputRenderPass {
+        std::shared_ptr<rhi::ICommandBuffer> commandBuffer;
+        bool usingRhi = false;
+    };
+
     std::shared_ptr<ShaderManager> m_shaderManager;
     std::shared_ptr<rhi::IRenderDevice> m_renderDevice;
     std::shared_ptr<rhi::IVertexArray> m_quadVao;
     // Core rendering logic to be implemented by derived classes.
     virtual void onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) = 0;
+
+    OutputRenderPass beginOutputRenderPass(FrameBufferPtr outputFb);
+    void endOutputRenderPass(const OutputRenderPass& pass, FrameBufferPtr outputFb);
 
     // Shader compilation helpers
     uint32_t loadShader(uint32_t type, const char* shaderSrc);

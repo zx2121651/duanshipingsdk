@@ -63,6 +63,14 @@
 #define GL_DEPTH_TEST 0x0B71
 #endif
 
+#if !defined(_MSC_VER)
+#define SDK_RHI_HAS_WEAK_SYMBOLS 1
+#define SDK_RHI_WEAK_SYMBOL __attribute__((weak))
+#else
+#define SDK_RHI_HAS_WEAK_SYMBOLS 0
+#define SDK_RHI_WEAK_SYMBOL
+#endif
+
 #ifndef glDepthMask
 #define glDepthMask(x)
 #endif
@@ -210,47 +218,101 @@ void GLPipelineState::apply(ShadowState& s) {
 
 // --- GLShaderResourceSet ---
 
-void GLShaderResourceSet::bindTexture(uint32_t slot, std::shared_ptr<ITexture> texture) {
-    for (auto& b : m_bindings) {
-        if (b.slot == slot) { b.texture = texture; return; }
+static GLenum toGLImageFormat(TextureFormat format) {
+    switch (format) {
+        case TextureFormat::RGBA8: return GL_RGBA8;
+        case TextureFormat::RGBA16F: return GL_RGBA16F;
+        case TextureFormat::R8: return GL_R8;
+        case TextureFormat::R16F: return GL_R16F;
+        case TextureFormat::R32F: return GL_R32F;
+        default: return GL_RGBA8;
     }
-    m_bindings.push_back({slot, texture, nullptr, false, TextureAccess::Read, TextureFormat::RGBA8, 0});
+}
+
+void GLShaderResourceSet::upsertBinding(Binding binding) {
+    auto it = std::find_if(m_bindings.begin(), m_bindings.end(), [slot = binding.slot](const Binding& b) {
+        return b.slot == slot;
+    });
+    if (it != m_bindings.end()) {
+        *it = std::move(binding);
+    } else {
+        m_bindings.push_back(std::move(binding));
+    }
+}
+
+void GLShaderResourceSet::bindTexture(uint32_t slot, std::shared_ptr<ITexture> texture) {
+    auto it = std::find_if(m_bindings.begin(), m_bindings.end(), [slot](const Binding& b) { return b.slot == slot; });
+    if (!texture) {
+        if (it != m_bindings.end()) {
+            m_bindings.erase(it);
+        }
+        return;
+    }
+
+    Binding binding{slot, BindingType::SampledTexture, texture, nullptr, TextureAccess::Read, texture->getFormat(), 0};
+    upsertBinding(std::move(binding));
 }
 
 void GLShaderResourceSet::apply() {
-    for (const auto& b : m_bindings) {
-        if (b.isStorage) {
-            if (b.buffer) {
-#ifdef GL_SHADER_STORAGE_BUFFER
-                auto glBuf = std::dynamic_pointer_cast<GLBuffer>(b.buffer);
-                if (glBuf) {
-                    extern void glBindBufferBase(GLenum, GLuint, GLuint) __attribute__((weak));
-                    if (glBindBufferBase) glBindBufferBase(GL_SHADER_STORAGE_BUFFER, b.slot, glBuf->getGLHandle());
+    for (auto& b : m_bindings) {
+        switch (b.type) {
+            case BindingType::SampledTexture:
+                if (b.texture) {
+                    glActiveTexture(GL_TEXTURE0 + b.slot);
+                    glBindTexture(b.texture->getTarget(), b.texture->getId());
                 }
+                break;
+
+            case BindingType::UniformBuffer:
+                if (b.buffer) {
+                    auto glBuf = std::dynamic_pointer_cast<GLBuffer>(b.buffer);
+                    if (glBuf) {
+#if SDK_RHI_HAS_WEAK_SYMBOLS
+                        extern void glBindBufferBase(GLenum, GLuint, GLuint) SDK_RHI_WEAK_SYMBOL;
+                        if (glBindBufferBase) glBindBufferBase(GL_UNIFORM_BUFFER, b.slot, glBuf->getGLHandle());
+#else
+                        glBindBufferBase(GL_UNIFORM_BUFFER, b.slot, glBuf->getGLHandle());
 #endif
-            }
-        } else if (b.buffer) {
-            auto glBuf = std::dynamic_pointer_cast<GLBuffer>(b.buffer);
-            if (glBuf) {
-                extern void glBindBufferBase(GLenum, GLuint, GLuint) __attribute__((weak));
-                if (glBindBufferBase) glBindBufferBase(GL_UNIFORM_BUFFER, b.slot, glBuf->getGLHandle());
-            }
-        } else if (b.texture) {
-            // is it image binding?
-            if (b.access == TextureAccess::Read || b.access == TextureAccess::Write || b.access == TextureAccess::ReadWrite) {
-                // assume bindImageTexture was called
-                extern void glBindImageTexture(GLuint, GLuint, GLint, GLboolean, GLint, GLenum, GLenum) __attribute__((weak));
-                if (glBindImageTexture) {
+                    }
+                }
+                break;
+
+            case BindingType::StorageBuffer:
+                if (b.buffer) {
+#ifdef GL_SHADER_STORAGE_BUFFER
+                    auto glBuf = std::dynamic_pointer_cast<GLBuffer>(b.buffer);
+                    if (glBuf) {
+#if SDK_RHI_HAS_WEAK_SYMBOLS
+                        extern void glBindBufferBase(GLenum, GLuint, GLuint) SDK_RHI_WEAK_SYMBOL;
+                        if (glBindBufferBase) glBindBufferBase(GL_SHADER_STORAGE_BUFFER, b.slot, glBuf->getGLHandle());
+#else
+                        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, b.slot, glBuf->getGLHandle());
+#endif
+                    }
+#endif
+                }
+                break;
+
+            case BindingType::ImageTexture:
+                if (b.texture) {
+#if SDK_RHI_HAS_WEAK_SYMBOLS
+                    extern void glBindImageTexture(GLuint, GLuint, GLint, GLboolean, GLint, GLenum, GLenum) SDK_RHI_WEAK_SYMBOL;
+                    if (glBindImageTexture) {
+                        GLenum access = GL_READ_WRITE;
+                        if (b.access == TextureAccess::Read) access = GL_READ_ONLY;
+                        if (b.access == TextureAccess::Write) access = GL_WRITE_ONLY;
+                        glBindImageTexture(b.slot, b.texture->getId(), b.level, GL_FALSE, 0, access, toGLImageFormat(b.format));
+                    }
+#elif defined(__ANDROID__) || defined(HAS_GLES31) || defined(HAS_GLES32)
                     GLenum access = GL_READ_WRITE;
                     if (b.access == TextureAccess::Read) access = GL_READ_ONLY;
                     if (b.access == TextureAccess::Write) access = GL_WRITE_ONLY;
-                    // format mapping is skipped for brevity, assuming GL_RGBA8 for now in this prototype
-                    glBindImageTexture(b.slot, b.texture->getId(), b.level, GL_FALSE, 0, access, GL_RGBA8);
+                    glBindImageTexture(b.slot, b.texture->getId(), b.level, GL_FALSE, 0, access, toGLImageFormat(b.format));
+#else
+                    (void)b;
+#endif
                 }
-            } else {
-                glActiveTexture(GL_TEXTURE0 + b.slot);
-                glBindTexture(b.texture->getTarget(), b.texture->getId());
-            }
+                break;
         }
     }
 }
@@ -368,16 +430,6 @@ void GLCommandBuffer::draw(uint32_t count) {
 }
 
 void GLCommandBuffer::drawIndexed(uint32_t indexCount, IndexType indexType) {
-    // [DEBUG] Log the active program ID to diagnose 0x502 at draw time
-    if (m_device) {
-        GLint currentProgram = 0;
-        glGetIntegerv(GL_CURRENT_PROGRAM, &currentProgram);
-        GLenum preErr = glGetError();
-        if (preErr != GL_NO_ERROR) {
-            __android_log_print(ANDROID_LOG_ERROR, "GL_CRITICAL",
-                "Pre-draw error 0x%X with program=%d", preErr, currentProgram);
-        }
-    }
     glDrawElements(toGLTopology(m_currentTopology), indexCount, toGLIndexType(indexType), nullptr);
     CHECK_GL_ERROR_LINE();
 }
@@ -385,7 +437,7 @@ void GLCommandBuffer::drawIndexed(uint32_t indexCount, IndexType indexType) {
 void GLCommandBuffer::dispatchCompute(uint32_t numGroupsX, uint32_t numGroupsY, uint32_t numGroupsZ) {
     // Compute dispatch is a command-buffer responsibility (not IShaderProgram's)
 #if !defined(__APPLE__) && !defined(_MSC_VER) && !defined(USE_MOCK_GL)
-    extern void glDispatchCompute(GLuint, GLuint, GLuint) __attribute__((weak));
+    extern void glDispatchCompute(GLuint, GLuint, GLuint) SDK_RHI_WEAK_SYMBOL;
     if (glDispatchCompute) {
         glDispatchCompute(numGroupsX, numGroupsY, numGroupsZ);
     }
@@ -658,6 +710,9 @@ std::shared_ptr<ITexture> GLRenderDevice::createMSAATexture(
 }
 
 void GLRenderDevice::submit(ICommandBuffer* cmdBuffer) {
+    if (!cmdBuffer) {
+        return;
+    }
     // Immediate-mode GL backend: commands are executed inline during recording.
     // glFlush() ensures all queued GL commands are submitted to the GPU driver
     // before this function returns — semantically equivalent to Vulkan queue submit.
@@ -821,6 +876,23 @@ std::shared_ptr<ITexture> GLRenderDevice::createTextureFromHardwareBuffer(const 
 #endif
 }
 
+std::shared_ptr<ITexture> GLRenderDevice::wrapExternalTexture(const ExternalTextureDesc& desc) {
+    if (desc.handle == 0 || desc.width == 0 || desc.height == 0) {
+        return nullptr;
+    }
+
+    const uint32_t target = desc.target != 0 ? desc.target : GL_TEXTURE_2D;
+    auto texture = std::make_shared<GLTexture>(
+        static_cast<uint32_t>(desc.handle),
+        desc.width,
+        desc.height,
+        desc.format,
+        1,
+        target,
+        desc.ownsHandle);
+    return texture;
+}
+
 GLuint GLRenderDevice::getOrCreateFBO(uint32_t texId, uint32_t texWidth, uint32_t texHeight) {
     auto it = m_fboCache.find(texId);
     if (it != m_fboCache.end()) return it->second;
@@ -926,37 +998,48 @@ void GLRenderDevice::waitIdle() {
 
 void GLCommandBuffer::setPushConstants(const void* data, size_t size) { }
 void GLShaderResourceSet::bindUniformBuffer(uint32_t slot, std::shared_ptr<IBuffer> buffer) {
-    m_bindings.push_back({slot, nullptr, buffer, false, TextureAccess::Read, TextureFormat::RGBA8, 0});
+    auto it = std::find_if(m_bindings.begin(), m_bindings.end(), [slot](const Binding& b) { return b.slot == slot; });
+    if (!buffer) {
+        if (it != m_bindings.end()) {
+            m_bindings.erase(it);
+        }
+        return;
+    }
+    upsertBinding({slot, BindingType::UniformBuffer, nullptr, buffer, TextureAccess::Read, TextureFormat::RGBA8, 0});
 }
 
 void GLShaderResourceSet::bindStorageBuffer(uint32_t slot, std::shared_ptr<IBuffer> buffer) {
     auto it = std::find_if(m_bindings.begin(), m_bindings.end(), [slot](const Binding& b) { return b.slot == slot; });
-    if (it != m_bindings.end()) {
-        it->buffer = buffer;
-        it->isStorage = true;
-    } else {
-        m_bindings.push_back({slot, nullptr, buffer, true, TextureAccess::ReadWrite, TextureFormat::RGBA8, 0});
+    if (!buffer) {
+        if (it != m_bindings.end()) {
+            m_bindings.erase(it);
+        }
+        return;
     }
+    upsertBinding({slot, BindingType::StorageBuffer, nullptr, buffer, TextureAccess::ReadWrite, TextureFormat::RGBA8, 0});
 }
 
 void GLShaderResourceSet::bindImageTexture(uint32_t slot, std::shared_ptr<ITexture> texture, TextureAccess access, TextureFormat format, uint32_t level) {
     auto it = std::find_if(m_bindings.begin(), m_bindings.end(), [slot](const Binding& b) { return b.slot == slot; });
-    if (it != m_bindings.end()) {
-        it->texture = texture;
-        it->access = access;
-        it->format = format;
-        it->level = level;
-    } else {
-        m_bindings.push_back({slot, texture, nullptr, false, access, format, level});
+    if (!texture) {
+        if (it != m_bindings.end()) {
+            m_bindings.erase(it);
+        }
+        return;
     }
+    upsertBinding({slot, BindingType::ImageTexture, texture, nullptr, access, format, level});
 }
 
 void GLCommandBuffer::drawInstanced(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance) {
     GLenum mode = toGLTopology(m_currentTopology);
-    extern void glDrawArraysInstanced(GLenum, GLint, GLsizei, GLsizei) __attribute__((weak));
+#if SDK_RHI_HAS_WEAK_SYMBOLS
+    extern void glDrawArraysInstanced(GLenum, GLint, GLsizei, GLsizei) SDK_RHI_WEAK_SYMBOL;
     if (glDrawArraysInstanced) {
         glDrawArraysInstanced(mode, firstVertex, vertexCount, instanceCount);
     }
+#else
+    (void)mode; (void)vertexCount; (void)instanceCount; (void)firstVertex; (void)firstInstance;
+#endif
 }
 
 void GLCommandBuffer::drawIndexedInstanced(uint32_t indexCount, uint32_t instanceCount, IndexType indexType, uint32_t firstIndex, int32_t vertexOffset, uint32_t firstInstance) {
@@ -965,10 +1048,15 @@ void GLCommandBuffer::drawIndexedInstanced(uint32_t indexCount, uint32_t instanc
     size_t indexSize = (indexType == IndexType::UInt16) ? 2 : 4;
     const void* offsetPtr = reinterpret_cast<const void*>(static_cast<uintptr_t>(firstIndex * indexSize));
 
-    extern void glDrawElementsInstanced(GLenum, GLsizei, GLenum, const void*, GLsizei) __attribute__((weak));
+    
+#if SDK_RHI_HAS_WEAK_SYMBOLS
+    extern void glDrawElementsInstanced(GLenum, GLsizei, GLenum, const void*, GLsizei) SDK_RHI_WEAK_SYMBOL;
     if (glDrawElementsInstanced) {
         glDrawElementsInstanced(mode, indexCount, type, offsetPtr, instanceCount);
     }
+#else
+    (void)mode; (void)type; (void)offsetPtr; (void)indexCount; (void)instanceCount; (void)vertexOffset; (void)firstInstance;
+#endif
 }
 
 std::shared_ptr<IPipelineState> GLRenderDevice::createComputePipeline(const ComputePipelineStateDesc& desc) {

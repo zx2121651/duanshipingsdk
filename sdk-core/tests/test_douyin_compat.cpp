@@ -273,6 +273,7 @@ static void testEffectLayerTypeEnum() {
 
 // ---------------------------------------------------------------------------
 int main() {
+    setvbuf(stdout, nullptr, _IONBF, 0);
     printf("========= test_douyin_compat =========\n");
     testFaceLandmarkDetector();
     testFaceReshapeFilter();

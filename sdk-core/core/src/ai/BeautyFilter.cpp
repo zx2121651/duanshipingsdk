@@ -72,7 +72,8 @@ float skinMask(vec3 rgb) {
 }
 float faceMask(vec2 uv) {
     if (u_hasFace == 0) return 1.0;
-    vec2 d = (uv - u_faceCenter) / u_faceRadius;
+    vec2 radius = max(u_faceRadius, vec2(0.001));
+    vec2 d = (uv - u_faceCenter) / radius;
     float dist = dot(d, d);
     return smoothstep(1.0, 0.6, dist);
 }
@@ -120,6 +121,14 @@ Result BeautyFilter::initialize() {
     if (!res.isOk()) return res;
     cacheUniformLocations();
 
+    if (m_renderDevice) {
+        m_paramsBuffer = m_renderDevice->createBuffer(
+            rhi::BufferType::UniformBuffer,
+            rhi::BufferUsage::DynamicDraw,
+            sizeof(UniformParams),
+            nullptr);
+    }
+
     // Init Dual PBOs
     glGenBuffers(2, m_pbos);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, m_pbos[0]);
@@ -147,6 +156,7 @@ void BeautyFilter::release() {
         glDeleteBuffers(1, &m_meshVbo);
         m_meshVbo = 0;
     }
+    m_paramsBuffer.reset();
     Filter::release();
 }
 
@@ -262,50 +272,76 @@ void BeautyFilter::setLandmarkResult(const ai::LandmarkFrameResult& r) {
         // Expand radius by 30% to cover forehead/jaw edges
         m_faceRadiusX = (maxX - minX) * 0.5f * 1.3f;
         m_faceRadiusY = (maxY - minY) * 0.5f * 1.3f;
+    } else {
+        m_faceCenterX = 0.5f;
+        m_faceCenterY = 0.5f;
+        m_faceRadiusX = 0.5f;
+        m_faceRadiusY = 0.5f;
     }
+}
+
+BeautyFilter::UniformParams BeautyFilter::buildUniformParams(const Texture& inputTexture) const {
+    UniformParams params;
+    if (m_parameters.count("smoothStrength")) {
+        params.smoothStrength = std::any_cast<float>(m_parameters.at("smoothStrength"));
+    }
+    if (m_parameters.count("whitenStrength")) {
+        params.whitenStrength = std::any_cast<float>(m_parameters.at("whitenStrength"));
+    }
+    params.texelWidth = (inputTexture.width > 0)
+        ? 1.0f / static_cast<float>(inputTexture.width)
+        : 0.001f;
+    params.texelHeight = (inputTexture.height > 0)
+        ? 1.0f / static_cast<float>(inputTexture.height)
+        : 0.001f;
+    params.hasFace = m_hasFace ? 1.0f : 0.0f;
+    params.faceCenterX = m_faceCenterX;
+    params.faceCenterY = m_faceCenterY;
+    params.faceRadiusX = m_faceRadiusX;
+    params.faceRadiusY = m_faceRadiusY;
+    return params;
+}
+
+void BeautyFilter::uploadLegacyUniforms(const UniformParams& params) const {
+    glUniform1i(m_inputImageTextureHandle, 0);
+    glUniform1f(m_locSmoothStrength, params.smoothStrength);
+    glUniform1f(m_locWhitenStrength, params.whitenStrength);
+    glUniform2f(m_locTexelSize, params.texelWidth, params.texelHeight);
+    if (m_locHasFace >= 0) glUniform1i(m_locHasFace, params.hasFace > 0.5f ? 1 : 0);
+    if (m_locFaceCenter >= 0) glUniform2f(m_locFaceCenter, params.faceCenterX, params.faceCenterY);
+    if (m_locFaceRadius >= 0) glUniform2f(m_locFaceRadius, params.faceRadiusX, params.faceRadiusY);
 }
 
 // ---------------------------------------------------------------------------
 void BeautyFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {
-    outputFb->bind();
+    auto outputPass = beginOutputRenderPass(outputFb);
     GLStateManager::getInstance().useProgram(m_programId);
+    const UniformParams params = buildUniformParams(inputTexture);
 
     // inputImageTexture — slot 0
     GLStateManager::getInstance().activeTexture(GL_TEXTURE0);
     GLStateManager::getInstance().bindTexture(GL_TEXTURE_2D, inputTexture.id);
-    glUniform1i(m_inputImageTextureHandle, 0);
+    uploadLegacyUniforms(params);
 
-    // smoothStrength
-    float smooth = 0.6f;
-    if (m_parameters.count("smoothStrength"))
-        smooth = std::any_cast<float>(m_parameters.at("smoothStrength"));
-    glUniform1f(m_locSmoothStrength, smooth);
-
-    // whitenStrength
-    float whiten = 0.4f;
-    if (m_parameters.count("whitenStrength"))
-        whiten = std::any_cast<float>(m_parameters.at("whitenStrength"));
-    glUniform1f(m_locWhitenStrength, whiten);
-
-    // texelSize
-    float tw = (inputTexture.width  > 0) ? 1.0f / static_cast<float>(inputTexture.width)  : 0.001f;
-    float th = (inputTexture.height > 0) ? 1.0f / static_cast<float>(inputTexture.height) : 0.001f;
-    glUniform2f(m_locTexelSize, tw, th);
-
-    // face region mask
-    if (m_locHasFace >= 0) glUniform1i(m_locHasFace, m_hasFace ? 1 : 0);
-    if (m_locFaceCenter >= 0) glUniform2f(m_locFaceCenter, m_faceCenterX, m_faceCenterY);
-    if (m_locFaceRadius >= 0) glUniform2f(m_locFaceRadius, m_faceRadiusX, m_faceRadiusY);
+    if (m_paramsBuffer) {
+        m_paramsBuffer->updateData(&params, sizeof(params));
+    }
 
     // 全屏四边形
     if (m_renderDevice && m_quadVao) {
-        auto cmd = m_renderDevice->createCommandBuffer();
+        auto cmd = outputPass.commandBuffer ? outputPass.commandBuffer
+                                            : m_renderDevice->createCommandBuffer();
+        auto resourceSet = m_renderDevice->createShaderResourceSet();
+        if (resourceSet && m_paramsBuffer) {
+            resourceSet->bindUniformBuffer(1, m_paramsBuffer);
+            cmd->bindResourceSet(0, resourceSet);
+        }
         cmd->bindVertexArray(m_quadVao.get());
         cmd->draw(4);
     } else {
         glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
     }
-    outputFb->unbind();
+    endOutputRenderPass(outputPass, outputFb);
 }
 
 std::string BeautyFilter::getVertexShaderSource()   const { return kBeautyVertSrc; }

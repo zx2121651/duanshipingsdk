@@ -52,7 +52,24 @@ public:
     void apply() override;
 
 private:
-    struct Binding { uint32_t slot; std::shared_ptr<ITexture> texture; std::shared_ptr<IBuffer> buffer; bool isStorage; TextureAccess access; TextureFormat format; uint32_t level; };
+    enum class BindingType {
+        SampledTexture,
+        UniformBuffer,
+        StorageBuffer,
+        ImageTexture
+    };
+
+    struct Binding {
+        uint32_t slot;
+        BindingType type;
+        std::shared_ptr<ITexture> texture;
+        std::shared_ptr<IBuffer> buffer;
+        TextureAccess access;
+        TextureFormat format;
+        uint32_t level;
+    };
+
+    void upsertBinding(Binding binding);
     std::vector<Binding> m_bindings;
 };
 
@@ -126,6 +143,7 @@ public:
         const TextureDesc& desc, int samples) override;
 
     std::shared_ptr<ITexture> createTextureFromHardwareBuffer(const HardwareBufferDesc& desc) override;
+    std::shared_ptr<ITexture> wrapExternalTexture(const ExternalTextureDesc& desc) override;
 
     RHICapabilities getCapabilities() const override;
     void waitIdle() override;
