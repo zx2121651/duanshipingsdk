@@ -5,6 +5,12 @@ namespace sdk {
 namespace video {
 namespace rhi {
 
+enum class TextureAccess {
+    Read,
+    Write,
+    ReadWrite
+};
+
 enum class TextureUsage {
     Sampled = 1 << 0,
     RenderTarget = 1 << 1,

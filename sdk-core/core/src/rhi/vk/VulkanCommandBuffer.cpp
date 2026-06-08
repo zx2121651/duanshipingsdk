@@ -197,7 +197,25 @@ void VulkanCommandBuffer::flush(VkQueue queue) {
     m_pendingFramebuffers.clear();
 }
 
+void VulkanCommandBuffer::drawInstanced(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance) {
+    if (m_cmd) {
+        vkCmdDraw(m_cmd, vertexCount, instanceCount, firstVertex, firstInstance);
+    }
+}
+void VulkanCommandBuffer::drawIndexedInstanced(uint32_t indexCount, uint32_t instanceCount, IndexType indexType, uint32_t firstIndex, int32_t vertexOffset, uint32_t firstInstance) {
+    if (m_cmd) {
+        vkCmdDrawIndexed(m_cmd, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
+    }
+}
+
+#endif // HAS_VULKAN
+void VulkanDescriptorSet::bindStorageBuffer(uint32_t slot, std::shared_ptr<IBuffer> buffer) {
+    // Stub for vk storage buffer
+}
+void VulkanDescriptorSet::bindImageTexture(uint32_t slot, std::shared_ptr<ITexture> texture, TextureAccess access, TextureFormat format, uint32_t level) {
+    // Stub for vk image texture
+}
+
 } // namespace rhi
 } // namespace video
 } // namespace sdk
-#endif // HAS_VULKAN

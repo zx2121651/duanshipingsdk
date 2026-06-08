@@ -12,6 +12,7 @@ static VkBufferUsageFlags toVkUsage(BufferType type, BufferUsage usage) {
     if (type == BufferType::VertexBuffer) flags |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
     if (type == BufferType::IndexBuffer)  flags |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
     if (type == BufferType::UniformBuffer) flags |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    if (type == BufferType::StorageBuffer) flags |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
     if (usage == BufferUsage::DynamicDraw) flags |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     return flags;
 }

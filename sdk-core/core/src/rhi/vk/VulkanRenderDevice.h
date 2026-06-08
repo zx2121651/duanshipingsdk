@@ -42,8 +42,10 @@ public:
     std::shared_ptr<IBuffer>        createBuffer(BufferType, BufferUsage, size_t, const void*) override;
     std::shared_ptr<IVertexArray>   createVertexArray() override;
     std::shared_ptr<IPipelineState> createGraphicsPipeline(const PipelineStateDesc& desc) override;
+    std::shared_ptr<IPipelineState> createComputePipeline(const ComputePipelineStateDesc& desc) override;
     std::shared_ptr<IShaderResourceSet> createShaderResourceSet() override;
     std::shared_ptr<ICommandBuffer> createCommandBuffer() override;
+    std::shared_ptr<IShaderProgram> createComputeShaderProgram(const char* computeSrc) override;
     std::shared_ptr<IShaderProgram> createShaderProgram(const char* vert, const char* frag) override;
     std::shared_ptr<IShaderProgram> createGeometryShaderProgram(const char*, const char*, const char*) override;
     std::shared_ptr<IShaderProgram> createTessellationProgram(const char*, const char*, const char*, const char*) override;

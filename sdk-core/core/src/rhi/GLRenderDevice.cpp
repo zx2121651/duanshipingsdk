@@ -19,6 +19,16 @@
 #include "GLBuffer.h"
 #include "GLVertexArray.h"
 #include "GLRenderDevice.h"
+#ifndef GL_READ_ONLY
+#define GL_READ_ONLY  0x88B8
+#endif
+#ifndef GL_WRITE_ONLY
+#define GL_WRITE_ONLY 0x88B9
+#endif
+#ifndef GL_READ_WRITE
+#define GL_READ_WRITE 0x88BA
+#endif
+
 #include "../../include/GLStateManager.h"
 #include <memory>
 #include <iostream>
@@ -204,19 +214,44 @@ void GLShaderResourceSet::bindTexture(uint32_t slot, std::shared_ptr<ITexture> t
     for (auto& b : m_bindings) {
         if (b.slot == slot) { b.texture = texture; return; }
     }
-    m_bindings.push_back({slot, texture});
+    m_bindings.push_back({slot, texture, nullptr, false, TextureAccess::Read, TextureFormat::RGBA8, 0});
 }
 
 void GLShaderResourceSet::apply() {
     for (const auto& b : m_bindings) {
-        glActiveTexture(GL_TEXTURE0 + b.slot);
-        CHECK_GL_ERROR_LINE();
-        if (b.texture) {
-            glBindTexture(b.texture->getTarget(), b.texture->getId());
-        } else {
-            glBindTexture(GL_TEXTURE_2D, 0);
+        if (b.isStorage) {
+            if (b.buffer) {
+#ifdef GL_SHADER_STORAGE_BUFFER
+                auto glBuf = std::dynamic_pointer_cast<GLBuffer>(b.buffer);
+                if (glBuf) {
+                    extern void glBindBufferBase(GLenum, GLuint, GLuint) __attribute__((weak));
+                    if (glBindBufferBase) glBindBufferBase(GL_SHADER_STORAGE_BUFFER, b.slot, glBuf->getGLHandle());
+                }
+#endif
+            }
+        } else if (b.buffer) {
+            auto glBuf = std::dynamic_pointer_cast<GLBuffer>(b.buffer);
+            if (glBuf) {
+                extern void glBindBufferBase(GLenum, GLuint, GLuint) __attribute__((weak));
+                if (glBindBufferBase) glBindBufferBase(GL_UNIFORM_BUFFER, b.slot, glBuf->getGLHandle());
+            }
+        } else if (b.texture) {
+            // is it image binding?
+            if (b.access == TextureAccess::Read || b.access == TextureAccess::Write || b.access == TextureAccess::ReadWrite) {
+                // assume bindImageTexture was called
+                extern void glBindImageTexture(GLuint, GLuint, GLint, GLboolean, GLint, GLenum, GLenum) __attribute__((weak));
+                if (glBindImageTexture) {
+                    GLenum access = GL_READ_WRITE;
+                    if (b.access == TextureAccess::Read) access = GL_READ_ONLY;
+                    if (b.access == TextureAccess::Write) access = GL_WRITE_ONLY;
+                    // format mapping is skipped for brevity, assuming GL_RGBA8 for now in this prototype
+                    glBindImageTexture(b.slot, b.texture->getId(), b.level, GL_FALSE, 0, access, GL_RGBA8);
+                }
+            } else {
+                glActiveTexture(GL_TEXTURE0 + b.slot);
+                glBindTexture(b.texture->getTarget(), b.texture->getId());
+            }
         }
-        CHECK_GL_ERROR_LINE();
     }
 }
 
@@ -891,8 +926,68 @@ void GLRenderDevice::waitIdle() {
 
 void GLCommandBuffer::setPushConstants(const void* data, size_t size) { }
 void GLShaderResourceSet::bindUniformBuffer(uint32_t slot, std::shared_ptr<IBuffer> buffer) {
-    m_bindings.push_back({slot, nullptr, buffer});
+    m_bindings.push_back({slot, nullptr, buffer, false, TextureAccess::Read, TextureFormat::RGBA8, 0});
 }
+
+void GLShaderResourceSet::bindStorageBuffer(uint32_t slot, std::shared_ptr<IBuffer> buffer) {
+    auto it = std::find_if(m_bindings.begin(), m_bindings.end(), [slot](const Binding& b) { return b.slot == slot; });
+    if (it != m_bindings.end()) {
+        it->buffer = buffer;
+        it->isStorage = true;
+    } else {
+        m_bindings.push_back({slot, nullptr, buffer, true, TextureAccess::ReadWrite, TextureFormat::RGBA8, 0});
+    }
+}
+
+void GLShaderResourceSet::bindImageTexture(uint32_t slot, std::shared_ptr<ITexture> texture, TextureAccess access, TextureFormat format, uint32_t level) {
+    auto it = std::find_if(m_bindings.begin(), m_bindings.end(), [slot](const Binding& b) { return b.slot == slot; });
+    if (it != m_bindings.end()) {
+        it->texture = texture;
+        it->access = access;
+        it->format = format;
+        it->level = level;
+    } else {
+        m_bindings.push_back({slot, texture, nullptr, false, access, format, level});
+    }
+}
+
+void GLCommandBuffer::drawInstanced(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance) {
+    GLenum mode = toGLTopology(m_currentTopology);
+    extern void glDrawArraysInstanced(GLenum, GLint, GLsizei, GLsizei) __attribute__((weak));
+    if (glDrawArraysInstanced) {
+        glDrawArraysInstanced(mode, firstVertex, vertexCount, instanceCount);
+    }
+}
+
+void GLCommandBuffer::drawIndexedInstanced(uint32_t indexCount, uint32_t instanceCount, IndexType indexType, uint32_t firstIndex, int32_t vertexOffset, uint32_t firstInstance) {
+    GLenum mode = toGLTopology(m_currentTopology);
+    GLenum type = (indexType == IndexType::UInt16) ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
+    size_t indexSize = (indexType == IndexType::UInt16) ? 2 : 4;
+    const void* offsetPtr = reinterpret_cast<const void*>(static_cast<uintptr_t>(firstIndex * indexSize));
+
+    extern void glDrawElementsInstanced(GLenum, GLsizei, GLenum, const void*, GLsizei) __attribute__((weak));
+    if (glDrawElementsInstanced) {
+        glDrawElementsInstanced(mode, indexCount, type, offsetPtr, instanceCount);
+    }
+}
+
+std::shared_ptr<IPipelineState> GLRenderDevice::createComputePipeline(const ComputePipelineStateDesc& desc) {
+    auto pso = std::make_shared<GLComputePipelineState>();
+    pso->desc = desc;
+    return pso;
+}
+
+std::shared_ptr<IShaderProgram> GLRenderDevice::createComputeShaderProgram(const char* computeSrc) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    auto prog = std::make_shared<GLShaderProgram>(std::string(computeSrc));
+    if (!prog->isValid()) {
+        std::cerr << "RHI: createComputeShaderProgram failed" << std::endl;
+        return nullptr;
+    }
+    return prog;
+}
+
+
 } // namespace rhi
 } // namespace video
 } // namespace sdk

@@ -81,6 +81,12 @@ public:
     virtual void bindUniformBuffer(uint32_t slot, std::shared_ptr<IBuffer> buffer) = 0;
 
     // Apply all bound resources to the current GL state
+    // Bind a Storage Buffer (SSBO) to a given binding slot
+    virtual void bindStorageBuffer(uint32_t slot, std::shared_ptr<IBuffer> buffer) = 0;
+
+    // Bind a Texture as an Image (for compute shader read/write)
+    virtual void bindImageTexture(uint32_t slot, std::shared_ptr<ITexture> texture, TextureAccess access, TextureFormat format, uint32_t level = 0) = 0;
+
     virtual void apply() = 0;
 };
 
@@ -141,6 +147,10 @@ struct PipelineStateDesc {
     BlendDesc blendState;
     DepthStencilDesc depthStencilState;
     RasterizerDesc rasterizerState;
+};
+
+struct ComputePipelineStateDesc {
+    IShaderProgram* shaderProgram = nullptr;
 };
 
 class [[nodiscard]] IPipelineState {

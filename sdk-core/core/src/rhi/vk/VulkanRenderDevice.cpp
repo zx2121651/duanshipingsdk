@@ -241,7 +241,15 @@ void VulkanCommandBuffer::setPushConstants(const void* data, size_t size) {
 void VulkanDescriptorSet::bindUniformBuffer(uint32_t slot, std::shared_ptr<IBuffer> buffer) {
     // Stub
 }
+std::shared_ptr<IPipelineState> VulkanRenderDevice::createComputePipeline(const ComputePipelineStateDesc& desc) {
+    return nullptr; /* stub */
+}
+std::shared_ptr<IShaderProgram> VulkanRenderDevice::createComputeShaderProgram(const char* computeSrc) {
+    return nullptr; /* stub */
+}
+
+#endif // HAS_VULKAN
+
 } // namespace rhi
 } // namespace video
 } // namespace sdk
-#endif // HAS_VULKAN

@@ -38,7 +38,9 @@ public:
     virtual void bindPipelineState(std::shared_ptr<IPipelineState> pso) = 0;
     virtual void bindVertexArray(IVertexArray* vao) = 0;
     virtual void draw(uint32_t count) = 0;
+    virtual void drawInstanced(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex = 0, uint32_t firstInstance = 0) = 0;
     virtual void drawIndexed(uint32_t indexCount, IndexType indexType = IndexType::UInt16) = 0;
+    virtual void drawIndexedInstanced(uint32_t indexCount, uint32_t instanceCount, IndexType indexType = IndexType::UInt16, uint32_t firstIndex = 0, int32_t vertexOffset = 0, uint32_t firstInstance = 0) = 0;
 
     virtual void pipelineBarrier(BarrierType type) = 0;
 

@@ -10,7 +10,8 @@ namespace rhi {
 enum class BufferType {
     VertexBuffer,
     IndexBuffer,
-    UniformBuffer
+    UniformBuffer,
+    StorageBuffer
 };
 
 // Define the usage pattern of the buffer for driver optimization

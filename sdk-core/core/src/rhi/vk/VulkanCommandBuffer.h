@@ -25,6 +25,8 @@ struct VulkanDescriptorSet : public IShaderResourceSet {
     ~VulkanDescriptorSet() override;
     void bindTexture(uint32_t slot, std::shared_ptr<ITexture> texture) override;
     void bindUniformBuffer(uint32_t slot, std::shared_ptr<IBuffer> buffer) override;
+    void bindStorageBuffer(uint32_t slot, std::shared_ptr<IBuffer> buffer) override;
+    void bindImageTexture(uint32_t slot, std::shared_ptr<ITexture> texture, TextureAccess access, TextureFormat format, uint32_t level = 0) override;
     void apply() override {}
     VkDescriptorSet handle() const { return m_set; }
 
@@ -58,7 +60,9 @@ public:
     void bindVertexArray(IVertexArray* vao) override;
 
     void draw(uint32_t count) override;
+    void drawInstanced(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex = 0, uint32_t firstInstance = 0) override;
     void drawIndexed(uint32_t indexCount, IndexType indexType = IndexType::UInt16) override;
+    void drawIndexedInstanced(uint32_t indexCount, uint32_t instanceCount, IndexType indexType = IndexType::UInt16, uint32_t firstIndex = 0, int32_t vertexOffset = 0, uint32_t firstInstance = 0) override;
 
     void pipelineBarrier(BarrierType type) override;
     void dispatchCompute(uint32_t nx, uint32_t ny, uint32_t nz) override;

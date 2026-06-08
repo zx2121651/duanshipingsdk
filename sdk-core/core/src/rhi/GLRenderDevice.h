@@ -29,6 +29,13 @@ struct ShadowState {
 
 class GLRenderDevice; // forward
 
+class GLComputePipelineState : public IPipelineState {
+public:
+    ComputePipelineStateDesc desc;
+    const PipelineStateDesc& getDesc() const override { static PipelineStateDesc d; return d; } // Dummy return for base class
+    const ComputePipelineStateDesc& getComputeDesc() const { return desc; }
+};
+
 class GLPipelineState : public IPipelineState {
 public:
     PipelineStateDesc desc;
@@ -40,10 +47,12 @@ class GLShaderResourceSet : public IShaderResourceSet {
 public:
     void bindTexture(uint32_t slot, std::shared_ptr<ITexture> texture) override;
     void bindUniformBuffer(uint32_t slot, std::shared_ptr<IBuffer> buffer) override;
+    void bindStorageBuffer(uint32_t slot, std::shared_ptr<IBuffer> buffer) override;
+    void bindImageTexture(uint32_t slot, std::shared_ptr<ITexture> texture, TextureAccess access, TextureFormat format, uint32_t level = 0) override;
     void apply() override;
 
 private:
-    struct Binding { uint32_t slot; std::shared_ptr<ITexture> texture; std::shared_ptr<IBuffer> buffer; };
+    struct Binding { uint32_t slot; std::shared_ptr<ITexture> texture; std::shared_ptr<IBuffer> buffer; bool isStorage; TextureAccess access; TextureFormat format; uint32_t level; };
     std::vector<Binding> m_bindings;
 };
 
@@ -68,7 +77,9 @@ public:
     void bindVertexArray(IVertexArray* vao) override;
 
     void draw(uint32_t count) override;
+    void drawInstanced(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex = 0, uint32_t firstInstance = 0) override;
     void drawIndexed(uint32_t indexCount, IndexType indexType = IndexType::UInt16) override;
+    void drawIndexedInstanced(uint32_t indexCount, uint32_t instanceCount, IndexType indexType = IndexType::UInt16, uint32_t firstIndex = 0, int32_t vertexOffset = 0, uint32_t firstInstance = 0) override;
 
     void pipelineBarrier(BarrierType type) override;
     void dispatchCompute(uint32_t numGroupsX, uint32_t numGroupsY, uint32_t numGroupsZ) override;
@@ -90,10 +101,13 @@ public:
     std::shared_ptr<IVertexArray> createVertexArray() override;
 
     std::shared_ptr<IPipelineState> createGraphicsPipeline(const PipelineStateDesc& desc) override;
+    std::shared_ptr<IPipelineState> createComputePipeline(const ComputePipelineStateDesc& desc) override;
     std::shared_ptr<IShaderResourceSet> createShaderResourceSet() override;
 
     std::shared_ptr<ICommandBuffer> createCommandBuffer() override;
     void submit(ICommandBuffer* cmdBuffer) override;
+
+    std::shared_ptr<IShaderProgram> createComputeShaderProgram(const char* computeSrc) override;
 
     std::shared_ptr<IShaderProgram> createShaderProgram(
         const char* vertexSrc, const char* fragmentSrc) override;

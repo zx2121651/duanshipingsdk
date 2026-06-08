@@ -32,6 +32,9 @@ static GLenum getGLTarget(BufferType type) {
         case BufferType::VertexBuffer: return GL_ARRAY_BUFFER;
         case BufferType::IndexBuffer: return GL_ELEMENT_ARRAY_BUFFER;
         case BufferType::UniformBuffer: return GL_UNIFORM_BUFFER;
+#ifdef GL_SHADER_STORAGE_BUFFER
+        case BufferType::StorageBuffer: return GL_SHADER_STORAGE_BUFFER;
+#endif
         default: return GL_ARRAY_BUFFER;
     }
 }

@@ -175,7 +175,28 @@ void MetalCommandBuffer::commit() {
     [m_cmdBuf waitUntilCompleted];
 }
 
+void MetalCommandBuffer::drawInstanced(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance) {
+    if (!m_renderEnc) return;
+#ifdef __OBJC__
+    [m_renderEnc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:firstVertex vertexCount:vertexCount instanceCount:instanceCount baseInstance:firstInstance];
+#endif
+}
+void MetalCommandBuffer::drawIndexedInstanced(uint32_t indexCount, uint32_t instanceCount, IndexType indexType, uint32_t firstIndex, int32_t vertexOffset, uint32_t firstInstance) {
+    if (!m_renderEnc) return;
+#ifdef __OBJC__
+    MTLIndexType mtlIndexType = (indexType == IndexType::UInt16) ? MTLIndexTypeUInt16 : MTLIndexTypeUInt32;
+    NSUInteger indexSize = (indexType == IndexType::UInt16) ? 2 : 4;
+    /* Note: simplified stub for indexing */
+    [m_renderEnc drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:indexCount indexType:mtlIndexType indexBuffer:nil indexBufferOffset:firstIndex*indexSize instanceCount:instanceCount baseVertex:vertexOffset baseInstance:firstInstance];
+#endif
+}
+void MetalResourceSet::bindStorageBuffer(uint32_t slot, std::shared_ptr<IBuffer> buffer) {
+}
+void MetalResourceSet::bindImageTexture(uint32_t slot, std::shared_ptr<ITexture> texture, TextureAccess access, TextureFormat format, uint32_t level) {
+}
+
+#endif // HAS_METAL
+
 } // namespace rhi
 } // namespace video
 } // namespace sdk
-#endif // HAS_METAL

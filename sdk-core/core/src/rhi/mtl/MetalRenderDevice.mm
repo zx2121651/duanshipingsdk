@@ -163,9 +163,13 @@ RHICapabilities MetalRenderDevice::getCapabilities() const {
     return caps;
 }
 
-} // namespace rhi
-} // namespace video
-} // namespace sdk
+std::shared_ptr<IPipelineState> MetalRenderDevice::createComputePipeline(const ComputePipelineStateDesc& desc) {
+    return nullptr;
+}
+std::shared_ptr<IShaderProgram> MetalRenderDevice::createComputeShaderProgram(const char* computeSrc) {
+    return nullptr;
+}
+
 #endif // HAS_METAL
 
 void MetalResourceSet::bindTexture(uint32_t slot, std::shared_ptr<ITexture> texture) {
@@ -177,3 +181,7 @@ void MetalResourceSet::bindUniformBuffer(uint32_t slot, std::shared_ptr<IBuffer>
 void MetalResourceSet::apply() {
     // MetalResourceSet apply is handled in command buffer
 }
+
+} // namespace rhi
+} // namespace video
+} // namespace sdk

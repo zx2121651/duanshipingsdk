@@ -1,3 +1,4 @@
+#include <memory>
 #pragma once
 #ifdef HAS_VULKAN
 

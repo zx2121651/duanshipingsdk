@@ -66,6 +66,7 @@ public:
     [[nodiscard]] virtual std::shared_ptr<IVertexArray> createVertexArray() = 0;
 
     [[nodiscard]] virtual std::shared_ptr<IPipelineState> createGraphicsPipeline(const PipelineStateDesc& desc) = 0;
+    [[nodiscard]] virtual std::shared_ptr<IPipelineState> createComputePipeline(const ComputePipelineStateDesc& desc) = 0;
     [[nodiscard]] virtual std::shared_ptr<IShaderResourceSet> createShaderResourceSet() = 0;
 
     [[nodiscard]] virtual std::shared_ptr<ICommandBuffer> createCommandBuffer() = 0;
@@ -74,6 +75,11 @@ public:
      * @brief Convenience factory: compile and link a graphics shader program.
      * Replaces the pattern of manually calling GLShaderProgram ctor outside the RHI.
      */
+    /**
+     * @brief Convenience factory: compile and link a compute shader program.
+     */
+    [[nodiscard]] virtual std::shared_ptr<IShaderProgram> createComputeShaderProgram(const char* computeSrc) = 0;
+
     [[nodiscard]] virtual std::shared_ptr<IShaderProgram> createShaderProgram(
         const char* vertexSrc, const char* fragmentSrc) = 0;
 
