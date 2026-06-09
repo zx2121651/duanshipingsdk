@@ -3,6 +3,7 @@
 #include "PipelineNode.h"
 #include "../Filter.h"
 #include "../FrameBufferPool.h"
+#include <algorithm>
 #include <mutex>
 
 namespace sdk {
@@ -70,7 +71,19 @@ public:
             return ResultPayload<VideoFrame>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "[Node: " + m_name + "] Upstream produced an invalid frame");
         }
 
-        Texture texIn{upstreamFrame.textureId, upstreamFrame.width, upstreamFrame.height};
+        Texture texIn;
+        texIn.id = upstreamFrame.textureId;
+        texIn.width = upstreamFrame.width;
+        texIn.height = upstreamFrame.height;
+        texIn.target = upstreamFrame.textureTarget;
+        texIn.format = upstreamFrame.format;
+        texIn.source = upstreamFrame.source;
+        texIn.timestampNs = static_cast<uint64_t>(upstreamFrame.timestampNs);
+        if (upstreamFrame.transformMatrix.size() == texIn.transformMatrix.size()) {
+            std::copy(upstreamFrame.transformMatrix.begin(),
+                      upstreamFrame.transformMatrix.end(),
+                      texIn.transformMatrix.begin());
+        }
 
         // Allocate a frame buffer from the pool attached to this node (if provided)
         FrameBufferPtr fbo = nullptr;
@@ -88,6 +101,9 @@ public:
         outFrame.textureId = texOut.id;
         outFrame.width = texOut.width;
         outFrame.height = texOut.height;
+        outFrame.textureTarget = texOut.target;
+        outFrame.format = texOut.format;
+        outFrame.source = texOut.source;
         outFrame.timestampNs = upstreamFrame.timestampNs;
         outFrame.transformMatrix = upstreamFrame.transformMatrix;
         // Retain the FBO so it is returned to the pool only when this VideoFrame is destroyed

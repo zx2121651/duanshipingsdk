@@ -19,14 +19,15 @@ class VulkanCommandBuffer;
 /// Render pass cache key
 struct RenderPassKey {
     VkFormat colorFmt;
-    bool     hasDepth;
+    VkFormat depthFmt;
     bool operator==(const RenderPassKey& o) const {
-        return colorFmt == o.colorFmt && hasDepth == o.hasDepth;
+        return colorFmt == o.colorFmt && depthFmt == o.depthFmt;
     }
 };
 struct RenderPassKeyHash {
     size_t operator()(const RenderPassKey& k) const {
-        return std::hash<uint32_t>()(k.colorFmt) ^ (k.hasDepth ? 1 : 0);
+        size_t seed = std::hash<uint32_t>()(k.colorFmt);
+        return seed ^ (std::hash<uint32_t>()(k.depthFmt) + 0x9e3779b9u + (seed << 6) + (seed >> 2));
     }
 };
 
@@ -59,7 +60,9 @@ public:
     // Vulkan-specific
     VulkanContext& context() { return m_ctx; }
     VkDescriptorPool descriptorPool() const { return m_descriptorPool; }
-    VkRenderPass getOrCreateRenderPass(VkFormat colorFmt, bool hasDepth);
+    VkDescriptorSetLayout descriptorSetLayout() const { return m_textureSetLayout; }
+    VkPipelineLayout defaultPipelineLayout() const { return m_defaultPipelineLayout; }
+    VkRenderPass getOrCreateRenderPass(VkFormat colorFmt, VkFormat depthFmt = VK_FORMAT_UNDEFINED);
 
     std::shared_ptr<VulkanMemoryAllocator> allocator() { return m_allocator; }
 
@@ -68,12 +71,14 @@ private:
     bool init();
     bool createDescriptorPool();
     bool createDescriptorSetLayout();
+    bool createDefaultPipelineLayout();
 
     VulkanContext m_ctx;
     std::shared_ptr<VulkanMemoryAllocator> m_allocator;
 
     VkDescriptorPool      m_descriptorPool       = VK_NULL_HANDLE;
     VkDescriptorSetLayout m_textureSetLayout      = VK_NULL_HANDLE;
+    VkPipelineLayout      m_defaultPipelineLayout = VK_NULL_HANDLE;
 
     // RenderPass cache
     std::mutex m_mutex;

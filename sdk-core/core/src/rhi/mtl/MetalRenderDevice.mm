@@ -11,7 +11,7 @@
 #include "MetalShaderProgram.h"
 #include "MetalCommandBuffer.h"
 #include "MetalPipeline.h"
-#include "../GLVertexArray.h"   // reuse for vertex layout description
+#include "MetalVertexArray.h"
 #include <iostream>
 
 namespace sdk {
@@ -62,7 +62,7 @@ std::shared_ptr<IBuffer> MetalRenderDevice::createBuffer(
 }
 
 std::shared_ptr<IVertexArray> MetalRenderDevice::createVertexArray() {
-    return std::make_shared<GLVertexArray>(); // layout tracking only
+    return std::make_shared<MetalVertexArray>();
 }
 
 std::shared_ptr<IPipelineState> MetalRenderDevice::createGraphicsPipeline(
@@ -176,16 +176,6 @@ std::shared_ptr<IShaderProgram> MetalRenderDevice::createComputeShaderProgram(co
 }
 
 #endif // HAS_METAL
-
-void MetalResourceSet::bindTexture(uint32_t slot, std::shared_ptr<ITexture> texture) {
-    m_bindings.push_back({slot, texture, nullptr});
-}
-void MetalResourceSet::bindUniformBuffer(uint32_t slot, std::shared_ptr<IBuffer> buffer) {
-    m_bindings.push_back({slot, nullptr, buffer});
-}
-void MetalResourceSet::apply() {
-    // MetalResourceSet apply is handled in command buffer
-}
 
 } // namespace rhi
 } // namespace video

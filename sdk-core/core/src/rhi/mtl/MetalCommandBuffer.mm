@@ -5,6 +5,8 @@
 #include "MetalTexture.h"
 #include "MetalBuffer.h"
 #include "MetalShaderProgram.h"
+#include "MetalVertexArray.h"
+#include <algorithm>
 #include <iostream>
 
 namespace sdk {
@@ -101,13 +103,42 @@ void MetalCommandBuffer::bindResourceSet(
     m_currentRS = std::dynamic_pointer_cast<MetalResourceSet>(rs);
     if (!m_currentRS || !m_renderEnc) return;
     for (auto& b : m_currentRS->bindings) {
-        auto* tex = dynamic_cast<MetalTexture*>(b.texture.get());
-        if (tex) [m_renderEnc setFragmentTexture:tex->mtlTexture()
-                                         atIndex:b.slot];
+        switch (b.type) {
+            case MetalResourceSet::BindingType::SampledTexture:
+            case MetalResourceSet::BindingType::ImageTexture: {
+                auto* tex = dynamic_cast<MetalTexture*>(b.texture.get());
+                if (tex) [m_renderEnc setFragmentTexture:tex->mtlTexture()
+                                                 atIndex:b.slot];
+                break;
+            }
+            case MetalResourceSet::BindingType::UniformBuffer:
+            case MetalResourceSet::BindingType::StorageBuffer: {
+                auto* buffer = dynamic_cast<MetalBuffer*>(b.buffer.get());
+                if (buffer) [m_renderEnc setFragmentBuffer:buffer->mtlBuffer()
+                                                    offset:0
+                                                   atIndex:b.slot];
+                break;
+            }
+        }
     }
 }
 
-void MetalCommandBuffer::bindVertexArray(IVertexArray* /*vao*/) {}
+void MetalCommandBuffer::bindVertexArray(IVertexArray* vao) {
+    m_currentVAO = dynamic_cast<MetalVertexArray*>(vao);
+    if (!m_currentVAO || !m_renderEnc) {
+        return;
+    }
+
+    const auto& vertexBuffers = m_currentVAO->vertexBuffers();
+    for (uint32_t i = 0; i < vertexBuffers.size(); ++i) {
+        auto* buffer = dynamic_cast<MetalBuffer*>(vertexBuffers[i].get());
+        if (buffer) {
+            [m_renderEnc setVertexBuffer:buffer->mtlBuffer()
+                                  offset:0
+                                 atIndex:i];
+        }
+    }
+}
 
 void MetalCommandBuffer::setViewport(float x, float y, float width, float height) {
     if (!m_renderEnc) return;
@@ -145,14 +176,19 @@ void MetalCommandBuffer::draw(uint32_t count) {
 }
 
 void MetalCommandBuffer::drawIndexed(uint32_t indexCount, IndexType indexType) {
-    if (!m_renderEnc) return;
+    if (!m_renderEnc || !m_currentVAO) return;
     MTLIndexType mtlIdxType = (indexType == IndexType::UInt32) ? MTLIndexTypeUInt32 : MTLIndexTypeUInt16;
     MTLPrimitiveType prim = m_currentPSO
         ? toMTLPrimitive(m_currentPSO->desc.primitiveTopology)
         : MTLPrimitiveTypeTriangleStrip;
-    // Index buffer must be bound via setVertexBuffer externally; this issues the draw
-    // [m_renderEnc drawIndexedPrimitives:prim indexCount:indexCount indexType:mtlIdxType indexBuffer:<buf> indexBufferOffset:0]
-    (void)indexCount; (void)mtlIdxType; (void)prim; // stub until index buffer bind is wired up
+    auto indexBuffer = m_currentVAO->indexBuffer();
+    auto* metalIndexBuffer = dynamic_cast<MetalBuffer*>(indexBuffer.get());
+    if (!metalIndexBuffer) return;
+    [m_renderEnc drawIndexedPrimitives:prim
+                            indexCount:indexCount
+                             indexType:mtlIdxType
+                           indexBuffer:metalIndexBuffer->mtlBuffer()
+                     indexBufferOffset:0];
 }
 
 void MetalCommandBuffer::pipelineBarrier(BarrierType /*type*/) {
@@ -188,21 +224,86 @@ void MetalCommandBuffer::commit() {
 void MetalCommandBuffer::drawInstanced(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance) {
     if (!m_renderEnc) return;
 #ifdef __OBJC__
-    [m_renderEnc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:firstVertex vertexCount:vertexCount instanceCount:instanceCount baseInstance:firstInstance];
+    MTLPrimitiveType prim = m_currentPSO
+        ? toMTLPrimitive(m_currentPSO->desc.primitiveTopology)
+        : MTLPrimitiveTypeTriangleStrip;
+    [m_renderEnc drawPrimitives:prim
+                    vertexStart:firstVertex
+                    vertexCount:vertexCount
+                  instanceCount:instanceCount
+                   baseInstance:firstInstance];
 #endif
 }
 void MetalCommandBuffer::drawIndexedInstanced(uint32_t indexCount, uint32_t instanceCount, IndexType indexType, uint32_t firstIndex, int32_t vertexOffset, uint32_t firstInstance) {
-    if (!m_renderEnc) return;
+    if (!m_renderEnc || !m_currentVAO) return;
 #ifdef __OBJC__
     MTLIndexType mtlIndexType = (indexType == IndexType::UInt16) ? MTLIndexTypeUInt16 : MTLIndexTypeUInt32;
     NSUInteger indexSize = (indexType == IndexType::UInt16) ? 2 : 4;
-    /* Note: simplified stub for indexing */
-    [m_renderEnc drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:indexCount indexType:mtlIndexType indexBuffer:nil indexBufferOffset:firstIndex*indexSize instanceCount:instanceCount baseVertex:vertexOffset baseInstance:firstInstance];
+    MTLPrimitiveType prim = m_currentPSO
+        ? toMTLPrimitive(m_currentPSO->desc.primitiveTopology)
+        : MTLPrimitiveTypeTriangleStrip;
+    auto indexBuffer = m_currentVAO->indexBuffer();
+    auto* metalIndexBuffer = dynamic_cast<MetalBuffer*>(indexBuffer.get());
+    if (!metalIndexBuffer) return;
+    [m_renderEnc drawIndexedPrimitives:prim
+                            indexCount:indexCount
+                             indexType:mtlIndexType
+                           indexBuffer:metalIndexBuffer->mtlBuffer()
+                     indexBufferOffset:firstIndex * indexSize
+                         instanceCount:instanceCount
+                            baseVertex:vertexOffset
+                          baseInstance:firstInstance];
 #endif
 }
-void MetalResourceSet::bindStorageBuffer(uint32_t slot, std::shared_ptr<IBuffer> buffer) {
+void MetalResourceSet::upsertBinding(Binding binding) {
+    auto it = std::find_if(bindings.begin(), bindings.end(), [slot = binding.slot](const Binding& b) {
+        return b.slot == slot;
+    });
+    if (it != bindings.end()) {
+        *it = std::move(binding);
+    } else {
+        bindings.push_back(std::move(binding));
+    }
 }
+
+void MetalResourceSet::bindTexture(uint32_t slot, std::shared_ptr<ITexture> texture) {
+    auto it = std::find_if(bindings.begin(), bindings.end(), [slot](const Binding& b) { return b.slot == slot; });
+    if (!texture) {
+        if (it != bindings.end()) bindings.erase(it);
+        return;
+    }
+    upsertBinding({slot, BindingType::SampledTexture, texture, nullptr, TextureAccess::Read, texture->getFormat(), 0});
+}
+
+void MetalResourceSet::bindUniformBuffer(uint32_t slot, std::shared_ptr<IBuffer> buffer) {
+    auto it = std::find_if(bindings.begin(), bindings.end(), [slot](const Binding& b) { return b.slot == slot; });
+    if (!buffer) {
+        if (it != bindings.end()) bindings.erase(it);
+        return;
+    }
+    upsertBinding({slot, BindingType::UniformBuffer, nullptr, buffer, TextureAccess::Read, TextureFormat::RGBA8, 0});
+}
+
+void MetalResourceSet::bindStorageBuffer(uint32_t slot, std::shared_ptr<IBuffer> buffer) {
+    auto it = std::find_if(bindings.begin(), bindings.end(), [slot](const Binding& b) { return b.slot == slot; });
+    if (!buffer) {
+        if (it != bindings.end()) bindings.erase(it);
+        return;
+    }
+    upsertBinding({slot, BindingType::StorageBuffer, nullptr, buffer, TextureAccess::ReadWrite, TextureFormat::RGBA8, 0});
+}
+
 void MetalResourceSet::bindImageTexture(uint32_t slot, std::shared_ptr<ITexture> texture, TextureAccess access, TextureFormat format, uint32_t level) {
+    auto it = std::find_if(bindings.begin(), bindings.end(), [slot](const Binding& b) { return b.slot == slot; });
+    if (!texture) {
+        if (it != bindings.end()) bindings.erase(it);
+        return;
+    }
+    upsertBinding({slot, BindingType::ImageTexture, texture, nullptr, access, format, level});
+}
+
+void MetalResourceSet::apply() {
+    // Metal resource binding is encoded by MetalCommandBuffer::bindResourceSet.
 }
 
 #endif // HAS_METAL

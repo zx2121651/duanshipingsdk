@@ -3,9 +3,9 @@
 #include "VulkanRenderDevice.h"
 #include "VulkanBuffer.h"
 #include "VulkanTexture.h"
+#include "VulkanVertexArray.h"
 #include "VulkanShaderProgram.h"
 #include "../../../include/rhi/IVertexArray.h"
-#include "../GLVertexArray.h"   // reuse GL VAO for layout description
 #include <iostream>
 
 namespace sdk {
@@ -24,11 +24,14 @@ bool VulkanRenderDevice::init() {
     m_allocator = std::make_shared<VulkanMemoryAllocator>(m_ctx.device(), m_ctx.physDevice());
     if (!createDescriptorPool()) return false;
     if (!createDescriptorSetLayout()) return false;
+    if (!createDefaultPipelineLayout()) return false;
     std::cout << "VulkanRenderDevice: initialized successfully" << std::endl;
     return true;
 }
 
 VulkanRenderDevice::~VulkanRenderDevice() {
+    if (m_defaultPipelineLayout != VK_NULL_HANDLE)
+        vkDestroyPipelineLayout(m_ctx.device(), m_defaultPipelineLayout, nullptr);
     if (m_textureSetLayout != VK_NULL_HANDLE)
         vkDestroyDescriptorSetLayout(m_ctx.device(), m_textureSetLayout, nullptr);
     if (m_descriptorPool != VK_NULL_HANDLE)
@@ -40,37 +43,76 @@ VulkanRenderDevice::~VulkanRenderDevice() {
 
 // ---------------------------------------------------------------------------
 bool VulkanRenderDevice::createDescriptorPool() {
+    constexpr uint32_t kMaxDescriptorSets = 512;
+    constexpr uint32_t kLogicalSlotsPerType = 16;
     VkDescriptorPoolSize sizes[] = {
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 256},
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         256},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, kMaxDescriptorSets * kLogicalSlotsPerType},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         kMaxDescriptorSets * kLogicalSlotsPerType},
+        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,         kMaxDescriptorSets * kLogicalSlotsPerType},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          kMaxDescriptorSets * kLogicalSlotsPerType},
     };
     VkDescriptorPoolCreateInfo ci{};
     ci.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    ci.maxSets       = 512;
-    ci.poolSizeCount = 2;
+    ci.maxSets       = kMaxDescriptorSets;
+    ci.poolSizeCount = static_cast<uint32_t>(sizeof(sizes) / sizeof(sizes[0]));
     ci.pPoolSizes    = sizes;
     ci.flags         = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
     return vkCreateDescriptorPool(m_ctx.device(), &ci, nullptr, &m_descriptorPool) == VK_SUCCESS;
 }
 
 bool VulkanRenderDevice::createDescriptorSetLayout() {
-    VkDescriptorSetLayoutBinding binding{};
-    binding.binding         = 0;
-    binding.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    binding.descriptorCount = 1;
-    binding.stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT;
+    std::vector<VkDescriptorSetLayoutBinding> bindings;
+    bindings.reserve(64);
+
+    auto addBinding = [&](uint32_t slot, VkDescriptorType type, VkShaderStageFlags stages) {
+        VkDescriptorSetLayoutBinding binding{};
+        binding.binding = slot;
+        binding.descriptorType = type;
+        binding.descriptorCount = 1;
+        binding.stageFlags = stages;
+        bindings.push_back(binding);
+    };
+
+    for (uint32_t slot = 0; slot < 16; ++slot) {
+        addBinding(slot, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT);
+    }
+    for (uint32_t slot = 16; slot < 32; ++slot) {
+        addBinding(slot, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT);
+    }
+    for (uint32_t slot = 32; slot < 48; ++slot) {
+        addBinding(slot, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT);
+    }
+    for (uint32_t slot = 48; slot < 64; ++slot) {
+        addBinding(slot, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT);
+    }
 
     VkDescriptorSetLayoutCreateInfo ci{};
     ci.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    ci.bindingCount = 1;
-    ci.pBindings    = &binding;
+    ci.bindingCount = static_cast<uint32_t>(bindings.size());
+    ci.pBindings    = bindings.data();
     return vkCreateDescriptorSetLayout(m_ctx.device(), &ci, nullptr, &m_textureSetLayout) == VK_SUCCESS;
 }
 
+bool VulkanRenderDevice::createDefaultPipelineLayout() {
+    VkPushConstantRange pushRange{};
+    pushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+    pushRange.offset = 0;
+    pushRange.size = 128;
+
+    VkPipelineLayoutCreateInfo ci{};
+    ci.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    ci.setLayoutCount = 1;
+    ci.pSetLayouts = &m_textureSetLayout;
+    ci.pushConstantRangeCount = 1;
+    ci.pPushConstantRanges = &pushRange;
+
+    return vkCreatePipelineLayout(m_ctx.device(), &ci, nullptr, &m_defaultPipelineLayout) == VK_SUCCESS;
+}
+
 // ---------------------------------------------------------------------------
-VkRenderPass VulkanRenderDevice::getOrCreateRenderPass(VkFormat colorFmt, bool hasDepth) {
+VkRenderPass VulkanRenderDevice::getOrCreateRenderPass(VkFormat colorFmt, VkFormat depthFmt) {
     std::lock_guard<std::mutex> lock(m_mutex);
-    RenderPassKey key{colorFmt, hasDepth};
+    RenderPassKey key{colorFmt, depthFmt};
     auto it = m_renderPassCache.find(key);
     if (it != m_renderPassCache.end()) return it->second;
 
@@ -81,8 +123,8 @@ VkRenderPass VulkanRenderDevice::getOrCreateRenderPass(VkFormat colorFmt, bool h
     colorAttach.storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
     colorAttach.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     colorAttach.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    colorAttach.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;
-    colorAttach.finalLayout    = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    colorAttach.initialLayout  = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    colorAttach.finalLayout    = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
     VkAttachmentReference colorRef{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
 
@@ -103,14 +145,14 @@ VkRenderPass VulkanRenderDevice::getOrCreateRenderPass(VkFormat colorFmt, bool h
 
     VkAttachmentDescription depthAttach{};
     VkAttachmentReference   depthRef{};
-    if (hasDepth) {
-        depthAttach.format         = VK_FORMAT_D24_UNORM_S8_UINT;
+    if (depthFmt != VK_FORMAT_UNDEFINED) {
+        depthAttach.format         = depthFmt;
         depthAttach.samples        = VK_SAMPLE_COUNT_1_BIT;
         depthAttach.loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR;
         depthAttach.storeOp        = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         depthAttach.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         depthAttach.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        depthAttach.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;
+        depthAttach.initialLayout  = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         depthAttach.finalLayout    = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         depthRef                   = {1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
         subpass.pDepthStencilAttachment = &depthRef;
@@ -144,15 +186,14 @@ std::shared_ptr<IBuffer> VulkanRenderDevice::createBuffer(
 }
 
 std::shared_ptr<IVertexArray> VulkanRenderDevice::createVertexArray() {
-    return std::make_shared<GLVertexArray>(); // Layout tracking reused; no GL VAO on Vulkan
+    return std::make_shared<VulkanVertexArray>();
 }
 
 std::shared_ptr<IPipelineState> VulkanRenderDevice::createGraphicsPipeline(
     const PipelineStateDesc& desc)
 {
-    // Vulkan pipeline state is encoded per-draw via VulkanPipeline (see VulkanCommandBuffer)
-    // For now return a lightweight descriptor carrier
-    auto pso = std::make_shared<VulkanPipelineState>();
+    // VulkanCommandBuffer lazily materializes the VkPipeline once a render pass is active.
+    auto pso = std::make_shared<VulkanPipelineState>(m_ctx.device());
     pso->desc = desc;
     return pso;
 }
@@ -240,20 +281,18 @@ std::shared_ptr<ITexture> VulkanRenderDevice::wrapExternalTexture(const External
     return nullptr;
 }
 
-void VulkanCommandBuffer::setPushConstants(const void* data, size_t size) {
-    if (m_cmd) {
-        // Simple stub since we don't have pipeline layout reference here easily.
-        // In real VK implementation this uses vkCmdPushConstants
-    }
-}
-void VulkanDescriptorSet::bindUniformBuffer(uint32_t slot, std::shared_ptr<IBuffer> buffer) {
-    // Stub
-}
 std::shared_ptr<IPipelineState> VulkanRenderDevice::createComputePipeline(const ComputePipelineStateDesc& desc) {
-    return nullptr; /* stub */
+    // VulkanCommandBuffer lazily materializes the VkPipeline at dispatch time.
+    auto pso = std::make_shared<VulkanPipelineState>(m_ctx.device());
+    pso->computeDesc = desc;
+    pso->isCompute = true;
+    return pso;
 }
 std::shared_ptr<IShaderProgram> VulkanRenderDevice::createComputeShaderProgram(const char* computeSrc) {
-    return nullptr; /* stub */
+    (void)computeSrc;
+    std::cerr << "VulkanRenderDevice: createComputeShaderProgram(GLSL) called - "
+                 "use SPIR-V path via VulkanShaderProgram::createFromSPIRV instead" << std::endl;
+    return nullptr;
 }
 
 #endif // HAS_VULKAN

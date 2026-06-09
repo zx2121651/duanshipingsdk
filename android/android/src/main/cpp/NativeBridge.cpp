@@ -4,6 +4,7 @@
 #include <vector>
 #include <memory>
 #include <chrono>
+#include <algorithm>
 
 #ifndef WIN32
 #include <android/native_window_jni.h>
@@ -36,6 +37,10 @@
 #include "ai/FaceMorphFilter.h"
 #include "ai/BodyEffectFilter.h"
 #include "ai/ExpressionDetector.h"
+
+#ifndef GL_TEXTURE_EXTERNAL_OES
+#define GL_TEXTURE_EXTERNAL_OES 0x8D65
+#endif
 
 extern "C" __attribute__((visibility("default"))) int ff_ac3_find_syncword(const uint8_t *buf, int buf_size) {
     return -1;
@@ -540,14 +545,22 @@ Java_com_sdk_video_RenderEngine_nativeProcessFrame(JNIEnv *env, jobject thiz, jl
 
     auto start = std::chrono::high_resolution_clock::now();
 
-    jsize len = env->GetArrayLength(matrix);
+    Texture inTex;
+    inTex.id = static_cast<uint32_t>(textureId);
+    inTex.width = static_cast<uint32_t>(width);
+    inTex.height = static_cast<uint32_t>(height);
+    inTex.target = GL_TEXTURE_EXTERNAL_OES;
+    inTex.source = sdk::video::rhi::ExternalTextureSource::GLOESTexture;
+    inTex.format = sdk::video::rhi::TextureFormat::RGBA8;
+    inTex.timestampNs = timestampNs > 0 ? static_cast<uint64_t>(timestampNs) : 0;
+
+    jsize len = matrix ? env->GetArrayLength(matrix) : 0;
     if (len == 16) {
         jfloat buffer[16];
         env->GetFloatArrayRegion(matrix, 0, 16, buffer);
         wrapper->filterEngine->updateParameterMat4("textureMatrix", buffer);
+        std::copy(buffer, buffer + 16, inTex.transformMatrix.begin());
     }
-
-    Texture inTex = {static_cast<uint32_t>(textureId), static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
 
     // Feed latest face landmarks into AI filters before the render pass.
     // 优先使用 MediaPipe 路径（nativeUpdateFaceLandmarks 写入的 cache）；

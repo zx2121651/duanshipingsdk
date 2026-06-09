@@ -20,6 +20,7 @@ namespace video {
 namespace rhi {
 
 class MetalRenderDevice;
+class MetalVertexArray;
 
 class MetalCommandBuffer : public ICommandBuffer {
 public:
@@ -40,7 +41,9 @@ public:
     void bindResourceSet(uint32_t setIndex, std::shared_ptr<IShaderResourceSet> rs) override;
     void bindVertexArray(IVertexArray* vao)                              override;
     void draw(uint32_t count)        override;
+    void drawInstanced(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex = 0, uint32_t firstInstance = 0) override;
     void drawIndexed(uint32_t count, IndexType indexType = IndexType::UInt16) override;
+    void drawIndexedInstanced(uint32_t indexCount, uint32_t instanceCount, IndexType indexType = IndexType::UInt16, uint32_t firstIndex = 0, int32_t vertexOffset = 0, uint32_t firstInstance = 0) override;
     void pipelineBarrier(BarrierType type) override;
     void dispatchCompute(uint32_t nx, uint32_t ny, uint32_t nz) override;
 
@@ -54,6 +57,7 @@ private:
     MTLComputeCommandEncoderRef    m_computeEnc= nullptr;
     std::shared_ptr<MetalPipelineState>  m_currentPSO;
     std::shared_ptr<MetalResourceSet>    m_currentRS;
+    MetalVertexArray*                    m_currentVAO = nullptr;
 };
 
 } // namespace rhi

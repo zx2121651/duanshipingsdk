@@ -21,15 +21,17 @@ public:
                 size_t size, const void* data);
     ~MetalBuffer() override = default;
 
-    void*  map() override;
-    void   unmap() override {}
+    BufferType getType() const override { return m_type; }
     size_t getSize() const override { return m_size; }
-    void   upload(const void* data, size_t size, size_t offset = 0) override;
+    void updateData(const void* data, size_t size, size_t offset = 0) override;
+    void* map(size_t offset, size_t size, BufferAccess access) override;
+    void   unmap() override {}
 
     MTLBufferRef mtlBuffer() const { return m_buffer; }
 
 private:
     MTLBufferRef m_buffer = nullptr;
+    BufferType   m_type   = BufferType::VertexBuffer;
     size_t       m_size   = 0;
 };
 

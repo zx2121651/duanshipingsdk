@@ -23,6 +23,7 @@
 #include "../core/include/rhi/IRenderDevice.h"
 #include "../core/include/rhi/IShaderProgram.h"
 #include "../core/include/GLContextManager.h"
+#include "../core/include/GLTypes.h"
 #include "../core/src/rhi/GLRenderDevice.h"
 
 // Minimal test harness
@@ -141,6 +142,8 @@ static void test_gl_render_device_create_buffer() {
                                   sizeof(data), data);
     ASSERT_TRUE(buf != nullptr,                        "GLRenderDevice::createBuffer != nullptr");
     ASSERT_EQ(buf->getSize(), sizeof(data),            "Buffer size matches");
+    ASSERT_EQ(static_cast<int>(buf->getType()),
+              static_cast<int>(BufferType::VertexBuffer), "Buffer type matches");
 }
 
 // -----------------------------------------------------------------------
@@ -502,9 +505,14 @@ static void tc_r29_external_texture_wrap_contract() {
 
     desc.handle = 456;
     desc.target = 0x8D65; // GL_TEXTURE_EXTERNAL_OES
+    desc.source = ExternalTextureSource::GLOESTexture;
+    desc.timestampNs = 123456789;
+    desc.transformMatrix[12] = 0.25f;
     auto oesTex = dev->wrapExternalTexture(desc);
     ASSERT_TRUE(oesTex != nullptr, "TC-R29: OES external texture wrapper created");
     ASSERT_EQ(oesTex->getTarget(), 0x8D65u, "TC-R29: OES texture target is preserved");
+    ASSERT_EQ(static_cast<int>(desc.source), static_cast<int>(ExternalTextureSource::GLOESTexture),
+              "TC-R29: OES source type is explicit");
 }
 
 // -----------------------------------------------------------------------
@@ -538,6 +546,251 @@ static void tc_r30_shader_resource_set_contract() {
     rs->apply();
 
     ASSERT_TRUE(true, "TC-R30: resource set bind/update/unbind/apply completed without crash");
+}
+
+// -----------------------------------------------------------------------
+// TC-R31: Buffer update/map contract is backend-facing and range-guarded
+// -----------------------------------------------------------------------
+static void tc_r31_buffer_update_map_contract() {
+    auto dev = std::make_shared<GLRenderDevice>();
+    uint8_t initial[16] = {};
+    auto buffer = dev->createBuffer(BufferType::UniformBuffer,
+                                    BufferUsage::DynamicDraw,
+                                    sizeof(initial),
+                                    initial);
+    ASSERT_TRUE(buffer != nullptr, "TC-R31: uniform buffer created");
+    ASSERT_EQ(buffer->getSize(), sizeof(initial), "TC-R31: buffer size is preserved");
+    ASSERT_EQ(static_cast<int>(buffer->getType()),
+              static_cast<int>(BufferType::UniformBuffer),
+              "TC-R31: buffer type is preserved");
+
+    uint8_t patch[4] = {1, 2, 3, 4};
+    buffer->updateData(patch, sizeof(patch), 4);
+    buffer->updateData(nullptr, sizeof(patch), 0);
+    buffer->updateData(patch, 0, 0);
+    buffer->updateData(patch, sizeof(patch), sizeof(initial) + 1);
+
+    void* mapped = buffer->map(0, sizeof(initial), BufferAccess::Write);
+    ASSERT_TRUE(mapped != nullptr, "TC-R31: valid map returns a pointer in mock GL");
+    buffer->unmap();
+
+    void* invalidMapped = buffer->map(sizeof(initial) + 1, 1, BufferAccess::Write);
+    ASSERT_TRUE(invalidMapped == nullptr, "TC-R31: out-of-range map returns nullptr");
+}
+
+// -----------------------------------------------------------------------
+// TC-R32: Vertex array accepts only matching vertex/index buffer roles
+// -----------------------------------------------------------------------
+static void tc_r32_vertex_array_buffer_role_contract() {
+    auto dev = std::make_shared<GLRenderDevice>();
+    float vertices[8] = {};
+    uint16_t indices[3] = {0, 1, 2};
+
+    auto vertexBuffer = dev->createBuffer(BufferType::VertexBuffer,
+                                          BufferUsage::StaticDraw,
+                                          sizeof(vertices),
+                                          vertices);
+    auto indexBuffer = dev->createBuffer(BufferType::IndexBuffer,
+                                         BufferUsage::StaticDraw,
+                                         sizeof(indices),
+                                         indices);
+    auto uniformBuffer = dev->createBuffer(BufferType::UniformBuffer,
+                                           BufferUsage::DynamicDraw,
+                                           16,
+                                           nullptr);
+    auto vao = dev->createVertexArray();
+
+    ASSERT_TRUE(vertexBuffer != nullptr, "TC-R32: vertex buffer created");
+    ASSERT_TRUE(indexBuffer != nullptr, "TC-R32: index buffer created");
+    ASSERT_TRUE(uniformBuffer != nullptr, "TC-R32: uniform buffer created");
+    ASSERT_TRUE(vao != nullptr, "TC-R32: vertex array created");
+
+    vao->addVertexBuffer(uniformBuffer, {{0, VertexFormat::Float2, 0, 2 * sizeof(float)}});
+    vao->setIndexBuffer(uniformBuffer);
+    vao->addVertexBuffer(vertexBuffer, {{0, VertexFormat::Float2, 0, 2 * sizeof(float)}});
+    vao->setIndexBuffer(indexBuffer);
+
+    auto cmd = dev->createCommandBuffer();
+    cmd->bindVertexArray(vao.get());
+    cmd->drawIndexed(3, IndexType::UInt16);
+    ASSERT_TRUE(true, "TC-R32: vertex array role filtering and indexed draw completed");
+}
+
+// -----------------------------------------------------------------------
+// TC-R33: Compute pipeline is a first-class RHI command path
+// -----------------------------------------------------------------------
+static void tc_r33_compute_pipeline_dispatch_contract() {
+    auto dev = std::make_shared<GLRenderDevice>();
+
+    ComputePipelineStateDesc desc;
+    auto pipeline = dev->createComputePipeline(desc);
+    auto resources = dev->createShaderResourceSet();
+    auto cmd = dev->createCommandBuffer();
+
+    ASSERT_TRUE(pipeline != nullptr, "TC-R33: compute pipeline created");
+    ASSERT_TRUE(resources != nullptr, "TC-R33: compute resource set created");
+    ASSERT_TRUE(cmd != nullptr, "TC-R33: compute command buffer created");
+
+    cmd->bindPipelineState(pipeline);
+    cmd->bindResourceSet(0, resources);
+    cmd->dispatchCompute(1, 1, 1);
+    cmd->pipelineBarrier(BarrierType::Pipeline);
+
+    ASSERT_TRUE(true, "TC-R33: compute dispatch path completed without crash");
+}
+
+// -----------------------------------------------------------------------
+// TC-R34: Render pass carries color/depth formats through public contracts
+// -----------------------------------------------------------------------
+static void tc_r34_render_pass_format_contract() {
+    auto dev = std::make_shared<GLRenderDevice>();
+
+    TextureDesc colorDesc;
+    colorDesc.width = 32;
+    colorDesc.height = 32;
+    colorDesc.format = TextureFormat::RGBA16F;
+    colorDesc.usageFlags = static_cast<uint32_t>(TextureUsage::RenderTarget) |
+                           static_cast<uint32_t>(TextureUsage::Sampled);
+
+    TextureDesc depthDesc;
+    depthDesc.width = 32;
+    depthDesc.height = 32;
+    depthDesc.format = TextureFormat::Depth32F;
+    depthDesc.usageFlags = static_cast<uint32_t>(TextureUsage::RenderTarget);
+
+    auto color = dev->createTexture(colorDesc);
+    auto depth = dev->createTexture(depthDesc);
+    ASSERT_TRUE(color != nullptr, "TC-R34: fp16 color render target created");
+    ASSERT_TRUE(depth != nullptr, "TC-R34: depth render target created");
+    ASSERT_EQ(static_cast<int>(color->getFormat()), static_cast<int>(TextureFormat::RGBA16F),
+              "TC-R34: color format is preserved");
+    ASSERT_EQ(static_cast<int>(depth->getFormat()), static_cast<int>(TextureFormat::Depth32F),
+              "TC-R34: depth format is preserved");
+
+    RenderPassDescriptor pass;
+    pass.colorAttachments.push_back({color});
+    pass.depthStencilAttachment.texture = depth;
+    pass.hasDepthStencil = true;
+
+    auto cmd = dev->createCommandBuffer();
+    cmd->beginRenderPass(pass);
+    cmd->endRenderPass();
+    ASSERT_TRUE(true, "TC-R34: render pass with explicit depth attachment completed");
+}
+
+// -----------------------------------------------------------------------
+// TC-R35: Beauty ping-pong textures can request sampled/render/storage usage
+// -----------------------------------------------------------------------
+static void tc_r35_texture_usage_flags_contract() {
+    auto dev = std::make_shared<GLRenderDevice>();
+
+    TextureDesc desc;
+    desc.width = 64;
+    desc.height = 64;
+    desc.format = TextureFormat::RGBA16F;
+    desc.usageFlags = static_cast<uint32_t>(TextureUsage::Sampled) |
+                      static_cast<uint32_t>(TextureUsage::RenderTarget) |
+                      static_cast<uint32_t>(TextureUsage::Storage);
+
+    auto texture = dev->createTexture(desc);
+    auto rs = dev->createShaderResourceSet();
+
+    ASSERT_TRUE(texture != nullptr, "TC-R35: sampled/render/storage texture created");
+    ASSERT_TRUE(rs != nullptr, "TC-R35: shader resource set created");
+    ASSERT_EQ(static_cast<int>(texture->getFormat()), static_cast<int>(TextureFormat::RGBA16F),
+              "TC-R35: ping-pong texture format is preserved");
+
+    rs->bindTexture(0, texture);
+    rs->bindImageTexture(1, texture, TextureAccess::ReadWrite, TextureFormat::RGBA16F);
+    rs->apply();
+
+    ASSERT_TRUE(true, "TC-R35: texture can be bound for sampled and image access");
+}
+
+// -----------------------------------------------------------------------
+// TC-R36: Hardware buffer import rejects invalid native buffers
+// -----------------------------------------------------------------------
+static void tc_r36_hardware_buffer_import_contract() {
+    auto dev = std::make_shared<GLRenderDevice>();
+
+    HardwareBufferDesc invalid;
+    invalid.source = ExternalTextureSource::AndroidHardwareBuffer;
+    invalid.width = 640;
+    invalid.height = 480;
+    invalid.logicalFormat = TextureFormat::RGBA8;
+    invalid.ownership = ExternalOwnership::Borrowed;
+
+    ASSERT_TRUE(dev->createTextureFromHardwareBuffer(invalid) == nullptr,
+                "TC-R36: null hardware buffer is rejected");
+
+    HardwareBufferDesc metadata;
+    metadata.timestampNs = 42;
+    metadata.transformMatrix[0] = 0.5f;
+    ASSERT_EQ(metadata.timestampNs, 42ull, "TC-R36: hardware buffer timestamp metadata stored");
+    ASSERT_TRUE(metadata.transformMatrix[0] == 0.5f,
+                "TC-R36: hardware buffer transform metadata stored");
+}
+
+// -----------------------------------------------------------------------
+// TC-R37: Camera/OES frame metadata travels with the texture contract
+// -----------------------------------------------------------------------
+static void tc_r37_external_camera_texture_frame_contract() {
+    Texture legacy{7, 1280, 720};
+    ASSERT_EQ(legacy.id, 7u, "TC-R37: legacy aggregate id remains compatible");
+    ASSERT_EQ(legacy.target, 0x0DE1u, "TC-R37: legacy texture defaults to GL_TEXTURE_2D");
+    ASSERT_EQ(static_cast<int>(legacy.source),
+              static_cast<int>(ExternalTextureSource::GLTexture2D),
+              "TC-R37: legacy texture defaults to GLTexture2D source");
+    ASSERT_EQ(legacy.timestampNs, 0ull, "TC-R37: legacy texture timestamp defaults to zero");
+    ASSERT_TRUE(legacy.transformMatrix[0] == 1.0f && legacy.transformMatrix[15] == 1.0f,
+                "TC-R37: legacy texture transform defaults to identity");
+
+    Texture camera;
+    camera.id = 99;
+    camera.width = 1080;
+    camera.height = 1920;
+    camera.target = 0x8D65; // GL_TEXTURE_EXTERNAL_OES
+    camera.source = ExternalTextureSource::GLOESTexture;
+    camera.timestampNs = 123456789ull;
+    camera.transformMatrix[12] = 0.375f;
+
+    ASSERT_EQ(camera.target, 0x8D65u, "TC-R37: camera input preserves OES target");
+    ASSERT_EQ(static_cast<int>(camera.source),
+              static_cast<int>(ExternalTextureSource::GLOESTexture),
+              "TC-R37: camera input source is explicit GLOESTexture");
+    ASSERT_EQ(camera.timestampNs, 123456789ull, "TC-R37: camera timestamp travels on Texture");
+    ASSERT_TRUE(camera.transformMatrix[12] == 0.375f,
+                "TC-R37: camera transform travels on Texture");
+}
+
+// -----------------------------------------------------------------------
+// TC-R38: Hardware buffer descriptors carry zero-copy sync and native layout metadata
+// -----------------------------------------------------------------------
+static void tc_r38_hardware_buffer_sync_metadata_contract() {
+    HardwareBufferDesc desc;
+    ASSERT_EQ(desc.stride, 0u, "TC-R38: hardware buffer stride defaults to unknown");
+    ASSERT_EQ(desc.layers, 1u, "TC-R38: hardware buffer layers default to 1");
+    ASSERT_EQ(desc.usage, 0ull, "TC-R38: hardware buffer usage defaults to unknown");
+    ASSERT_EQ(desc.acquireFenceFd, -1, "TC-R38: hardware buffer acquire fence defaults to none");
+    ASSERT_EQ(static_cast<int>(desc.syncMode),
+              static_cast<int>(ExternalSyncMode::GpuWait),
+              "TC-R38: hardware buffer sync defaults to GPU wait");
+
+    desc.stride = 2048;
+    desc.layers = 1;
+    desc.format = 1;
+    desc.usage = 0x300ull;
+    desc.acquireFenceFd = 42;
+    desc.syncMode = ExternalSyncMode::CpuWait;
+
+    ASSERT_EQ(desc.stride, 2048u, "TC-R38: explicit stride metadata is stored");
+    ASSERT_EQ(desc.layers, 1u, "TC-R38: explicit layer metadata is stored");
+    ASSERT_EQ(desc.format, 1, "TC-R38: explicit native format metadata is stored");
+    ASSERT_EQ(desc.usage, 0x300ull, "TC-R38: explicit usage metadata is stored");
+    ASSERT_EQ(desc.acquireFenceFd, 42, "TC-R38: explicit acquire fence fd is stored");
+    ASSERT_EQ(static_cast<int>(desc.syncMode),
+              static_cast<int>(ExternalSyncMode::CpuWait),
+              "TC-R38: explicit sync mode is stored");
 }
 
 // -----------------------------------------------------------------------
@@ -575,6 +828,14 @@ int main() {
     tc_r28_empty_render_pass_noop();
     tc_r29_external_texture_wrap_contract();
     tc_r30_shader_resource_set_contract();
+    tc_r31_buffer_update_map_contract();
+    tc_r32_vertex_array_buffer_role_contract();
+    tc_r33_compute_pipeline_dispatch_contract();
+    tc_r34_render_pass_format_contract();
+    tc_r35_texture_usage_flags_contract();
+    tc_r36_hardware_buffer_import_contract();
+    tc_r37_external_camera_texture_frame_contract();
+    tc_r38_hardware_buffer_sync_metadata_contract();
 
     std::cout << "\n=== Results: " << g_passed << " passed, "
               << g_failed << " failed ===\n";

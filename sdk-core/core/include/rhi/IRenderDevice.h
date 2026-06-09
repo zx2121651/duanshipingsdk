@@ -2,6 +2,7 @@
 #include <memory>
 #include <cstdint>
 #include "ITexture.h"
+#include "ExternalTexture.h"
 #include "IBuffer.h"
 #include "IVertexArray.h"
 #include "ICommandBuffer.h"
@@ -48,22 +49,6 @@ struct RHICapabilities {
     int         maxMSAASamples   = 1;
     int         glesVersionInt   = 30;    ///< 30/31/32; 0 for Vulkan/Metal
     const char* rendererString   = "";    ///< GL_RENDERER or Metal device name
-};
-
-struct HardwareBufferDesc {
-    void* nativeBuffer; // Android: AHardwareBuffer* ; iOS: CVPixelBufferRef
-    int width;
-    int height;
-    int format; // OS-specific format hint
-};
-
-struct ExternalTextureDesc {
-    uint64_t handle = 0; // Backend-specific existing texture/image handle.
-    uint32_t width = 0;
-    uint32_t height = 0;
-    TextureFormat format = TextureFormat::RGBA8;
-    uint32_t target = 0; // GLES: GL_TEXTURE_2D / GL_TEXTURE_EXTERNAL_OES. Other backends use 0 until explicit import support exists.
-    bool ownsHandle = false;
 };
 
 class IRenderDevice {

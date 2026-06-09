@@ -62,8 +62,17 @@ VulkanBuffer::~VulkanBuffer() {
 
 void* VulkanBuffer::map(size_t offset, size_t size, BufferAccess /*access*/) {
     if (!m_hostVisible || m_alloc.memory == VK_NULL_HANDLE) return nullptr;
+    if (offset > m_size) {
+        std::cerr << "VulkanBuffer::map: range exceeds buffer size" << std::endl;
+        return nullptr;
+    }
+    const size_t mapSize = size == 0 ? m_size - offset : size;
+    if (mapSize > m_size - offset) {
+        std::cerr << "VulkanBuffer::map: range exceeds buffer size" << std::endl;
+        return nullptr;
+    }
     void* ptr = nullptr;
-    vkMapMemory(m_device, m_alloc.memory, offset, size == 0 ? m_size : size, 0, &ptr);
+    vkMapMemory(m_device, m_alloc.memory, offset, mapSize, 0, &ptr);
     return ptr;
 }
 
@@ -73,7 +82,11 @@ void VulkanBuffer::unmap() {
 }
 
 void VulkanBuffer::updateData(const void* data, size_t size, size_t offset) {
-    if (!m_hostVisible) return;
+    if (!m_hostVisible || !data || size == 0) return;
+    if (offset > m_size || size > m_size - offset) {
+        std::cerr << "VulkanBuffer::updateData: range exceeds buffer size" << std::endl;
+        return;
+    }
     void* mapped = nullptr;
     vkMapMemory(m_device, m_alloc.memory, offset, size, 0, &mapped);
     std::memcpy(mapped, data, size);

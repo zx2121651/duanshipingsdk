@@ -15,6 +15,10 @@ std::shared_ptr<VulkanShaderProgram> VulkanShaderProgram::createFromSPIRV(
     prog->m_pcData.resize(128, 0);
 
     for (const auto& src : stages) {
+        if (src.spirv.empty()) {
+            std::cerr << "VulkanShaderProgram: empty SPIR-V stage skipped" << std::endl;
+            continue;
+        }
         VkShaderModuleCreateInfo ci{};
         ci.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
         ci.codeSize = src.spirv.size() * sizeof(uint32_t);

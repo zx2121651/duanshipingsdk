@@ -203,6 +203,7 @@ if(HAS_VULKAN)
         core/src/rhi/vk/VulkanMemoryAllocator.cpp
         core/src/rhi/vk/VulkanBuffer.cpp
         core/src/rhi/vk/VulkanTexture.cpp
+        core/src/rhi/vk/VulkanVertexArray.cpp
         core/src/rhi/vk/VulkanShaderProgram.cpp
         core/src/rhi/vk/VulkanCommandBuffer.cpp
         core/src/rhi/vk/VulkanRenderDevice.cpp
@@ -223,6 +224,7 @@ if(HAS_METAL)
         core/src/rhi/mtl/MetalTexture.mm
         core/src/rhi/mtl/MetalBuffer.mm
         core/src/rhi/mtl/MetalShaderProgram.mm
+        core/src/rhi/mtl/MetalVertexArray.mm
         core/src/rhi/mtl/MetalCommandBuffer.mm
         core/src/rhi/mtl/MetalRenderDevice.mm
     )

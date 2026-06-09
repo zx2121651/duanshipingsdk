@@ -1,7 +1,10 @@
 #pragma once
 #include <cstdint>
 
+#include <array>
 #include <string>
+
+#include "rhi/ExternalTexture.h"
 
 #ifdef USE_MOCK_GL
     #include "GLES3/gl3.h"
@@ -23,9 +26,14 @@ namespace rhi {
 }
 
 struct Texture {
-    uint32_t id;
-    uint32_t width;
-    uint32_t height;
+    uint32_t id = 0;
+    uint32_t width = 0;
+    uint32_t height = 0;
+    uint32_t target = 0x0DE1; // GL_TEXTURE_2D
+    rhi::TextureFormat format = rhi::TextureFormat::RGBA8;
+    rhi::ExternalTextureSource source = rhi::ExternalTextureSource::GLTexture2D;
+    uint64_t timestampNs = 0;
+    std::array<float, 16> transformMatrix = rhi::identityTextureTransform();
 };
 
 // --- Missing GLES tokens on some platforms/configurations ---

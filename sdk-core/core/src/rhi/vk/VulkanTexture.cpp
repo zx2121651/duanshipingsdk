@@ -34,6 +34,7 @@ VulkanTexture::VulkanTexture(VkDevice device,
       m_width(desc.width), m_height(desc.height), m_format(desc.format), m_samples(samples)
 {
     VkFormat fmt = toVkFormat(desc.format);
+    m_vkFormat = fmt;
     bool isDepth = (desc.format == TextureFormat::Depth24 || desc.format == TextureFormat::Depth32F);
 
     // 1. Create VkImage
@@ -108,7 +109,9 @@ VkDescriptorImageInfo VulkanTexture::descriptorInfo() const {
     VkDescriptorImageInfo info{};
     info.sampler     = m_sampler;
     info.imageView   = m_imageView;
-    info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    info.imageLayout = m_currentLayout == VK_IMAGE_LAYOUT_UNDEFINED
+        ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+        : m_currentLayout;
     return info;
 }
 

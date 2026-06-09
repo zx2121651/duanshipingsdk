@@ -176,16 +176,24 @@ ResultPayload<Texture> FilterEngine::processFrame(const Texture& textureIn, int 
             glUseProgram(0);
         }
 
+        int64_t frameTimestampNs = 0;
         if (m_cameraNode) {
             VideoFrame inFrame;
             inFrame.textureId = textureIn.id;
             inFrame.width = width;
             inFrame.height = height;
-            inFrame.timestampNs = std::chrono::duration_cast<std::chrono::nanoseconds>(start_time.time_since_epoch()).count();
+            inFrame.textureTarget = textureIn.target;
+            inFrame.format = textureIn.format;
+            inFrame.source = textureIn.source;
+            inFrame.timestampNs = textureIn.timestampNs != 0
+                ? static_cast<int64_t>(textureIn.timestampNs)
+                : std::chrono::duration_cast<std::chrono::nanoseconds>(start_time.time_since_epoch()).count();
+            inFrame.transformMatrix.assign(textureIn.transformMatrix.begin(), textureIn.transformMatrix.end());
+            frameTimestampNs = inFrame.timestampNs;
             m_cameraNode->pushFrame(inFrame);
         }
 
-        Result execRes = m_graph->execute(0);
+        Result execRes = m_graph->execute(frameTimestampNs);
         if (!execRes.isOk()) {
             LOGE("Graph execution failed [Error: %d]: %s", execRes.getErrorCode(), execRes.getMessage().c_str());
             return ResultPayload<Texture>::error(execRes.getErrorCode(), execRes.getMessage());
@@ -229,7 +237,20 @@ ResultPayload<Texture> FilterEngine::processFrame(const Texture& textureIn, int 
             }
         }
 
-        return ResultPayload<Texture>::ok(Texture{outFrame.textureId, outFrame.width, outFrame.height});
+        Texture outTex;
+        outTex.id = outFrame.textureId;
+        outTex.width = outFrame.width;
+        outTex.height = outFrame.height;
+        outTex.target = outFrame.textureTarget;
+        outTex.format = outFrame.format;
+        outTex.source = outFrame.source;
+        outTex.timestampNs = static_cast<uint64_t>(outFrame.timestampNs);
+        if (outFrame.transformMatrix.size() == outTex.transformMatrix.size()) {
+            std::copy(outFrame.transformMatrix.begin(),
+                      outFrame.transformMatrix.end(),
+                      outTex.transformMatrix.begin());
+        }
+        return ResultPayload<Texture>::ok(outTex);
     }
 
     return ResultPayload<Texture>::error(ErrorCode::ERR_RENDER_INVALID_STATE, "Pipeline graph or output node is uninitialized");

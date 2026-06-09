@@ -126,6 +126,21 @@ std::string OES2RGBFilter::getFragmentShaderSource() const {
     return "";
 }
 
+static std::array<float, 16> resolveTextureMatrix(
+    const Texture& inputTexture,
+    const std::map<std::string, std::array<float, 16>>& mat4Parameters) {
+    if (inputTexture.source == rhi::ExternalTextureSource::GLOESTexture ||
+        inputTexture.target == GL_TEXTURE_EXTERNAL_OES) {
+        return inputTexture.transformMatrix;
+    }
+
+    auto it = mat4Parameters.find("textureMatrix");
+    if (it != mat4Parameters.end()) {
+        return it->second;
+    }
+    return inputTexture.transformMatrix;
+}
+
 void OES2RGBFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb) {
     if (!m_renderDevice || m_renderDevice->getCapabilities().backend == rhi::BackendType::GLES) {
         outputFb->bind();
@@ -140,11 +155,9 @@ void OES2RGBFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb)
         if (m_programId > 0 && m_inputImageTextureHandle != static_cast<GLuint>(-1)) {
             glUniform1i(m_inputImageTextureHandle, 0);
         }
-        if (m_mat4Parameters.count("textureMatrix")) {
-            auto& matrix = m_mat4Parameters.at("textureMatrix");
-            if (m_programId > 0 && m_textureMatrixHandle != static_cast<GLuint>(-1))
-                glUniformMatrix4fv(m_textureMatrixHandle, 1, GL_FALSE, matrix.data());
-        }
+        const auto matrix = resolveTextureMatrix(inputTexture, m_mat4Parameters);
+        if (m_programId > 0 && m_textureMatrixHandle != static_cast<GLuint>(-1))
+            glUniformMatrix4fv(m_textureMatrixHandle, 1, GL_FALSE, matrix.data());
         bool flipH = false;
         if (m_parameters.count("flipHorizontal") && m_parameters.at("flipHorizontal").type() == typeid(bool)) {
             flipH = std::any_cast<bool>(m_parameters.at("flipHorizontal"));
@@ -170,7 +183,7 @@ void OES2RGBFilter::onDraw(const Texture& inputTexture, FrameBufferPtr outputFb)
     }
 
     if (!m_pipelineState || !m_paramsBuffer || !m_quadVao) return;
-    std::array<float, 16> matrix = m_mat4Parameters["textureMatrix"];
+    std::array<float, 16> matrix = resolveTextureMatrix(inputTexture, m_mat4Parameters);
     bool flipH = m_parameters.count("flipHorizontal") ? std::any_cast<bool>(m_parameters.at("flipHorizontal")) : false;
     bool flipV = m_parameters.count("flipVertical") ? std::any_cast<bool>(m_parameters.at("flipVertical")) : false;
 

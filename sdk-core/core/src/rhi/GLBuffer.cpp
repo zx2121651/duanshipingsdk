@@ -1,5 +1,7 @@
 #include "GLBuffer.h"
 
+#include <iostream>
+
 
 #ifndef GL_MAP_READ_BIT
 #define GL_MAP_READ_BIT 0x0001
@@ -68,6 +70,10 @@ GLBuffer::~GLBuffer() {
 
 void GLBuffer::updateData(const void* data, size_t size, size_t offset) {
     if (!data || size == 0) return;
+    if (offset > m_size || size > m_size - offset) {
+        std::cerr << "GLBuffer::updateData: range exceeds buffer size" << std::endl;
+        return;
+    }
 
     glBindBuffer(m_glTarget, m_handle);
     if (offset == 0 && size == m_size) {
@@ -81,6 +87,16 @@ void GLBuffer::updateData(const void* data, size_t size, size_t offset) {
 }
 
 void* GLBuffer::map(size_t offset, size_t size, BufferAccess access) {
+    if (offset > m_size) {
+        std::cerr << "GLBuffer::map: range exceeds buffer size" << std::endl;
+        return nullptr;
+    }
+    const size_t mapSize = size == 0 ? m_size - offset : size;
+    if (mapSize > m_size - offset) {
+        std::cerr << "GLBuffer::map: range exceeds buffer size" << std::endl;
+        return nullptr;
+    }
+
     GLbitfield glAccess = 0;
     switch (access) {
         case BufferAccess::Read: glAccess = GL_MAP_READ_BIT; break;
@@ -90,7 +106,7 @@ void* GLBuffer::map(size_t offset, size_t size, BufferAccess access) {
 
     // Keep buffer bound until unmap() — the mapped pointer must remain valid
     glBindBuffer(m_glTarget, m_handle);
-    void* ptr = glMapBufferRange(m_glTarget, offset, size, glAccess);
+    void* ptr = glMapBufferRange(m_glTarget, offset, mapSize, glAccess);
     // Do NOT unbind here; unmap() is responsible for the bind/unmap/unbind sequence
     return ptr;
 }

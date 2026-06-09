@@ -18,8 +18,16 @@ struct VideoFrame {
     uint32_t textureId = 0;
     uint32_t width = 0;
     uint32_t height = 0;
+    uint32_t textureTarget = 0x0DE1; // GL_TEXTURE_2D
+    rhi::TextureFormat format = rhi::TextureFormat::RGBA8;
+    rhi::ExternalTextureSource source = rhi::ExternalTextureSource::GLTexture2D;
     int64_t timestampNs = 0;
-    std::vector<float> transformMatrix;
+    std::vector<float> transformMatrix = {
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f
+    };
 
     // Holding the buffer ensures it returns to the pool when the last node finishes with it
     FrameBufferPtr frameBuffer = nullptr;

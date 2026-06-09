@@ -42,6 +42,7 @@
     #include <GLES2/gl2ext.h>
     #include <GLES3/gl3.h>
     #include <GLES3/gl32.h>  // geometry + tessellation shader enums
+    #include <unistd.h>
 #endif
 
 #ifdef __APPLE__
@@ -71,12 +72,88 @@
 #define SDK_RHI_WEAK_SYMBOL
 #endif
 
+#ifndef EGL_SYNC_NATIVE_FENCE_ANDROID
+#define EGL_SYNC_NATIVE_FENCE_ANDROID 0x3144
+#endif
+#ifndef EGL_SYNC_NATIVE_FENCE_FD_ANDROID
+#define EGL_SYNC_NATIVE_FENCE_FD_ANDROID 0x3145
+#endif
+#ifndef EGL_SYNC_FLUSH_COMMANDS_BIT_KHR
+#define EGL_SYNC_FLUSH_COMMANDS_BIT_KHR 0x0001
+#endif
+#ifndef EGL_FOREVER_KHR
+#define EGL_FOREVER_KHR 0xFFFFFFFFFFFFFFFFull
+#endif
+
 #ifndef glDepthMask
 #define glDepthMask(x)
 #endif
 
 #ifndef GL_HALF_FLOAT
 #define GL_HALF_FLOAT 0x140B
+#endif
+
+#if defined(__ANDROID__)
+namespace {
+
+void closeNativeFenceFd(int fd) {
+    if (fd < 0) {
+        return;
+    }
+    close(fd);
+}
+
+bool waitForAndroidNativeFence(EGLDisplay display,
+                               int fenceFd,
+                               sdk::video::rhi::ExternalSyncMode syncMode) {
+    if (fenceFd < 0) {
+        return true;
+    }
+
+    if (syncMode == sdk::video::rhi::ExternalSyncMode::None) {
+        closeNativeFenceFd(fenceFd);
+        return true;
+    }
+
+    static auto s_eglCreateSyncKHR =
+        (PFNEGLCREATESYNCKHRPROC)eglGetProcAddress("eglCreateSyncKHR");
+    static auto s_eglDestroySyncKHR =
+        (PFNEGLDESTROYSYNCKHRPROC)eglGetProcAddress("eglDestroySyncKHR");
+    static auto s_eglClientWaitSyncKHR =
+        (PFNEGLCLIENTWAITSYNCKHRPROC)eglGetProcAddress("eglClientWaitSyncKHR");
+    static auto s_eglWaitSyncKHR =
+        (PFNEGLWAITSYNCKHRPROC)eglGetProcAddress("eglWaitSyncKHR");
+
+    if (!s_eglCreateSyncKHR || !s_eglDestroySyncKHR || !s_eglClientWaitSyncKHR) {
+        std::cerr << "AHardwareBuffer import: EGL native fence extensions unavailable; closing fence fd" << std::endl;
+        closeNativeFenceFd(fenceFd);
+        return false;
+    }
+
+    const EGLint attribs[] = {
+        EGL_SYNC_NATIVE_FENCE_FD_ANDROID, fenceFd,
+        EGL_NONE
+    };
+    EGLSyncKHR sync = s_eglCreateSyncKHR(display, EGL_SYNC_NATIVE_FENCE_ANDROID, attribs);
+    if (sync == EGL_NO_SYNC_KHR) {
+        std::cerr << "AHardwareBuffer import: eglCreateSyncKHR(native fence) failed" << std::endl;
+        closeNativeFenceFd(fenceFd);
+        return false;
+    }
+
+    bool ok = true;
+    if (syncMode == sdk::video::rhi::ExternalSyncMode::GpuWait && s_eglWaitSyncKHR) {
+        ok = s_eglWaitSyncKHR(display, sync, 0) == EGL_TRUE;
+    } else {
+        EGLint result = s_eglClientWaitSyncKHR(
+            display, sync, EGL_SYNC_FLUSH_COMMANDS_BIT_KHR, EGL_FOREVER_KHR);
+        ok = (result == EGL_CONDITION_SATISFIED_KHR || result == EGL_ALREADY_SIGNALED_KHR);
+    }
+    s_eglDestroySyncKHR(display, sync);
+    return ok;
+}
+
+} // namespace
 #endif
 
 
@@ -386,6 +463,16 @@ void GLCommandBuffer::bindPipelineState(std::shared_ptr<IPipelineState> pso) {
         ShadowState& shadow = m_device ? m_device->getShadowState() : s_fallbackShadow;
         glPipeline->apply(shadow);
         m_currentTopology = glPipeline->desc.primitiveTopology;
+        return;
+    }
+
+    auto glComputePipeline = std::dynamic_pointer_cast<GLComputePipelineState>(pso);
+    if (glComputePipeline) {
+        if (glComputePipeline->desc.shaderProgram) {
+            auto glProg = static_cast<GLShaderProgram*>(glComputePipeline->desc.shaderProgram);
+            glUseProgram(glProg->getGLHandle());
+            CHECK_GL_ERROR_LINE();
+        }
     } else {
         glUseProgram(0);
         m_currentTopology = PrimitiveTopology::TriangleStrip;
@@ -745,15 +832,40 @@ std::shared_ptr<IShaderResourceSet> GLRenderDevice::createShaderResourceSet() {
 
 std::shared_ptr<ITexture> GLRenderDevice::createTextureFromHardwareBuffer(const HardwareBufferDesc& desc) {
     std::lock_guard<std::mutex> lock(m_mutex);
+    if (!desc.nativeBuffer) {
+        return nullptr;
+    }
 
 #if defined(__ANDROID__) && __ANDROID_API__ >= 26
-    if (!desc.nativeBuffer) return nullptr;
-
     AHardwareBuffer* ahwb = static_cast<AHardwareBuffer*>(desc.nativeBuffer);
+    AHardwareBuffer_Desc hwDesc{};
+    AHardwareBuffer_describe(ahwb, &hwDesc);
+    const uint32_t width = desc.width != 0 ? desc.width : hwDesc.width;
+    const uint32_t height = desc.height != 0 ? desc.height : hwDesc.height;
+    const uint32_t stride = desc.stride != 0 ? desc.stride : hwDesc.stride;
+    const uint32_t layers = desc.layers != 0 ? desc.layers : hwDesc.layers;
+    const int nativeFormat = desc.format != 0 ? desc.format : static_cast<int>(hwDesc.format);
+    const uint64_t usage = desc.usage != 0 ? desc.usage : hwDesc.usage;
+    if (width == 0 || height == 0) {
+        std::cerr << "createTextureFromHardwareBuffer: invalid hardware buffer size" << std::endl;
+        closeNativeFenceFd(desc.acquireFenceFd);
+        return nullptr;
+    }
+    if (layers == 0) {
+        std::cerr << "createTextureFromHardwareBuffer: invalid hardware buffer layer count" << std::endl;
+        closeNativeFenceFd(desc.acquireFenceFd);
+        return nullptr;
+    }
 
     EGLDisplay display = eglGetCurrentDisplay();
     if (display == EGL_NO_DISPLAY) {
         std::cerr << "createTextureFromHardwareBuffer: No EGL display" << std::endl;
+        closeNativeFenceFd(desc.acquireFenceFd);
+        return nullptr;
+    }
+
+    if (!waitForAndroidNativeFence(display, desc.acquireFenceFd, desc.syncMode)) {
+        std::cerr << "createTextureFromHardwareBuffer: acquire fence wait failed" << std::endl;
         return nullptr;
     }
 
@@ -801,11 +913,26 @@ std::shared_ptr<ITexture> GLRenderDevice::createTextureFromHardwareBuffer(const 
     glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
 
-    return std::make_shared<GLHardwareTexture>(id, GL_TEXTURE_EXTERNAL_OES, desc.width, desc.height, eglImage);
+    return std::make_shared<GLHardwareTexture>(id,
+                                               GL_TEXTURE_EXTERNAL_OES,
+                                               width,
+                                               height,
+                                               desc.logicalFormat,
+                                               eglImage,
+                                               desc.nativeBuffer,
+                                               desc.ownership,
+                                               stride,
+                                               layers,
+                                               nativeFormat,
+                                               usage,
+                                               desc.timestampNs,
+                                               desc.transformMatrix);
 
 #elif defined(__APPLE__)
-    if (!desc.nativeBuffer) return nullptr;
     CVPixelBufferRef pixelBuffer = (CVPixelBufferRef)desc.nativeBuffer;
+    if (desc.width == 0 || desc.height == 0) {
+        return nullptr;
+    }
 
     // For iOS, assuming a local creation or global cache, but CoreVideo prefers a CVOpenGLESTextureCacheRef.
     // In a full implementation, GLRenderDevice would hold a CVOpenGLESTextureCacheRef m_textureCache.
@@ -864,15 +991,31 @@ std::shared_ptr<ITexture> GLRenderDevice::createTextureFromHardwareBuffer(const 
     // Clean up cache; cvTexture retains the texture
     if (textureCache) CFRelease(textureCache);
 
-    return std::make_shared<GLHardwareTexture>(texId, GL_TEXTURE_2D, desc.width, desc.height, cvTexture);
+    return std::make_shared<GLHardwareTexture>(texId,
+                                               GL_TEXTURE_2D,
+                                               desc.width,
+                                               desc.height,
+                                               desc.logicalFormat,
+                                               cvTexture,
+                                               desc.timestampNs,
+                                               desc.transformMatrix);
 
 #else
     // Non-Android/Apple stub
+    if (desc.width == 0 || desc.height == 0) {
+        return nullptr;
+    }
     GLuint id = 0;
     glGenTextures(1, &id);
     glBindTexture(GL_TEXTURE_2D, id);
     glBindTexture(GL_TEXTURE_2D, 0);
-    return std::make_shared<GLHardwareTexture>(id, GL_TEXTURE_2D, desc.width, desc.height);
+    return std::make_shared<GLHardwareTexture>(id,
+                                               GL_TEXTURE_2D,
+                                               desc.width,
+                                               desc.height,
+                                               desc.logicalFormat,
+                                               desc.timestampNs,
+                                               desc.transformMatrix);
 #endif
 }
 
@@ -889,7 +1032,9 @@ std::shared_ptr<ITexture> GLRenderDevice::wrapExternalTexture(const ExternalText
         desc.format,
         1,
         target,
-        desc.ownsHandle);
+        desc.ownsHandle,
+        desc.timestampNs,
+        desc.transformMatrix);
     return texture;
 }
 

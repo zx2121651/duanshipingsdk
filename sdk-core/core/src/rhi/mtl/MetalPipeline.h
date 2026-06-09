@@ -2,6 +2,7 @@
 #ifdef HAS_METAL
 
 #include "../../../include/rhi/IPipelineState.h"
+#include "../../../include/rhi/IBuffer.h"
 #include "../../../include/rhi/ITexture.h"
 #include <memory>
 #include <vector>
@@ -27,17 +28,33 @@ struct MetalPipelineState : public IPipelineState {
 };
 
 struct MetalResourceSet : public IShaderResourceSet {
-    struct Binding {
-        uint32_t                    slot;
-        std::shared_ptr<ITexture>   texture;
+    enum class BindingType {
+        SampledTexture,
+        UniformBuffer,
+        StorageBuffer,
+        ImageTexture
     };
+
+    struct Binding {
+        uint32_t slot;
+        BindingType type;
+        std::shared_ptr<ITexture> texture;
+        std::shared_ptr<IBuffer> buffer;
+        TextureAccess access;
+        TextureFormat format;
+        uint32_t level;
+    };
+
     std::vector<Binding> bindings;
 
-    void bindTexture(uint32_t slot, std::shared_ptr<ITexture> tex) override {
-        for (auto& b : bindings) { if (b.slot == slot) { b.texture = tex; return; } }
-        bindings.push_back({slot, tex});
-    }
-    void apply() override {}
+    void bindTexture(uint32_t slot, std::shared_ptr<ITexture> texture) override;
+    void bindUniformBuffer(uint32_t slot, std::shared_ptr<IBuffer> buffer) override;
+    void bindStorageBuffer(uint32_t slot, std::shared_ptr<IBuffer> buffer) override;
+    void bindImageTexture(uint32_t slot, std::shared_ptr<ITexture> texture, TextureAccess access, TextureFormat format, uint32_t level = 0) override;
+    void apply() override;
+
+private:
+    void upsertBinding(Binding binding);
 };
 
 } // namespace rhi
